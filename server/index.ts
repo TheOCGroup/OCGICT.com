@@ -7,6 +7,7 @@ import { getActiveStreamingModelProvider } from "./services/streamingModelProvid
 import { HunterAdapter, VictorAdapter } from "./services/systemAdapters";
 import { PiperQueueAdapter } from "./services/piperAdapter";
 import { WichitaPropertyService } from "./services/wichitaPropertyService";
+import { SellerUnderwritingService } from "./services/sellerUnderwritingService";
 import { OcgObservability } from "./services/observability";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -83,6 +84,33 @@ async function startServer() {
       }
       const victorRecord = WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord);
       res.json({ victorRecord });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── 2b. Seller Acquisition & Preliminary Offer Pipeline ───────────
+  app.post("/api/seller/property-lookup", async (req, res) => {
+    try {
+      const { address } = req.body;
+      if (!address) {
+        return res.status(400).json({ error: "Missing address" });
+      }
+      const publicRecord = await WichitaPropertyService.lookupPublicRecord({ address });
+      res.json({ address, publicRecord, found: !!publicRecord });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/seller/preliminary-offer", async (req, res) => {
+    try {
+      const payload = req.body;
+      if (!payload || !payload.address) {
+        return res.status(400).json({ error: "Missing required seller intake payload: address" });
+      }
+      const offerResult = await SellerUnderwritingService.processSellerIntake(payload);
+      res.json(offerResult);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

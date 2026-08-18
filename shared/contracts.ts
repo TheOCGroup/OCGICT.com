@@ -107,7 +107,126 @@ export interface IPropertyIntelligenceRecord {
 }
 
 // ============================================================
-// 4. G ACTION & WEBSITE CONTROL REGISTRY
+// 4. SELLER ACQUISITION & PRELIMINARY OFFER CONTRACTS
+// ============================================================
+export type SellerOfferConfidenceTier = "HIGH_CONFIDENCE" | "MEDIUM_CONFIDENCE" | "LOW_CONFIDENCE" | "HUMAN_REVIEW_REQUIRED";
+
+export interface IComparableSale {
+  id: string;
+  address: string;
+  distanceMiles: number;
+  salePrice: number;
+  saleDate: string;
+  sqft: number;
+  pricePerSqft: number;
+  yearBuilt: number;
+  similarityScore: number; // 0.0 - 1.0
+  source: string;
+}
+
+export interface ISellerIntakePayload {
+  address: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  // Minimal Seller Inputs
+  propertyCondition: "Move-In Ready" | "Dated / Needs Updates" | "Needs Major Cosmetic & Mechanical Rehab" | "Full Gut / Major Deferred Maintenance" | "Severe Structural / Fire Damage";
+  occupancyStatus: "Owner Occupied" | "Tenant Occupied" | "Vacant" | "Estate / Unoccupied";
+  sellerSituation: "Inherited Property / Probate" | "Downsizing / Estate Liquidation" | "Deferred Maintenance" | "Relocation / Quick Transition" | "Tired Landlord" | "Exploring Options";
+  desiredTimeline: "Immediate (14-21 Days)" | "Within 30-45 Days" | "60-90 Days" | "Flexible";
+  primaryPriority: "Maximum Net Cash" | "Speed & Convenience" | "No Repairs / As-Is" | "Flexible Closing Date";
+  knownRepairs?: string[];
+  sellerNotes?: string;
+  photosUploaded?: boolean;
+  // Contact
+  fullName: string;
+  email: string;
+  phone: string;
+  preferredContact?: "Phone" | "Email" | "SMS";
+}
+
+export interface IOfferConfidenceGate {
+  overallConfidenceScore: number; // 0.00 - 1.00
+  tier: SellerOfferConfidenceTier;
+  thresholdsMet: {
+    propertyMatchConfidence: number; // min 0.85 for high
+    compQualityScore: number;        // min 0.80 for high
+    arvConfidence: number;           // min 0.80 for high
+    repairEstimateConfidence: number;// min 0.75 for high
+    dataFreshnessDays: number;       // <= 180 days
+    ownershipConsistency: boolean;
+    structuralRiskDetected: boolean;
+    probateOrLegalFlag: boolean;
+  };
+  reasonsForTier: string[];
+  requiredHumanVerifications: string[];
+}
+
+export interface ISellerOfferResult {
+  id: string;
+  createdAt: string;
+  property: {
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    parcelId?: string;
+    livingAreaSqft: number;
+    yearBuilt: number;
+    propertyType: string;
+    taxDistrict: string;
+    totalAppraisedValue: number;
+  };
+  provenance: {
+    recordsSource: string;
+    retrievalTimestamp: string;
+    certaintyLevel: DataCertaintyLevel;
+  };
+  internalUnderwriting: {
+    estimatedArv: number;
+    acquisitionMultiplier: number; // e.g. 0.70
+    grossArvCap: number;
+    estimatedRehabBudget: number;
+    rehabBreakdown: {
+      exteriorRoof: number;
+      interiorCosmetic: number;
+      mechanicalsHvac: number;
+      contingencyReserves: number;
+    };
+    internalMaoCeiling: number; // (ARV * 0.70) - Rehab
+  };
+  sellerOfferPresentation: {
+    status: "PRELIMINARY_OFFER_AVAILABLE" | "PRELIMINARY_ESTIMATE" | "ADDITIONAL_REVIEW_REQUIRED";
+    headline: string;
+    offerRangeMin?: number;
+    offerRangeMax?: number;
+    singlePointEstimate?: number;
+    displayTerms: {
+      isBinding: false;
+      asIsCondition: true;
+      commissionFree: true;
+      subjectToWalkthrough: boolean;
+      subjectToTitleReview: boolean;
+    };
+    explanation: {
+      whatOcgReviewed: string[];
+      whatRemainsToBeVerified: string[];
+      nextSteps: string[];
+    };
+    legalDisclaimer: string;
+  };
+  confidenceGate: IOfferConfidenceGate;
+  comparableSales: IComparableSale[];
+  piperHandoff: {
+    outboxTrackingId: string;
+    status: "ENQUEUED" | "READY_FOR_PIPER";
+    assignedStage: string;
+    leadCategory: "SELLER_ACQUISITION_DIRECT";
+  };
+}
+
+// ============================================================
+// 5. G ACTION & WEBSITE CONTROL REGISTRY
 // ============================================================
 export type GActionId =
   | "NAVIGATE"

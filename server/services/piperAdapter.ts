@@ -72,7 +72,32 @@ export class PiperQueueAdapter {
     };
   }
 
+  public static async enqueueLead(lead: {
+    briefId: string;
+    fullName: string;
+    email: string;
+    phone: string;
+    targetStrategy: string;
+    liquidityTier: string;
+    timeline: string;
+    summary: string;
+  }): Promise<{ outboxId: string; status: string }> {
+    const outboxId = `OUTBOX_LEAD_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    
+    OcgObservability.log("PIPER_LEAD_ENQUEUED", {
+      outboxId,
+      fullName: lead.fullName,
+      email: lead.email,
+      strategy: lead.targetStrategy
+    });
+
+    return { outboxId, status: "READY_FOR_PIPER" };
+  }
+
   public static getPendingOutbox(): PiperOutboxRecord[] {
     return [...this.outboxQueue];
   }
 }
+
+export const PiperOutboxService = PiperQueueAdapter;
+

@@ -99,28 +99,19 @@ export class WichitaPropertyService {
       },
     };
 
-    let record = Object.entries(mockDb).find(([key]) => cleanAddr.includes(key))?.[1];
-
-    if (!record) {
-      // Return a provisional modeled record with explicit data provenance flags
-      record = {
-        parcelId: `PIN_${Date.now().toString().slice(-8)}`,
-        situsAddress: query.address,
-        taxDistrict: "0101 WICHITA CITY",
-        appraisedLandValue: 22000,
-        appraisedBuildingValue: 98000,
-        totalAppraisedValue: 120000,
-        priorYearTaxes: 1716.00,
-        taxStatus: "Current",
-        zoningCode: "SF-5",
-        zoningDescription: "Single-Family Residential",
-        floodPlainStatus: "Zone X (Low Risk)",
-        legalDescription: "SEDGWICK COUNTY RESIDENTIAL PLATTED LOT",
-        yearBuilt: 1950,
-        livingAreaSqft: 1400,
-      };
+    if (!cleanAddr) {
+      return null;
     }
 
+    const matchedEntry = Object.entries(mockDb).find(([key]) => cleanAddr.includes(key));
+    if (!matchedEntry) {
+      // Per OCG No-Pretending rule: do not synthesize fake parcel records.
+      // Return null so confidence gate properly marks HUMAN_REVIEW_REQUIRED.
+      OcgObservability.log("RETRIEVAL_UNMATCHED_HONEST_FAILURE", { query: cleanAddr });
+      return null;
+    }
+
+    const record = matchedEntry[1];
     const now = new Date().toISOString();
     return {
       parcelId: record.parcelId!,
