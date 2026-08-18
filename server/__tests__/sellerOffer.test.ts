@@ -17,7 +17,7 @@ async function runTests() {
     address: "248 S Rutan Ave, Wichita, KS 67218",
     propertyCondition: "Needs Major Cosmetic & Mechanical Rehab",
     occupancyStatus: "Vacant",
-    sellerSituation: "Downsizing / Estate Liquidation",
+    sellerSituation: "Downsizing / Transitioning",
     desiredTimeline: "Within 30-45 Days",
     primaryPriority: "No Repairs / As-Is",
     knownRepairs: ["Roof / Shingles (Aging)"],

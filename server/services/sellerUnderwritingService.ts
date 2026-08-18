@@ -14,14 +14,21 @@ export class SellerUnderwritingService {
   /**
    * Process Seller Acquisition Intake and generate a guarded preliminary offer result.
    */
-  public static async processSellerIntake(payload: ISellerIntakePayload): Promise<ISellerOfferResult> {
+  public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
-    const cleanAddress = payload.address.trim();
+    const cleanAddress = (payload.address || "").trim();
+    const sellerSituation = payload.sellerSituation || payload.situation || "Direct Sale / Exploring Options";
+    const propertyCondition = payload.propertyCondition || payload.conditionLevel || "Standard Updates";
+    const desiredTimeline = payload.desiredTimeline || payload.timeline || "30-60 Days";
+    const primaryPriority = payload.primaryPriority || payload.priority || "Fair Value";
+    const fullName = payload.fullName || payload.sellerName || "Direct Property Owner";
+    const email = payload.email || payload.sellerEmail || "";
+    const phone = payload.phone || payload.sellerPhone || "";
 
     OcgObservability.log("SELLER_INTAKE_PROCESSING_STARTED", {
       address: cleanAddress,
-      condition: payload.propertyCondition,
-      situation: payload.sellerSituation
+      condition: propertyCondition,
+      situation: sellerSituation,
     });
 
     // 1. Parallel Property Records & Comps Lookup
@@ -31,7 +38,7 @@ export class SellerUnderwritingService {
     ]);
 
     // Determine Property Identity & Core Metrics
-    const livingAreaSqft = publicRecord?.livingAreaSqft || this.estimateSqftFromType(payload.propertyCondition);
+    const livingAreaSqft = publicRecord?.livingAreaSqft || this.estimateSqftFromType(propertyCondition);
     const yearBuilt = publicRecord?.yearBuilt || 1955;
     const propertyType = publicRecord?.zoningDescription || "Single Family Residential";
     const totalAppraised = publicRecord?.totalAppraisedValue || 135000;
@@ -42,7 +49,7 @@ export class SellerUnderwritingService {
 
     // 3. Deterministic Unit-Rate Rehab Budget Estimation
     const { estimatedRehabBudget, rehabBreakdown, repairConfidence, structuralRiskDetected } = 
-      this.calculateRehabScope(payload, livingAreaSqft, yearBuilt);
+      this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt);
 
     // 4. Deterministic Internal Underwriting (MAO = ARV * 0.70 - Rehab)
     const acquisitionMultiplier = 0.70;
@@ -50,7 +57,7 @@ export class SellerUnderwritingService {
     const internalMaoCeiling = Math.max(0, grossArvCap - estimatedRehabBudget);
 
     // 5. Confidence Gating & Threshold Evaluation
-    const probateOrLegalFlag = payload.sellerSituation.includes("Probate") || payload.sellerSituation.includes("Inherited");
+    const probateOrLegalFlag = sellerSituation.toLowerCase().includes("probate") || sellerSituation.toLowerCase().includes("inherited") || sellerSituation.toLowerCase().includes("estate");
     const propertyMatchConfidence = publicRecord ? 0.95 : 0.60;
     const compQualityScore = comps.length >= 3 ? 0.88 : comps.length > 0 ? 0.65 : 0.30;
     
@@ -87,13 +94,14 @@ export class SellerUnderwritingService {
     const trackingId = `SELLER_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     await PiperOutboxService.enqueueLead({
       briefId: trackingId,
-      fullName: payload.fullName,
-      email: payload.email,
-      phone: payload.phone,
+      fullName: fullName,
+      email: email,
+      phone: phone,
+      address: cleanAddress,
       targetStrategy: "Direct Sale / Liquidation",
       liquidityTier: "Equity / Real Estate Only",
-      timeline: payload.desiredTimeline,
-      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${payload.propertyCondition}. Priority: ${payload.primaryPriority}. Notes: ${payload.sellerNotes || 'None'}.`
+      timeline: desiredTimeline,
+      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Notes: ${payload.sellerNotes || 'None'}.`
     });
 
     const result: ISellerOfferResult = {
