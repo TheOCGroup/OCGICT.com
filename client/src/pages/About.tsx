@@ -1,0 +1,18 @@
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { ArrowRight, Palette, ShieldCheck, Building2, Cpu } from "lucide-react";
+import { Link } from "wouter";
+
+export default function About() {
+  return <div className="min-h-screen bg-[#090b0f] text-white"><Navbar/><main className="pt-20">
+    <section className="container py-24 md:py-32"><div className="max-w-4xl"><div className="section-eyebrow mb-5">About OCG</div><h1 className="text-5xl md:text-8xl font-semibold tracking-[-0.055em] leading-[0.92]">Real estate experience shaped the company. Necessity shaped the technology.</h1><p className="mt-8 text-xl leading-relaxed text-white/55 max-w-3xl">OCG is a real estate investment and acquisition company focused on helping serious investors make informed decisions, execute disciplined acquisitions, and create value through thoughtful renovation and strategy.</p></div></section>
+    <section className="bg-white text-[#0b0d12] py-24"><div className="container grid gap-5 md:grid-cols-2 xl:grid-cols-4">{[
+      [Building2,'Real Estate','Acquisition strategy, investor thinking, negotiations, deal execution, and portfolio-minded decision making.'],
+      [Palette,'Design + Renovation','A design background informs how we evaluate layouts, finishes, scope, functionality, and value-add potential.'],
+      [ShieldCheck,'Insurance + Risk','Insurance experience sharpened the company’s approach to risk, protection, documentation, and client relationships.'],
+      [Cpu,'Artificial Intelligence','AI emerged because traditional acquisition work could not always move as fast as the opportunities required.'],
+    ].map(([Icon,title,body]:any)=><div className="strategy-card" key={title}><Icon size={21} className="text-blue-700"/><h2 className="mt-8 text-3xl font-semibold">{title}</h2><p className="mt-4 text-sm leading-relaxed text-black/55">{body}</p></div>)}</div></section>
+    <section className="py-24 md:py-32"><div className="container grid lg:grid-cols-2 gap-14"><div><div className="section-eyebrow mb-4">The turning point</div><h2 className="text-4xl md:text-6xl font-semibold tracking-[-0.04em]">We were doing the right work. We simply couldn't always do it fast enough.</h2></div><div className="space-y-5 text-base md:text-lg leading-relaxed text-white/55"><p>Some of the best off-market and distressed opportunities come with strict showing rules and compressed decision windows. Before moving forward, we still needed to understand condition, develop an accurate renovation scope, estimate costs, establish ARV, think through design and value creation, run the acquisition numbers, structure financing, and prepare enough information for lender review.</p><p>That pressure pushed OCG toward AI and automation — not to remove human judgment, but to make the existing process faster, more consistent, and more informed.</p><p className="text-white font-semibold text-2xl">So we started building the systems we wished we'd had.</p></div></div></section>
+    <section className="border-y border-white/8 bg-[#0d1118] py-24"><div className="container"><div className="max-w-3xl"><div className="section-eyebrow mb-4">Our position</div><h2 className="text-4xl md:text-6xl font-semibold">AI is not the product OCG sells. It is part of how OCG operates.</h2><p className="mt-6 text-white/52 text-lg leading-relaxed">Technology helps us retrieve evidence, organize information, evaluate more possibilities, and compress repetitive work. People remain responsible for judgment, advice, relationships, negotiation, professional verification, and execution.</p><Link href="/how-ocg-works" className="btn-gold mt-8">See How OCG Works <ArrowRight size={15}/></Link></div></div></section>
+  </main><Footer/></div>
+}
