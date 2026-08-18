@@ -4,10 +4,10 @@ const SUPABASE_URL = "https://lsaerludzkxjewqgbvkg.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWVybHVkemt4amV3cWdidmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTMwNzEsImV4cCI6MjA5MTc2OTA3MX0.k0PmsyeAQ-hq8aTn_AVoyzsx-cbYdmfQzHKhIMp_s1U";
 
-const LOCAL_STORAGE_KEY = "ocg_strategy_briefs_v1";
+const LOCAL_STORAGE_KEY = "ocg_strategy_briefs_v3";
 
 export async function persistStrategyBrief(brief: IOCGStrategyBrief): Promise<{ success: boolean; id: string; storage: "supabase" | "local" }> {
-  // Always write to local storage as fallback and immediate cache
+  // 1. Always write to local storage as instant reliable cache
   try {
     const existing = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "[]");
     const updated = [brief, ...existing.filter((b: IOCGStrategyBrief) => b.id !== brief.id)];
@@ -16,7 +16,7 @@ export async function persistStrategyBrief(brief: IOCGStrategyBrief): Promise<{ 
     console.warn("Local storage cache warning:", err);
   }
 
-  // Attempt Supabase REST persistence
+  // 2. Attempt Supabase REST persistence into leads table
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",
@@ -27,13 +27,13 @@ export async function persistStrategyBrief(brief: IOCGStrategyBrief): Promise<{ 
         Prefer: "return=representation",
       },
       body: JSON.stringify({
-        name: brief.clientName || "OCG Intelligence Lead",
-        email: brief.clientEmail || "intake@ocgintelligence.local",
-        phone: brief.clientPhone || "",
-        source: brief.leadSource,
+        name: brief.clientContext?.fullName || "OCG Strategy Lead",
+        email: brief.clientContext?.email || "intake@ocgintelligence.local",
+        phone: brief.clientContext?.phone || "",
+        source: brief.provenance.origin,
         notes: JSON.stringify(brief),
         status: "new",
-        created_at: new Date().toISOString(),
+        created_at: brief.createdAt,
       }),
     });
 

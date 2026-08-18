@@ -1,116 +1,227 @@
 /**
- * OCG Core Type Contracts & System Interfaces
- * Shared across G Intelligence, HUNTER, VICTOR, PIPER, and Frontend Operations.
+ * Canonical OCG Operating Contracts & Type Specifications (Phase III)
+ * Shared across G Gateway, HUNTER, VICTOR, PIPER, and Frontend Operations.
  */
 
 // ============================================================
-// 1. OCG STRATEGY BRIEF CONTRACT
+// 1. DATA CERTAINTY & PROVENANCE CLASSIFICATIONS
+// ============================================================
+export type DataCertaintyLevel =
+  | "KNOWN"                         // Formally verified public record / deed / closed title
+  | "ESTIMATED"                     // Computed via deterministic underwriting formula
+  | "PROVISIONAL"                   // Derived from heuristic models / preliminary intake
+  | "PROFESSIONAL_VERIFICATION_REQ"; // Requires on-site contractor inspection or certified appraisal
+
+export interface IDataFieldProvenance<T> {
+  value: T;
+  certainty: DataCertaintyLevel;
+  source: string;
+  retrievalTimestamp: string;
+  confidenceScore?: number; // 0.00 - 1.00
+  verificationNotes?: string;
+}
+
+// ============================================================
+// 2. CANONICAL OCG STRATEGY BRIEF CONTRACT
 // ============================================================
 export interface IOCGStrategyBrief {
   id: string;
+  version: "3.0.0";
   createdAt: string;
-  clientName?: string;
-  clientEmail?: string;
-  clientPhone?: string;
-  investorStage: "Beginner" | "Active Operator" | "Capital Allocator" | "Seller / Disposing";
-  availableLiquidityTier: "$10k-$25k" | "$25k-$50k" | "$50k-$100k" | "$100k-$250k" | "$250k+" | "Equity / Real Estate Only";
-  preferredStrategy: "Fix & Flip" | "BRRRR" | "Buy & Hold / Cash Flow" | "Direct Sale / Liquidation" | "Exploratory / Unsure";
-  targetNeighborhoods?: string[];
-  targetTimeline: "Immediate (0-30 Days)" | "30-90 Days" | "90-180 Days" | "Flexible";
-  riskTolerance: "Conservative (Preserve Capital First)" | "Balanced Growth" | "Aggressive Turnkey";
-  underwritingNotes?: {
-    estimatedBudget?: number;
-    targetArv?: number;
-    projectedRehabTier?: "Cosmetic ($15-$25/sqft)" | "Standard ($30-$45/sqft)" | "Full Architectural ($50-$75/sqft)";
+  updatedAt: string;
+  provenance: {
+    origin: "G_CONVERSATIONAL_INTAKE" | "DIRECT_INVESTOR_FORM" | "DIRECT_SELLER_FORM" | "OPERATOR_MANUAL";
+    sessionId: string;
+    clientIpHash?: string;
+    userAgent?: string;
   };
-  executiveSummary: string;
-  leadSource: "Website G Conversation" | "Direct Booking" | "Seller Intake" | "Investor Intake";
-  status: "Draft" | "Submitted" | "Scheduled" | "Ingested_by_PIPER";
+  clientContext: {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    preferredContactMethod?: "Email" | "Phone" | "SMS";
+    investorStage: IDataFieldProvenance<"Beginner" | "Active Operator" | "Capital Allocator" | "Seller / Disposing">;
+    availableLiquidityTier: IDataFieldProvenance<"$10k-$25k" | "$25k-$50k" | "$50k-$100k" | "$100k-$250k" | "$250k+" | "Equity / Real Estate Only">;
+    investmentExperienceYears?: number;
+    involvementPreference?: "Active Project Oversight" | "Passive Capital Partner" | "Hybrid Advisory";
+  };
+  strategyExploration: {
+    primaryFit: IDataFieldProvenance<"Fix & Flip" | "BRRRR" | "Buy & Hold" | "Direct Sale / Liquidation" | "Exploratory / Unsure">;
+    secondaryFit?: string;
+    targetNeighborhoods?: string[];
+    timeline: IDataFieldProvenance<"Immediate (0-30 Days)" | "30-90 Days" | "90-180 Days" | "Flexible">;
+    riskTolerance: IDataFieldProvenance<"Conservative (Preserve Capital First)" | "Balanced Growth" | "Aggressive Turnkey">;
+    modeledUnderwritingContext?: {
+      targetArv?: number;
+      estimatedRehabBudget?: number;
+      targetMaoCeiling?: number;
+      modeledGrossMargin?: number;
+      contingencyBuffer?: number;
+    };
+  };
+  executiveIntelligence: {
+    gConversationSummary: string;
+    keyRiskConsiderations: string[];
+    unresolvedQuestions: string[];
+    nextRecommendedHumanAction: string;
+    disclaimerAcknowledged: boolean;
+  };
+  lifecycle: {
+    status: "Draft" | "Persisted_Staging" | "Scheduled_Strategy_Session" | "Ingested_by_PIPER" | "Archived";
+    piperDealId?: string;
+    assignedPrincipal?: string;
+  };
 }
 
 // ============================================================
-// 2. G WEBSITE CONTROL & TOOL ACTIONS
+// 3. PROPERTY INTELLIGENCE RECORD (VICTOR / PIPER INPUT)
 // ============================================================
-export type GActionType =
-  | "navigate"
-  | "open_calculator"
-  | "set_calculator_values"
-  | "load_property_case"
-  | "activate_seller_intake"
-  | "book_strategy_session"
-  | "generate_strategy_brief";
+export interface IPropertyIntelligenceRecord {
+  id: string;
+  address: string;
+  city: "Wichita" | string;
+  state: "KS" | string;
+  zip: string;
+  sedgwickCountyParcelId?: IDataFieldProvenance<string>;
+  legalDescription?: IDataFieldProvenance<string>;
+  
+  // Physical Characteristics
+  propertyType: IDataFieldProvenance<"Single Family Craftsman" | "Mid-Century Ranch" | "Victorian / Cottage" | "Multi-Family" | "Other">;
+  sqft: IDataFieldProvenance<number>;
+  yearBuilt: IDataFieldProvenance<number>;
+  bedrooms: IDataFieldProvenance<number>;
+  bathrooms: IDataFieldProvenance<number>;
+  
+  // Underwriting & Scope
+  arvRetailEstimate: IDataFieldProvenance<number>;
+  rehabScopeEstimate: IDataFieldProvenance<number>;
+  maximumAllowableOffer: IDataFieldProvenance<number>;
+  projectedMonthlyRent: IDataFieldProvenance<number>;
+  
+  // Risk & Physical Verification Flags
+  foundationInspectionStatus: DataCertaintyLevel;
+  roofAgeAndCondition: DataCertaintyLevel;
+  mepSystemsCondition: DataCertaintyLevel; // Mechanical, Electrical, Plumbing
+  floodPlainZone: IDataFieldProvenance<string>;
+  taxDelinquencyStatus: IDataFieldProvenance<"Current" | "Delinquent" | "In Foreclosure">;
+}
 
-export interface IGWebsiteAction {
-  type: GActionType;
+// ============================================================
+// 4. G ACTION & WEBSITE CONTROL REGISTRY
+// ============================================================
+export type GActionId =
+  | "NAVIGATE"
+  | "OPEN_STRATEGY_COMPARISON"
+  | "SELECT_STRATEGY_TAB"
+  | "SET_CALCULATOR_VALUES"
+  | "SELECT_PROPERTY_TRANSFORMATION"
+  | "INITIATE_SELLER_MODE"
+  | "INITIATE_INVESTOR_QUALIFICATION"
+  | "INITIATE_BOOKING"
+  | "UPDATE_STRATEGY_BRIEF";
+
+export interface IGActionInvocation {
+  actionId: GActionId;
   payload?: {
     path?: string;
+    strategyTab?: "flip" | "brrrr" | "buy_hold";
     arv?: number;
     rehab?: number;
-    propertyId?: "bungalow" | "ranch";
-    sellerStep?: number;
-    briefingData?: Partial<IOCGStrategyBrief>;
+    propertyCaseId?: "bungalow" | "ranch";
+    sellerStepIndex?: number;
+    briefUpdates?: Partial<IOCGStrategyBrief>;
+    bookingContext?: {
+      briefId?: string;
+      requestedStrategy?: string;
+    };
   };
-  uiNotice?: string;
-}
-
-// ============================================================
-// 3. HUNTER / VICTOR / PIPER SYSTEM INTERFACES
-// ============================================================
-export interface IHunterSignal {
-  id: string;
+  uiToastMessage?: string;
   timestamp: string;
-  neighborhood: string;
-  address: string;
-  distressVector: "Tax Delinquency" | "Probate / Estate" | "Deferred Exterior Maintenance" | "Code Compliance" | "Landlord Portfolio Exit";
-  countyAppraisal: number;
-  estimatedMarketDeltaPercent: number;
-  priorityScore: number; // 1-100
-  intakeStatus: "Signal Flagged" | "Victor Queued" | "Manual Review" | "Dismissed";
 }
 
-export interface IVictorUnderwritingPayload {
-  dealId: string;
-  address: string;
+// ============================================================
+// 5. HUNTER / VICTOR / PIPER ADAPTER CONTRACTS
+// ============================================================
+export interface IHunterAdapterRequest {
+  targetZipCodes?: string[];
+  distressVector?: "Tax Delinquency" | "Probate / Estate" | "Deferred Exterior Maintenance" | "All";
+  minAppraisalDeltaPercent?: number;
+}
+
+export interface IHunterAdapterResponse {
+  status: "SPECIFICATION_MOCK" | "LIVE_CONNECTED" | "ERROR";
+  signalsFound: Array<{
+    signalId: string;
+    address: string;
+    neighborhood: string;
+    distressVector: string;
+    marketDeltaPercent: number;
+    priorityScore: number;
+  }>;
+  retrievalTimestamp: string;
+  upstreamService: "HUNTER_CORE_V1";
+}
+
+export interface IVictorAdapterRequest {
+  propertyAddress: string;
   sqft: number;
   yearBuilt: number;
-  compsRadiusMiles: number;
-  comparableCount: number;
-  computedArv: number;
-  itemizedRehabScope: {
-    roofAndExterior: number;
-    kitchenAndBaths: number;
-    mepSystems: number; // Mechanical, Electrical, Plumbing
-    interiorFinishes: number;
+  observedConditionTier: "Light Cosmetic" | "Standard Renovation" | "Heavy Gut / Structural";
+  targetStrategy: "Fix & Flip" | "BRRRR";
+}
+
+export interface IVictorAdapterResponse {
+  status: "SPECIFICATION_MOCK" | "LIVE_CONNECTED" | "ERROR";
+  underwritingRecord: IPropertyIntelligenceRecord;
+  rehabBreakdown: {
+    exteriorAndRoof: number;
+    kitchensAndBaths: number;
+    mechanicals: number;
     contingencyReserve: number;
+    totalRehab: number;
   };
-  totalEstimatedRehab: number;
-  maximumAllowableOffer: number; // (ARV * 0.70) - Rehab
-  flipProjectedProfit: number;
-  brrrrRefiCapRate: number;
-  dscrCoverageRatio: number;
-  underwritingConfidenceScore: number; // 1-100
+  maoCeiling: number;
+  dscrRefiFeasibility: {
+    projectedRent: number;
+    estimatedPiti: number;
+    coverageRatio: number;
+    qualifiesForDscr: boolean;
+  };
+  underwritingConfidenceScore: number;
 }
 
-export interface IPiperDealPipelineStage {
-  dealId: string;
-  propertyAddress: string;
-  currentStage: "1. Lead Sourced" | "2. Underwriting Complete" | "3. Offer Extended" | "4. In Escrow" | "5. Due Diligence / Inspections" | "6. Closed / Title Transferred" | "7. Active Renovation" | "8. Stabilized / Exit";
-  closingDateTarget: string;
-  contingenciesCleared: string[];
-  lenderPacketReady: boolean;
-  assignedPrincipal: string;
+export interface IPiperAdapterRequest {
+  strategyBrief: IOCGStrategyBrief;
+  associatedPropertyRecord?: IPropertyIntelligenceRecord;
+}
+
+export interface IPiperAdapterResponse {
+  status: "SPECIFICATION_MOCK" | "LIVE_CONNECTED" | "ERROR";
+  piperTrackingId: string;
+  dealStage: "1. Intake & Initial Triage";
+  assignedWorkflow: "Investor Strategy Assessment" | "Seller Direct Review";
+  ingestionTimestamp: string;
 }
 
 // ============================================================
-// 4. INTEGRATION COMPONENT STATUS ENUM
+// 6. VOICE PROVIDER AGNOSTIC INTERFACES
 // ============================================================
-export type IntegrationStatus = "LIVE" | "STAGING" | "SPECIFICATION" | "BLOCKED";
+export interface ISTTProvider {
+  name: string;
+  connect(stream: MediaStream): Promise<void>;
+  onTranscript(callback: (text: string, isFinal: boolean) => void): void;
+  disconnect(): Promise<void>;
+}
 
-export interface IIntegrationMatrixItem {
-  subsystem: string;
-  component: string;
-  status: IntegrationStatus;
-  currentCapability: string;
-  productionRequirement: string;
-  blockerOrDecisionRequired?: string;
+export interface ITTSProvider {
+  name: string;
+  synthesizeStreaming(textStream: AsyncIterable<string>): Promise<AsyncIterable<ArrayBuffer>>;
+  cancel(): void;
+}
+
+export interface ILiveAvatarProvider {
+  name: string;
+  initialize(containerElement: HTMLElement): Promise<void>;
+  speak(audioStream: ArrayBuffer): void;
+  interrupt(): void;
 }

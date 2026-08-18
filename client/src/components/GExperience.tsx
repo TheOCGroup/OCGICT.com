@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Bot, Send, Sparkles, Mic, ArrowRight, ShieldCheck, FileText, CheckCircle2, User, Download, Copy, Check } from "lucide-react";
+import { Bot, Send, Sparkles, Mic, ArrowRight, ShieldCheck, FileText, CheckCircle2, User, Copy, Check, Info } from "lucide-react";
 import { Link } from "wouter";
+import { GActionRegistry } from "@/intelligence/actionRegistry";
 import { processGDialogue } from "@/intelligence/gActionDispatcher";
 import { persistStrategyBrief } from "@/lib/persistence";
-import { IOCGStrategyBrief, IGWebsiteAction } from "../../../shared/contracts";
+import { getActiveBookingProvider } from "@/lib/booking";
+import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
   id: string;
   sender: "g" | "user";
   text: string;
-  actionTag?: string;
 }
 
 export default function GExperience() {
@@ -26,7 +27,10 @@ export default function GExperience() {
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [briefing, setBriefing] = useState<IOCGStrategyBrief | null>(null);
+  const [sessionId] = useState<string>(() => `sess_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`);
   const chatScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const bookingProvider = getActiveBookingProvider();
 
   const scrollToChatBottom = () => {
     if (chatScrollContainerRef.current) {
@@ -48,17 +52,7 @@ export default function GExperience() {
     "How does OCG preserve investor liquidity on flips?"
   ];
 
-  const dispatchWebsiteAction = (action?: IGWebsiteAction) => {
-    if (!action) return;
-    if (action.uiNotice) {
-      setActiveActionNotice(action.uiNotice);
-      setTimeout(() => setActiveActionNotice(null), 5000);
-    }
-    // Broadcast custom event for site components (calculators, sliders, etc.)
-    window.dispatchEvent(new CustomEvent("ocg:g-action", { detail: action }));
-  };
-
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputVal;
     if (!query.trim()) return;
 
@@ -72,25 +66,61 @@ export default function GExperience() {
     if (!textToSend) setInputVal("");
     setIsTyping(true);
 
-    setTimeout(async () => {
-      const response = processGDialogue(query, messages);
-      dispatchWebsiteAction(response.action);
+    try {
+      // 1. Attempt Server-Side G Intelligence Gateway
+      let replyText = "";
+      let actionInvocation: IGActionInvocation | undefined;
+      let generatedBrief: IOCGStrategyBrief | undefined;
 
-      if (response.generatedBrief) {
-        const fullBrief: IOCGStrategyBrief = {
-          id: `brief_${Date.now()}`,
-          createdAt: new Date().toISOString(),
-          investorStage: response.generatedBrief.investorStage || "Active Operator",
-          availableLiquidityTier: response.generatedBrief.availableLiquidityTier || "$50k-$100k",
-          preferredStrategy: response.generatedBrief.preferredStrategy || "Fix & Flip",
-          targetTimeline: response.generatedBrief.targetTimeline || "30-90 Days",
-          riskTolerance: response.generatedBrief.riskTolerance || "Conservative (Preserve Capital First)",
-          executiveSummary: response.generatedBrief.executiveSummary || "Inquiry analyzed through G Intelligence.",
-          leadSource: "Website G Conversation",
-          status: "Draft"
-        };
-        setBriefing(fullBrief);
-        await persistStrategyBrief(fullBrief);
+      try {
+        const res = await fetch("/api/g/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            message: query,
+            history: messages.map((m) => ({
+              role: m.sender === "user" ? "user" : "assistant",
+              content: m.text,
+            })),
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          replyText = data.replyText;
+          actionInvocation = data.action;
+          generatedBrief = data.strategyBrief;
+        }
+      } catch (networkErr) {
+        console.warn("Gateway endpoint unreachable, using local intelligence engine fallback:", networkErr);
+      }
+
+      // 2. Local Fallback if Gateway did not respond
+      if (!replyText) {
+        const localResponse = processGDialogue(query, messages);
+        replyText = localResponse.messageText;
+        if (localResponse.action) {
+          actionInvocation = localResponse.action;
+        }
+        if (localResponse.generatedBrief) {
+          generatedBrief = localResponse.generatedBrief;
+        }
+      }
+
+      // 3. Execute Tool Action via Registry
+      if (actionInvocation) {
+        const execResult = GActionRegistry.execute(actionInvocation);
+        if (execResult.message) {
+          setActiveActionNotice(execResult.message);
+          setTimeout(() => setActiveActionNotice(null), 5000);
+        }
+      }
+
+      // 4. Update and Persist Strategy Brief
+      if (generatedBrief) {
+        setBriefing(generatedBrief);
+        await persistStrategyBrief(generatedBrief);
       }
 
       setMessages((prev) => [
@@ -98,11 +128,12 @@ export default function GExperience() {
         {
           id: (Date.now() + 1).toString(),
           sender: "g",
-          text: response.messageText,
+          text: replyText,
         },
       ]);
+    } finally {
       setIsTyping(false);
-    }, 750);
+    }
   };
 
   const copyBriefJson = () => {
@@ -128,7 +159,7 @@ export default function GExperience() {
             </span>
           </h2>
           <p className="mt-4 text-sm md:text-base text-slate-400 leading-relaxed">
-            G is trained across OCG's financing philosophy, Wichita housing stock, 70% rule underwriting, and investor diagnostics. Ask a question, explore a scenario, or generate an OCG Strategy Brief.
+            G is trained across OCG's financing philosophy, Wichita housing stock, 70% rule underwriting, and investor diagnostics. Ask a question, explore a scenario, or generate a canonical OCG Strategy Brief.
           </p>
         </div>
 
@@ -164,7 +195,7 @@ export default function GExperience() {
                 </div>
                 <div>
                   <div className="font-bold text-white text-sm flex items-center gap-2">
-                    G <span className="text-[10px] uppercase font-mono text-blue-400 px-2 py-0.5 bg-blue-950/80 rounded border border-blue-800/40">OCG Intelligence Core</span>
+                    G <span className="text-[10px] uppercase font-mono text-blue-400 px-2 py-0.5 bg-blue-950/80 rounded border border-blue-800/40">OCG Gateway Core</span>
                   </div>
                   <div className="text-[11px] text-slate-400">Context-Aware Real Estate & Underwriting System</div>
                 </div>
@@ -186,7 +217,7 @@ export default function GExperience() {
             {voiceNotice && (
               <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200 flex items-center justify-between">
                 <span>
-                  <strong>Staging Notice:</strong> Live streaming audio with WebRTC barge-in is in development. Full interactive text intelligence and website-action dispatching are operational below.
+                  <strong>Staging Notice:</strong> Provider-agnostic streaming voice architecture (STT/TTS) is specified in documentation. Full interactive text intelligence and website-action dispatching are operational below.
                 </span>
                 <button onClick={() => setVoiceNotice(false)} className="text-blue-400 font-bold ml-2">✕</button>
               </div>
@@ -226,7 +257,7 @@ export default function GExperience() {
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-950 text-blue-400">
                     <Bot size={14} />
                   </div>
-                  <span>G is analyzing OCG underwriting models and Wichita intelligence...</span>
+                  <span>G Gateway is reasoning across OCG underwriting models and Wichita intelligence...</span>
                 </div>
               )}
             </div>
@@ -256,7 +287,7 @@ export default function GExperience() {
             </form>
           </div>
 
-          {/* Structured OCG Strategy Brief & Human Strategy Handoff */}
+          {/* Canonical OCG Strategy Brief with Certainty Badges */}
           <div className="space-y-5">
             <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -276,29 +307,51 @@ export default function GExperience() {
 
               {briefing ? (
                 <div className="space-y-3 text-xs">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Investor Stage</span>
-                    <span className="font-semibold text-white">{briefing.investorStage}</span>
+                    <span className="font-semibold text-white flex items-center gap-1">
+                      {briefing.clientContext.investorStage.value}
+                      <span className="text-[9px] font-mono text-blue-400 bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-900">
+                        {briefing.clientContext.investorStage.certainty}
+                      </span>
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Available Liquidity</span>
-                    <span className="font-semibold text-emerald-400">{briefing.availableLiquidityTier}</span>
+                    <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                      {briefing.clientContext.availableLiquidityTier.value}
+                      <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-900/60">
+                        {briefing.clientContext.availableLiquidityTier.certainty}
+                      </span>
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Strategy Fit</span>
-                    <span className="font-semibold text-blue-300">{briefing.preferredStrategy}</span>
+                    <span className="font-semibold text-blue-300 flex items-center gap-1">
+                      {briefing.strategyExploration.primaryFit.value}
+                      <span className="text-[9px] font-mono text-blue-400 bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-900">
+                        {briefing.strategyExploration.primaryFit.certainty}
+                      </span>
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Timeline</span>
-                    <span className="text-slate-200">{briefing.targetTimeline}</span>
+                    <span className="text-slate-200">{briefing.strategyExploration.timeline.value}</span>
                   </div>
+
                   <div className="rounded-xl bg-slate-900 p-3 border border-slate-800 space-y-1">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Executive Summary</span>
-                    <p className="text-slate-300 text-[11px] leading-relaxed">{briefing.executiveSummary}</p>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">
+                      {briefing.executiveIntelligence.gConversationSummary}
+                    </p>
                   </div>
+
                   <div className="text-[10px] text-slate-500 flex items-center gap-1">
                     <CheckCircle2 size={12} className="text-blue-400" />
-                    Persisted to OCG Intake Protocol (ID: {briefing.id.slice(0, 14)}...)
+                    Structured Brief Persisted (ID: {briefing.id.slice(0, 14)}...)
                   </div>
                 </div>
               ) : (
@@ -312,7 +365,7 @@ export default function GExperience() {
 
               <div className="pt-2">
                 <Link
-                  href="/contact"
+                  href={bookingProvider.getBookingUrl(briefing || undefined)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:from-blue-500 hover:to-indigo-500 transition-all shadow-lg shadow-blue-950"
                 >
                   Book Your OCG Strategy Session <ArrowRight size={15} />

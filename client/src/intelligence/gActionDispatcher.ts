@@ -1,15 +1,15 @@
-import { IGWebsiteAction, IOCGStrategyBrief } from "../../../shared/contracts";
+import { IGActionInvocation, IOCGStrategyBrief } from "../../../shared/contracts";
 import { queryOcgKnowledge } from "./ocgKnowledge";
 import { queryWichitaNeighborhood } from "./wichitaMarketIntelligence";
 
 export interface GEngineResponse {
   messageText: string;
-  action?: IGWebsiteAction;
-  generatedBrief?: Partial<IOCGStrategyBrief>;
+  action?: IGActionInvocation;
+  generatedBrief?: IOCGStrategyBrief;
 }
 
 /**
- * G Intelligence Reasoning & Action Engine
+ * G Intelligence Reasoning & Action Engine (Local Fallback & Deterministic Matcher)
  * Analyzes conversational input, retrieves verified OCG frameworks and Wichita submarket intelligence,
  * and generates structured website actions / strategy dossiers.
  */
@@ -19,6 +19,7 @@ export function processGDialogue(
 ): GEngineResponse {
   const query = userInput.trim();
   const lower = query.toLowerCase();
+  const now = new Date().toISOString();
 
   // 1. Check for Wichita Neighborhood Query
   const neighborhoodMatch = queryWichitaNeighborhood(lower);
@@ -26,18 +27,20 @@ export function processGDialogue(
     const isCollegeHill = neighborhoodMatch.id === "college-hill";
     const isCrownHeights = neighborhoodMatch.id === "crown-heights";
 
-    let action: IGWebsiteAction | undefined = undefined;
+    let action: IGActionInvocation | undefined = undefined;
     if (isCollegeHill) {
       action = {
-        type: "load_property_case",
-        payload: { propertyId: "bungalow" },
-        uiNotice: "Loaded College Hill Craftsman Architectural Case Study"
+        actionId: "SELECT_PROPERTY_TRANSFORMATION",
+        payload: { propertyCaseId: "bungalow" },
+        uiToastMessage: "Loaded College Hill Craftsman Architectural Case Study",
+        timestamp: now,
       };
     } else if (isCrownHeights) {
       action = {
-        type: "load_property_case",
-        payload: { propertyId: "ranch" },
-        uiNotice: "Loaded Crown Heights Mid-Century Brick Ranch Case Study"
+        actionId: "SELECT_PROPERTY_TRANSFORMATION",
+        payload: { propertyCaseId: "ranch" },
+        uiToastMessage: "Loaded Crown Heights Mid-Century Brick Ranch Case Study",
+        timestamp: now,
       };
     }
 
@@ -52,13 +55,12 @@ ${isCollegeHill || isCrownHeights ? "I have also activated the interactive Befor
 
     return {
       messageText: reply,
-      action
+      action,
     };
   }
 
   // 2. Check for 70% Rule / Underwriting Calculation Request
   if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("underwrite") || lower.includes("math")) {
-    // Extract potential ARV or numbers if mentioned
     let arv = 240000;
     let rehab = 45000;
 
@@ -77,22 +79,70 @@ On a modeled **$${arv.toLocaleString()} ARV** with an estimated **$${rehab.toLoc
 
 I have adjusted the interactive **70% Rule & MAO Explorer** on this page with these parameters so you can stress-test different purchase prices and holding buffers.`,
       action: {
-        type: "set_calculator_values",
+        actionId: "SET_CALCULATOR_VALUES",
         payload: { arv, rehab },
-        uiNotice: `Updated 70% MAO Explorer to ARV $${arv.toLocaleString()} / Rehab $${rehab.toLocaleString()}`
-      }
+        uiToastMessage: `Updated 70% MAO Explorer to ARV $${arv.toLocaleString()} / Rehab $${rehab.toLocaleString()}`,
+        timestamp: now,
+      },
     };
   }
 
   // 3. Check for Capital Allocation / Liquidity Question
   if (lower.includes("50k") || lower.includes("100k") || lower.includes("capital") || lower.includes("liquidity") || lower.includes("preserve") || lower.includes("cash")) {
-    const briefData: Partial<IOCGStrategyBrief> = {
-      investorStage: "Capital Allocator",
-      availableLiquidityTier: lower.includes("100k") ? "$100k-$250k" : "$50k-$100k",
-      preferredStrategy: "Fix & Flip",
-      riskTolerance: "Conservative (Preserve Capital First)",
-      targetTimeline: "30-90 Days",
-      executiveSummary: "Investor seeking to deploy capital safely without draining liquid cash. OCG recommended senior debt for acquisition/construction while holding liquid reserves as contingency defense."
+    const brief: IOCGStrategyBrief = {
+      id: `brief_${Date.now()}`,
+      version: "3.0.0",
+      createdAt: now,
+      updatedAt: now,
+      provenance: {
+        origin: "G_CONVERSATIONAL_INTAKE",
+        sessionId: "local_sess",
+      },
+      clientContext: {
+        investorStage: {
+          value: "Capital Allocator",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        availableLiquidityTier: {
+          value: lower.includes("100k") ? "$100k-$250k" : "$50k-$100k",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        involvementPreference: "Hybrid Advisory",
+      },
+      strategyExploration: {
+        primaryFit: {
+          value: "Fix & Flip",
+          certainty: "ESTIMATED",
+          source: "OCG Strategy Matrix",
+          retrievalTimestamp: now,
+        },
+        timeline: {
+          value: "30-90 Days",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        riskTolerance: {
+          value: "Conservative (Preserve Capital First)",
+          certainty: "ESTIMATED",
+          source: "OCG Financing Doctrine",
+          retrievalTimestamp: now,
+        },
+      },
+      executiveIntelligence: {
+        gConversationSummary: "Investor seeking to deploy capital safely without draining liquid cash. OCG recommended senior debt for acquisition/construction while holding liquid reserves as contingency defense.",
+        keyRiskConsiderations: ["Preserve personal liquidity buffer against holding/material cost shifts."],
+        unresolvedQuestions: ["Contractor physical scope verification required."],
+        nextRecommendedHumanAction: "Schedule Strategy Session with Genaro.",
+        disclaimerAcknowledged: true,
+      },
+      lifecycle: {
+        status: "Persisted_Staging",
+      },
     };
 
     return {
@@ -104,24 +154,72 @@ I have adjusted the interactive **70% Rule & MAO Explorer** on this page with th
 3. **Lender Confidence**: Lenders require 6-12 months of interest reserves. Retaining your cash ensures favorable loan terms and allows scaling into multiple opportunities.
 
 I have assembled this into your **Structured Strategy Brief** on the right.`,
-      generatedBrief: briefData,
+      generatedBrief: brief,
       action: {
-        type: "generate_strategy_brief",
-        payload: { briefingData: briefData },
-        uiNotice: "Generated Structured Investor Strategy Brief"
-      }
+        actionId: "UPDATE_STRATEGY_BRIEF",
+        payload: { briefUpdates: brief },
+        uiToastMessage: "Generated Structured Investor Strategy Brief",
+        timestamp: now,
+      },
     };
   }
 
   // 4. Check for Seller / Inherited / Estate Inquiry
   if (lower.includes("sell") || lower.includes("inherited") || lower.includes("probate") || lower.includes("estate") || lower.includes("repairs") || lower.includes("house")) {
-    const sellerBrief: Partial<IOCGStrategyBrief> = {
-      investorStage: "Seller / Disposing",
-      availableLiquidityTier: "Equity / Real Estate Only",
-      preferredStrategy: "Direct Sale / Liquidation",
-      targetTimeline: "Immediate (0-30 Days)",
-      riskTolerance: "Conservative (Preserve Capital First)",
-      executiveSummary: "Homeowner or estate heir seeking transparent preliminary review of Wichita property condition without high-pressure wholesaler tactics."
+    const sellerBrief: IOCGStrategyBrief = {
+      id: `brief_${Date.now()}`,
+      version: "3.0.0",
+      createdAt: now,
+      updatedAt: now,
+      provenance: {
+        origin: "G_CONVERSATIONAL_INTAKE",
+        sessionId: "local_sess",
+      },
+      clientContext: {
+        investorStage: {
+          value: "Seller / Disposing",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        availableLiquidityTier: {
+          value: "Equity / Real Estate Only",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        involvementPreference: "Passive Capital Partner",
+      },
+      strategyExploration: {
+        primaryFit: {
+          value: "Direct Sale / Liquidation",
+          certainty: "ESTIMATED",
+          source: "OCG Strategy Matrix",
+          retrievalTimestamp: now,
+        },
+        timeline: {
+          value: "Immediate (0-30 Days)",
+          certainty: "PROVISIONAL",
+          source: "G Local Inference",
+          retrievalTimestamp: now,
+        },
+        riskTolerance: {
+          value: "Conservative (Preserve Capital First)",
+          certainty: "ESTIMATED",
+          source: "OCG Financing Doctrine",
+          retrievalTimestamp: now,
+        },
+      },
+      executiveIntelligence: {
+        gConversationSummary: "Homeowner or estate heir seeking transparent preliminary review of Wichita property condition without high-pressure wholesaler tactics.",
+        keyRiskConsiderations: ["Heir consensus and estate probate timeline."],
+        unresolvedQuestions: ["On-site condition walkthrough pending."],
+        nextRecommendedHumanAction: "Schedule Property Consultation with Genaro.",
+        disclaimerAcknowledged: true,
+      },
+      lifecycle: {
+        status: "Persisted_Staging",
+      },
     };
 
     return {
@@ -135,10 +233,11 @@ I have assembled this into your **Structured Strategy Brief** on the right.`,
 I have prepared a preliminary intake brief. You can review the 4-step seller advisory process or book a direct consultation with Genaro.`,
       generatedBrief: sellerBrief,
       action: {
-        type: "activate_seller_intake",
-        payload: { sellerStep: 1, briefingData: sellerBrief },
-        uiNotice: "Prepared Seller Advisory Dossier"
-      }
+        actionId: "INITIATE_SELLER_MODE",
+        payload: { sellerStepIndex: 1 },
+        uiToastMessage: "Prepared Seller Advisory Dossier",
+        timestamp: now,
+      },
     };
   }
 
