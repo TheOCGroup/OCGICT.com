@@ -26,6 +26,7 @@ export function processGDialogue(
   if (neighborhoodMatch) {
     const isCollegeHill = neighborhoodMatch.id === "college-hill";
     const isCrownHeights = neighborhoodMatch.id === "crown-heights";
+    const isDelano = neighborhoodMatch.id === "delano";
 
     let action: IGActionInvocation | undefined = undefined;
     if (isCollegeHill) {
@@ -42,6 +43,13 @@ export function processGDialogue(
         uiToastMessage: "Loaded Crown Heights Mid-Century Brick Ranch Case Study",
         timestamp: now,
       };
+    } else if (isDelano) {
+      action = {
+        actionId: "SELECT_PROPERTY_TRANSFORMATION",
+        payload: { propertyCaseId: "delano" as any },
+        uiToastMessage: "Loaded Historic Delano Worker Cottage Case Study",
+        timestamp: now,
+      };
     }
 
     const reply = `**${neighborhoodMatch.name} (${neighborhoodMatch.quadrant} Wichita)**:
@@ -51,7 +59,7 @@ export function processGDialogue(
 • **Target Demographic**: ${neighborhoodMatch.targetBuyerDemographic}
 • **Market Dynamics**: ${neighborhoodMatch.neighborhoodInsights}
 
-${isCollegeHill || isCrownHeights ? "I have also activated the interactive Before/After architectural transformation model above for you to inspect." : ""}`;
+${isCollegeHill || isCrownHeights || isDelano ? "I have also activated the interactive Before/After architectural transformation model above for you to inspect." : ""}`;
 
     return {
       messageText: reply,

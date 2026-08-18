@@ -59,6 +59,27 @@ const properties: PropertyCase[] = [
       "Full interior reconfiguration to open-concept kitchen/living"
     ],
     designStrategy: "Elevating dated 1960s brick into a crisp modern ranch without exceeding neighborhood comp thresholds."
+  },
+  {
+    id: "delano",
+    name: "Delano Historic Worker Cottage",
+    neighborhood: "Historic Delano / West Douglas Corridor",
+    propertyType: "1-Story Historic Worker Cottage",
+    sqft: "1,280 sq ft",
+    yearBuilt: "1922",
+    beforeImg: "/images/transformations/wichita_delano_before.jpg",
+    afterImg: "/images/transformations/wichita_delano_after.jpg",
+    estimatedRehab: "$36,000",
+    projectedArv: "$195,000",
+    targetBuyer: "Downtown Commuter / Value-Add Rental Investor",
+    scopeItems: [
+      "Deep navy-slate exterior siding + crisp warm-white architectural trim",
+      "Restored front porch with natural cedar wood front door & soffit",
+      "Modern matte black exterior cylinder sconces",
+      "Manicured Kansas native perennial landscaping & dark mulch",
+      "Updated high-efficiency HVAC & PEX plumbing run"
+    ],
+    designStrategy: "Cost-disciplined restoration tailored to West Douglas corridor rental demand and entry-level buyer appetite."
   }
 ];
 
@@ -70,8 +91,9 @@ export default function InteractiveTransformSlider() {
 
   React.useEffect(() => {
     const handleGAction = (e: any) => {
-      if (e.detail?.type === "load_property_case" && e.detail.payload?.propertyId) {
-        const targetId = e.detail.payload.propertyId;
+      const isMatch = e.detail?.type === "load_property_case" || e.detail?.actionId === "SELECT_PROPERTY_TRANSFORMATION";
+      const targetId = e.detail?.payload?.propertyCaseId || e.detail?.payload?.propertyId;
+      if (isMatch && targetId) {
         const foundIdx = properties.findIndex((p) => p.id === targetId);
         if (foundIdx !== -1) {
           setActiveIdx(foundIdx);

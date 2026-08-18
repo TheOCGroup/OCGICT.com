@@ -10,7 +10,8 @@ export function Rule70Calculator() {
 
   React.useEffect(() => {
     const handleGAction = (e: any) => {
-      if (e.detail?.type === "set_calculator_values" && e.detail.payload) {
+      const isMatch = e.detail?.type === "set_calculator_values" || e.detail?.actionId === "SET_CALCULATOR_VALUES";
+      if (isMatch && e.detail.payload) {
         if (e.detail.payload.arv) setArv(e.detail.payload.arv);
         if (e.detail.payload.rehab) setRehab(e.detail.payload.rehab);
       }
