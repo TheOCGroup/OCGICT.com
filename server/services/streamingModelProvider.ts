@@ -56,7 +56,6 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
       };
     }
 
-    // Add function declarations if tools are provided
     if (options.tools && options.tools.length > 0) {
       payload.tools = [
         {
@@ -104,64 +103,19 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
   }
 
   async generateStream(options: ModelCompletionOptions): Promise<AsyncIterable<StreamingChunk>> {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
-
-    const contents = options.messages
-      .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
-
-    const systemInstruction = options.messages.find((m) => m.role === "system");
-
-    const payload: any = {
-      contents,
-      generationConfig: {
-        temperature: options.temperature ?? 0.35,
-        maxOutputTokens: options.maxTokens ?? 1024,
-      },
-    };
-
-    if (systemInstruction) {
-      payload.systemInstruction = {
-        parts: [{ text: systemInstruction.content }],
-      };
-    }
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Gemini Streaming Error [${response.status}]: ${err}`);
-    }
-
-    async function* streamGenerator(): AsyncIterable<StreamingChunk> {
-      // Stream JSON parsing from SSE / REST stream chunks
-      const reader = (response.body as any)?.getReader();
-      if (!reader) {
-        yield { type: "done" };
-        return;
+    const comp = await this.generateCompletion(options);
+    async function* streamGen(): AsyncIterable<StreamingChunk> {
+      const words = comp.content.split(" ");
+      for (const word of words) {
+        yield { type: "token", text: word + " " };
+        await new Promise((r) => setTimeout(r, 20));
       }
-
-      const decoder = new TextDecoder();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunkStr = decoder.decode(value, { stream: true });
-          yield { type: "token", text: chunkStr };
-        }
-      } finally {
-        yield { type: "done" };
+      if (comp.toolCalls && comp.toolCalls.length > 0) {
+        yield { type: "tool_call", toolCall: comp.toolCalls[0] };
       }
+      yield { type: "done" };
     }
-
-    return streamGenerator();
+    return streamGen();
   }
 }
 
@@ -179,16 +133,42 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
-    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao")) {
-      content = `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab. This safeguards holding costs and shields your operating margin.`;
+    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("repairs") || (lower.includes("arv") && lower.includes("property"))) {
+      let arv = 240000;
+      let rehab = 45000;
+
+      if (lower.includes("300k") || lower.includes("300,000") || lower.includes("300000")) arv = 300000;
+      else if (lower.includes("250k") || lower.includes("250,000")) arv = 250000;
+      else if (lower.includes("200k") || lower.includes("200,000")) arv = 200000;
+
+      if (lower.includes("55k") || lower.includes("55,000") || lower.includes("55000")) rehab = 55000;
+      else if (lower.includes("50k") || lower.includes("50,000")) rehab = 50000;
+      else if (lower.includes("40k") || lower.includes("40,000")) rehab = 40000;
+
+      const mao = Math.round(arv * 0.70) - rehab;
+      content = `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab Scope. On a $${arv.toLocaleString()} ARV with $${rehab.toLocaleString()} in repairs: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. This preserves an equity buffer for holding interest and transaction fees.`;
       toolCalls = [
         {
           name: "set_calculator_values",
-          arguments: { arv: 240000, rehab: 45000 },
+          arguments: { arv, rehab },
+        },
+      ];
+    } else if (lower.includes("all my cash") || lower.includes("why wouldn't i") || lower.includes("all cash into")) {
+      content = `OCG advises preserving liquid cash as strategic contingency armor. Deploying senior lender debt for purchase and construction draws protects you against unexpected material/permit delays and satisfies lender interest reserves.`;
+    } else if (lower.includes("dscr") || lower.includes("rental")) {
+      content = `DSCR loans evaluate property cash flow rather than personal W-2 income, typically requiring 1.20x-1.25x rent-to-debt coverage and a 20-25% equity down payment.`;
+    } else if (lower.includes("60,000") || lower.includes("60k") || lower.includes("not sure")) {
+      content = `Having $60,000 gives you strong Wichita leverage, but you should never deploy 100% of it into your first deal. We recommend reserving $20k+ as emergency defense while exploring BRRRR or leveraged flips.`;
+    } else if (lower.includes("passed away") || lower.includes("mother") || lower.includes("inherited") || lower.includes("probate")) {
+      content = `Navigating an inherited home requires transparent, compassionate support. OCG evaluates properties directly as-is with zero wholesaler commissions and flexible closing dates.`;
+      toolCalls = [
+        {
+          name: "activate_seller_intake",
+          arguments: { sellerStep: 1 },
         },
       ];
     } else if (lower.includes("college hill") || lower.includes("craftsman")) {
-      content = `College Hill features historic Craftsman bungalows and Tudors from 1910-1940. Preserving cedar architectural woodwork while updating mechanicals and kitchens commands top neighborhood pricing.`;
+      content = `College Hill features historic Craftsman bungalows and Tudors from 1910-1940. Preserving cedar woodwork while updating mechanicals commands top neighborhood pricing.`;
       toolCalls = [
         {
           name: "load_property_case",
@@ -196,27 +176,19 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
         },
       ];
     } else if (lower.includes("crown heights") || lower.includes("ranch")) {
-      content = `Crown Heights features 1950s-1960s brick ranches with solid construction. Limewashed brick, modern horizontal slats, and primary suite expansions perform exceptionally well.`;
+      content = `Crown Heights features 1950s-1960s brick ranches with solid construction. Limewashed brick and open-concept living expansions perform exceptionally well.`;
       toolCalls = [
         {
           name: "load_property_case",
           arguments: { propertyId: "ranch" },
         },
       ];
-    } else if (lower.includes("sell") || lower.includes("inherited") || lower.includes("probate")) {
-      content = `Inherited homes and estate transitions require objective property review and respectful communication. OCG analyzes public records, repairs, and timelines directly.`;
+    } else if (lower.includes("delano") || lower.includes("cottage")) {
+      content = `Historic Delano features 1920s worker cottages along West Douglas, delivering strong rental yield and entry-level buyer demand.`;
       toolCalls = [
         {
-          name: "activate_seller_intake",
-          arguments: { sellerStep: 1 },
-        },
-      ];
-    } else if (lower.includes("invest") || lower.includes("flip") || lower.includes("brrrr")) {
-      content = `OCG guides investors across Fix & Flip (cash creation + lender-funded rehab) and BRRRR (equity recycling into DSCR debt). Let's evaluate your personal liquidity tier.`;
-      toolCalls = [
-        {
-          name: "navigate",
-          arguments: { path: "/invest" },
+          name: "load_property_case",
+          arguments: { propertyId: "delano" },
         },
       ];
     } else {
@@ -227,7 +199,7 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       content,
       toolCalls,
       provider: "OCG_LOCAL_ENGINE",
-      model: "ocg-deterministic-v4",
+      model: "ocg-deterministic-v5",
       latencyMs: Date.now() - startTime,
     };
   }
@@ -238,7 +210,7 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       const words = comp.content.split(" ");
       for (const word of words) {
         yield { type: "token", text: word + " " };
-        await new Promise((r) => setTimeout(r, 25));
+        await new Promise((r) => setTimeout(r, 20));
       }
       if (comp.toolCalls && comp.toolCalls.length > 0) {
         yield { type: "tool_call", toolCall: comp.toolCalls[0] };
@@ -253,11 +225,10 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
  * Model Provider Factory supporting Environment Config
  */
 export function getActiveStreamingModelProvider(): IStreamingModelProvider {
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && geminiKey.trim() !== "") {
     return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-1.5-flash");
   }
 
-  // Graceful fallback to local engine
   return new EnhancedLocalProvider();
 }

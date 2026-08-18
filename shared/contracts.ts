@@ -127,7 +127,7 @@ export interface IGActionInvocation {
     strategyTab?: "flip" | "brrrr" | "buy_hold";
     arv?: number;
     rehab?: number;
-    propertyCaseId?: "bungalow" | "ranch";
+    propertyCaseId?: "bungalow" | "ranch" | "delano";
     sellerStepIndex?: number;
     briefUpdates?: Partial<IOCGStrategyBrief>;
     bookingContext?: {

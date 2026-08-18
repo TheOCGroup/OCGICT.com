@@ -33,9 +33,10 @@ export default function Home() {
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
-                  className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300 mb-6"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-blue-300 mb-6"
                 >
-                  <Sparkles size={14} /> Wichita, Kansas · Real Estate Investment + Acquisition
+                  <Sparkles size={13} className="shrink-0" />
+                  <span>Wichita, Kansas · Real Estate Investment + Acquisition</span>
                 </motion.div>
 
                 <motion.div
@@ -51,7 +52,7 @@ export default function Home() {
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.12 }}
-                  className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[0.96] text-white"
+                  className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.02] text-white"
                 >
                   REAL ESTATE INVESTING.<br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-200 to-slate-400">
