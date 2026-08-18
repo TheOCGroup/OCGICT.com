@@ -13,7 +13,7 @@ interface Message {
   text: string;
 }
 
-export default function GExperience() {
+export function GExperience() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -291,9 +291,14 @@ export default function GExperience() {
           <div className="space-y-5">
             <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-                  <FileText size={14} /> OCG Strategy Brief
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                    <FileText size={14} /> Your OCG Strategy Brief
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                    POWERED BY OCG LAB
+                  </span>
+                </div>
                 {briefing && (
                   <button
                     onClick={copyBriefJson}

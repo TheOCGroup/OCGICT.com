@@ -1,465 +1,413 @@
-import { useState } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import { ArrowRight, TrendingUp, Home as HomeIcon, Users, Shield, Phone, Mail, MapPin, Clock, CheckCircle2, Send, Loader2, Calendar } from "lucide-react";
-import { toast } from "sonner";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Send, 
+  CheckCircle2, 
+  Bot, 
+  DollarSign, 
+  Building2, 
+  ShieldCheck, 
+  Sparkles,
+  ArrowRight,
+  Clock
+} from 'lucide-react';
+import { loadStrategyBrief } from '@/lib/persistence';
 
-const SUPABASE_URL = "https://lsaerludzkxjewqgbvkg.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWVybHVkemt4amV3cWdidmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTMwNzEsImV4cCI6MjA5MTc2OTA3MX0.k0PmsyeAQ-hq8aTn_AVoyzsx-cbYdmfQzHKhIMp_s1U";
+export function Contact() {
+  const [role, setRole] = useState<'investor' | 'seller' | 'capital'>('investor');
+  const [briefAttached, setBriefAttached] = useState<boolean>(false);
+  const [briefId, setBriefId] = useState<string | null>(null);
 
-async function submitLeadToCRM(lead: Record<string, string | number | null>) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
-    method: "POST",
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal",
-    },
-    body: JSON.stringify({
-      ...lead,
-      id: crypto.randomUUID(),
-      stage: "New Lead",
-      priority: "Medium",
-      state: "KS",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }),
+  // Form Fields
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    // Investor Fields
+    capitalAmount: '$50,000 – $100,000',
+    strategyInterest: 'Fix & Flip Renovation',
+    investorExperience: 'First-Time Investor',
+    // Seller Fields
+    propertyAddress: '',
+    propertyCondition: 'Needs Cosmetic Updates',
+    sellerTimeline: 'Within 30 Days',
+    // Capital Partner Fields
+    lendingFacility: 'Private Debt / Bridge Financing',
+    // Common Message
+    message: ''
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err);
-  }
-}
 
-type FormType = "investor" | "seller" | "wholesaler" | "lender";
+  const [submitted, setSubmitted] = useState(false);
 
-const formTabs: { id: FormType; label: string; icon: typeof TrendingUp; desc: string }[] = [
-  { id: "investor", label: "Investor", icon: TrendingUp, desc: "Explore Fix & Flip, BRRRR, or capital placement." },
-  { id: "seller", label: "Seller Review", icon: HomeIcon, desc: "Preliminary review for off-market or estate property." },
-  { id: "wholesaler", label: "Acquisitions Partner", icon: Users, desc: "Submit off-market property for quick underwriting." },
-  { id: "lender", label: "Lending Partner", icon: Shield, desc: "Partner with OCG on debt or bridge financing." },
-];
-
-const inputCls = "w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors";
-const selectCls = "w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors";
-const labelCls = "text-slate-400 text-xs font-bold uppercase tracking-wider mb-1.5 block";
-
-function InvestorForm() {
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", phone: "", experience: "new", interest: "Fix & Flip Strategy", budget: "50-100", notes: "", buyerList: false });
-
-  const set = (k: string, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await submitLeadToCRM({
-        name: `${form.firstName} ${form.lastName}`.trim(),
-        email: form.email,
-        phone: form.phone,
-        type: "Investor",
-        investment_strategy: form.interest,
-        source: "Website — Investor Strategy Form",
-        notes: `Experience: ${form.experience} | Budget: ${form.budget} | Buyer List: ${form.buyerList ? "Yes" : "No"}\n\n${form.notes}`,
-      });
-      toast.success("Thank you! Genaro and the OCG team will reach out within 24 hours.");
-      setForm({ firstName: "", lastName: "", email: "", phone: "", experience: "new", interest: "Fix & Flip Strategy", budget: "50-100", notes: "", buyerList: false });
-    } catch {
-      toast.error("Submission failed. Please call us directly at 720.620.9929.");
-    } finally {
-      setLoading(false);
+  // Load existing Strategy Brief context if created with G
+  useEffect(() => {
+    const brief = loadStrategyBrief();
+    if (brief) {
+      setBriefAttached(true);
+      setBriefId(brief.id);
+      if (brief.clientContext.investorStage.value.includes('Seller')) {
+        setRole('seller');
+      }
     }
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>First Name *</label>
-          <input required className={inputCls} placeholder="First name" value={form.firstName} onChange={e => set("firstName", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Last Name *</label>
-          <input required className={inputCls} placeholder="Last name" value={form.lastName} onChange={e => set("lastName", e.target.value)} />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Email *</label>
-          <input required type="email" className={inputCls} placeholder="your@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Phone *</label>
-          <input required type="tel" className={inputCls} placeholder="(720) 000-0000" value={form.phone} onChange={e => set("phone", e.target.value)} />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Investment Experience</label>
-          <select className={selectCls} value={form.experience} onChange={e => set("experience", e.target.value)}>
-            <option value="new">New Investor (0–1 deals)</option>
-            <option value="some">Some Experience (2–5 deals)</option>
-            <option value="active">Active Investor (6+ deals)</option>
-            <option value="portfolio">Portfolio Investor (10+ properties)</option>
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Primary Interest</label>
-          <select className={selectCls} value={form.interest} onChange={e => set("interest", e.target.value)}>
-            <option value="Fix &amp; Flip Strategy">Fix &amp; Flip Strategy</option>
-            <option value="BRRRR Strategy">BRRRR Strategy</option>
-            <option value="Buy &amp; Hold">Buy &amp; Hold</option>
-            <option value="General Strategy Consultation">General Strategy Consultation</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Available Liquid Reserves</label>
-        <select className={selectCls} value={form.budget} onChange={e => set("budget", e.target.value)}>
-          <option value="under50">Under $50,000</option>
-          <option value="50-100">$50,000 – $100,000</option>
-          <option value="100-250">$100,000 – $250,000</option>
-          <option value="over250">$250,000+</option>
-        </select>
-      </div>
-      <div>
-        <label className={labelCls}>What are you trying to accomplish?</label>
-        <textarea rows={3} className={`${inputCls} resize-none`} placeholder="Share your timeline, goals, or specific Wichita neighborhoods of interest..." value={form.notes} onChange={e => set("notes", e.target.value)} />
-      </div>
-      <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 disabled:opacity-50 transition-all shadow-md shadow-blue-950 mt-2">
-        {loading ? <><Loader2 size={15} className="animate-spin" /> Submitting...</> : <>Book Strategy Session <ArrowRight size={15} /></>}
-      </button>
-    </form>
-  );
-}
-
-function SellerForm() {
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ firstName: "", lastName: "", phone: "", email: "", address: "", condition: "fair", situation: "fast-close", askingPrice: "", notes: "" });
-
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await submitLeadToCRM({
-        name: `${form.firstName} ${form.lastName}`.trim(),
-        email: form.email || null,
-        phone: form.phone,
-        type: "Seller",
-        address: form.address,
-        source: "Website — Seller Form",
-        seller_motivation: form.situation,
-        asking_terms: form.askingPrice || null,
-        notes: `Condition: ${form.condition} | Situation: ${form.situation} | Asking: ${form.askingPrice || "Not specified"}\n\n${form.notes}`,
-      });
-      toast.success("Thank you! OCG acquisitions will review public records and connect within 24 hours.");
-      setForm({ firstName: "", lastName: "", phone: "", email: "", address: "", condition: "fair", situation: "fast-close", askingPrice: "", notes: "" });
-    } catch {
-      toast.error("Submission failed. Please call us directly at 720.620.9929.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>First Name *</label>
-          <input required className={inputCls} placeholder="First name" value={form.firstName} onChange={e => set("firstName", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Last Name *</label>
-          <input required className={inputCls} placeholder="Last name" value={form.lastName} onChange={e => set("lastName", e.target.value)} />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Phone *</label>
-          <input required type="tel" className={inputCls} placeholder="(720) 000-0000" value={form.phone} onChange={e => set("phone", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Email</label>
-          <input type="email" className={inputCls} placeholder="your@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Property Address *</label>
-        <input required className={inputCls} placeholder="123 Main St, Wichita, KS" value={form.address} onChange={e => set("address", e.target.value)} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Property Condition</label>
-          <select className={selectCls} value={form.condition} onChange={e => set("condition", e.target.value)}>
-            <option value="fair">Fair — Needs Cosmetic Updates</option>
-            <option value="poor">Significant Repairs Needed</option>
-            <option value="distressed">Distressed / Heavy Rehab</option>
-            <option value="good">Good / Move-In Ready</option>
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Circumstance</label>
-          <select className={selectCls} value={form.situation} onChange={e => set("situation", e.target.value)}>
-            <option value="inherited">Inherited Property / Estate</option>
-            <option value="fast-close">Looking for Fast, Clean Close</option>
-            <option value="deferred">Tired Landlord / Deferred Maintenance</option>
-            <option value="relocation">Downsizing or Relocating</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Additional Notes</label>
-        <textarea rows={3} className={`${inputCls} resize-none`} placeholder="Any details on repairs, occupancy, or questions..." value={form.notes} onChange={e => set("notes", e.target.value)} />
-      </div>
-      <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 disabled:opacity-50 transition-all shadow-md shadow-blue-950 mt-2">
-        {loading ? <><Loader2 size={15} className="animate-spin" /> Submitting...</> : <>Request Seller Review <ArrowRight size={15} /></>}
-      </button>
-    </form>
-  );
-}
-
-function WholesalerForm() {
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", askingPrice: "", arv: "", rehab: "", closeDate: "", notes: "" });
-
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await submitLeadToCRM({
-        name: form.name,
-        email: form.email,
-        phone: form.phone,
-        type: "Wholesaler",
-        address: form.address,
-        target_price: form.askingPrice ? parseFloat(form.askingPrice.replace(/[^0-9.]/g, "")) : null,
-        arv: form.arv ? parseFloat(form.arv.replace(/[^0-9.]/g, "")) : null,
-        rehab_budget: form.rehab ? parseFloat(form.rehab.replace(/[^0-9.]/g, "")) : null,
-        source: "Website — Acquisition Deal Submission",
-        notes: `Close Deadline: ${form.closeDate || "Not specified"}\n\n${form.notes}`,
-      });
-      toast.success("Deal submitted! VICTOR and the acquisition team will review.");
-      setForm({ name: "", phone: "", email: "", address: "", askingPrice: "", arv: "", rehab: "", closeDate: "", notes: "" });
-    } catch {
-      toast.error("Submission failed. Please call us directly at 720.620.9929.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Your Name *</label>
-          <input required className={inputCls} placeholder="Your name" value={form.name} onChange={e => set("name", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Phone *</label>
-          <input required type="tel" className={inputCls} placeholder="(720) 000-0000" value={form.phone} onChange={e => set("phone", e.target.value)} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Property Address *</label>
-        <input required className={inputCls} placeholder="123 Main St, Wichita, KS" value={form.address} onChange={e => set("address", e.target.value)} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label className={labelCls}>Asking Price *</label>
-          <input required type="text" className={inputCls} placeholder="$85,000" value={form.askingPrice} onChange={e => set("askingPrice", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Your Est. ARV</label>
-          <input type="text" className={inputCls} placeholder="$160,000" value={form.arv} onChange={e => set("arv", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Est. Rehab</label>
-          <input type="text" className={inputCls} placeholder="$40,000" value={form.rehab} onChange={e => set("rehab", e.target.value)} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Notes</label>
-        <textarea rows={3} className={`${inputCls} resize-none`} placeholder="Lockbox info, inspection window, title company..." value={form.notes} onChange={e => set("notes", e.target.value)} />
-      </div>
-      <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 disabled:opacity-50 transition-all shadow-md shadow-blue-950 mt-2">
-        {loading ? <><Loader2 size={15} className="animate-spin" /> Submitting...</> : <>Submit Deal For Review <Send size={15} /></>}
-      </button>
-    </form>
-  );
-}
-
-function LenderForm() {
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", lenderType: "Hard Money / Private Debt", minLoan: "$50,000", maxLoan: "$1,000,000", notes: "" });
-
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await submitLeadToCRM({
-        name: form.name,
-        company: form.company,
-        email: form.email,
-        phone: form.phone,
-        type: "Private Lender",
-        source: "Website — Lender Partner Application",
-        lender_status: form.lenderType,
-        notes: `Lender Type: ${form.lenderType} | Min: ${form.minLoan} | Max: ${form.maxLoan}\n\n${form.notes}`,
-      });
-      toast.success("Application submitted! Genaro will review and connect.");
-      setForm({ name: "", company: "", email: "", phone: "", lenderType: "Hard Money / Private Debt", minLoan: "$50,000", maxLoan: "$1,000,000", notes: "" });
-    } catch {
-      toast.error("Submission failed. Please call us directly at 720.620.9929.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Name *</label>
-          <input required className={inputCls} placeholder="Your name" value={form.name} onChange={e => set("name", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Lending Institution / Fund *</label>
-          <input required className={inputCls} placeholder="Institution Name" value={form.company} onChange={e => set("company", e.target.value)} />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className={labelCls}>Email *</label>
-          <input required type="email" className={inputCls} placeholder="lender@company.com" value={form.email} onChange={e => set("email", e.target.value)} />
-        </div>
-        <div>
-          <label className={labelCls}>Phone *</label>
-          <input required type="tel" className={inputCls} placeholder="(720) 000-0000" value={form.phone} onChange={e => set("phone", e.target.value)} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Program Type</label>
-        <select className={selectCls} value={form.lenderType} onChange={e => set("lenderType", e.target.value)}>
-          <option value="Hard Money / Private Debt">Hard Money / Fix &amp; Flip Debt</option>
-          <option value="DSCR Long-Term Loan">DSCR 30-Year Long-Term</option>
-          <option value="Bridge / Mezzanine">Bridge / Transition Facility</option>
-          <option value="Private Equity / JV">Private Equity / JV Capital</option>
-        </select>
-      </div>
-      <div>
-        <label className={labelCls}>Program Guidelines / Rate Sheets</label>
-        <textarea rows={3} className={`${inputCls} resize-none`} placeholder="Max LTC/LTV, minimum credit requirements, typical rates..." value={form.notes} onChange={e => set("notes", e.target.value)} />
-      </div>
-      <button type="submit" disabled={loading} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 disabled:opacity-50 transition-all shadow-md shadow-blue-950 mt-2">
-        {loading ? <><Loader2 size={15} className="animate-spin" /> Submitting...</> : <>Submit Lending Program <ArrowRight size={15} /></>}
-      </button>
-    </form>
-  );
-}
-
-export default function Contact() {
-  const [activeForm, setActiveForm] = useState<FormType>("investor");
-
-  return (
-    <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
-      <Navbar />
-
-      <main className="pt-32 pb-24 space-y-16">
-        <section className="container max-w-5xl">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300">
-              <Calendar size={14} /> Direct OCG Strategy Session
-            </div>
-            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[0.98] text-white">
-              Let's start a high-conviction conversation.
-            </h1>
-            <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
-              Whether you are an investor deploying capital, a seller seeking a preliminary property review, or a capital partner — our team is ready to evaluate the numbers with you.
-            </p>
+    <div className="flex flex-col min-h-screen bg-[#070A0F] text-slate-100 selection:bg-blue-600 selection:text-white">
+      
+      {/* 1. CONTACT HERO */}
+      <section className="relative py-20 lg:py-28 bg-gradient-to-b from-[#0B1220] via-[#070A0F] to-[#070A0F] border-b border-slate-800">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl text-center">
+          
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-400 mb-6 shadow-lg">
+            <Sparkles size={14} />
+            <span>Direct Principal Communication</span>
           </div>
-        </section>
 
-        <section className="container max-w-5xl">
-          <div className="grid lg:grid-cols-[1fr_1.5fr] gap-10 items-start">
-            {/* Left: Contact Info & Calendar Direct */}
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+            Let's start a<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-200 to-slate-300">
+              high-conviction conversation.
+            </span>
+          </h1>
+
+          <p className="mt-6 text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto font-normal">
+            Whether you are an investor deploying capital, a seller seeking an objective preliminary property review, or a capital partner—our team is ready to evaluate the numbers with you.
+          </p>
+
+        </div>
+      </section>
+
+      {/* 2. PROGRESSIVE INTAKE FORM */}
+      <section className="py-24 bg-[#070A0F] border-b border-slate-800">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+          
+          <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-12 items-start">
+            
+            {/* Left Box: The Progressive Form */}
+            <div className="p-8 sm:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl">
+              
+              {submitted ? (
+                <div className="text-center py-12 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white">Strategy Session Request Received</h3>
+                  <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+                    Thank you, <strong className="text-white">{formData.name}</strong>. Genaro Ocasio and the OCG acquisition team will review your inquiry and contact you within 24 hours.
+                  </p>
+                  {briefAttached && (
+                    <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-900/60 text-xs text-blue-300 inline-block font-mono">
+                      ✓ Attached Strategy Brief Dossier ({briefId})
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  
+                  {/* Step 1: Who Are You? (Role Switcher) */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-widest text-blue-400 mb-3 font-mono">
+                      Step 01 · Who Are You?
+                    </label>
+                    
+                    <div className="grid grid-cols-3 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setRole('investor')}
+                        className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer ${
+                          role === 'investor'
+                            ? 'bg-blue-600 border-blue-400 text-white font-bold shadow-lg shadow-blue-950'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <DollarSign size={18} className="mx-auto mb-1" />
+                        <span className="text-xs">Investor</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRole('seller')}
+                        className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer ${
+                          role === 'seller'
+                            ? 'bg-amber-600 border-amber-400 text-white font-bold shadow-lg shadow-amber-950'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Building2 size={18} className="mx-auto mb-1" />
+                        <span className="text-xs">Seller</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRole('capital')}
+                        className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer ${
+                          role === 'capital'
+                            ? 'bg-purple-600 border-purple-400 text-white font-bold shadow-lg shadow-purple-950'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <ShieldCheck size={18} className="mx-auto mb-1" />
+                        <span className="text-xs">Capital / Lender</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Context-Aware Relevant Fields */}
+                  <div className="pt-2 border-t border-slate-800/80 space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-widest text-slate-400 font-mono">
+                      Step 02 · Inquiry Details
+                    </div>
+
+                    {/* Investor-Only Fields */}
+                    {role === 'investor' && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                            Available Liquid Capital
+                          </label>
+                          <select
+                            value={formData.capitalAmount}
+                            onChange={(e) => setFormData({ ...formData, capitalAmount: e.target.value })}
+                            className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                          >
+                            <option>$25,000 – $50,000 (Exploring)</option>
+                            <option>$50,000 – $100,000 (Active Deployment)</option>
+                            <option>$100,000 – $250,000+ (Portfolio Growth)</option>
+                            <option>$250,000+ (Private Lending / Equity Partner)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                            Primary Strategy Focus
+                          </label>
+                          <select
+                            value={formData.strategyInterest}
+                            onChange={(e) => setFormData({ ...formData, strategyInterest: e.target.value })}
+                            className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                          >
+                            <option>Fix & Flip Renovation</option>
+                            <option>BRRRR Strategy</option>
+                            <option>Turnkey Buy & Hold</option>
+                            <option>Undecided / Open to Guidance</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Seller-Only Fields */}
+                    {role === 'seller' && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                            Wichita Property Address *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 248 S Rutan Ave, Wichita, KS"
+                            value={formData.propertyAddress}
+                            onChange={(e) => setFormData({ ...formData, propertyAddress: e.target.value })}
+                            required
+                            className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-amber-400 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                            Estimated Condition
+                          </label>
+                          <select
+                            value={formData.propertyCondition}
+                            onChange={(e) => setFormData({ ...formData, propertyCondition: e.target.value })}
+                            className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-amber-400 focus:outline-none"
+                          >
+                            <option>Needs Cosmetic Updates</option>
+                            <option>Needs Major Mechanical / Roof Repairs</option>
+                            <option>Full Gut / Deferred Maintenance</option>
+                            <option>Move-In Ready</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                            Desired Closing Timeline
+                          </label>
+                          <select
+                            value={formData.sellerTimeline}
+                            onChange={(e) => setFormData({ ...formData, sellerTimeline: e.target.value })}
+                            className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-amber-400 focus:outline-none"
+                          >
+                            <option>As soon as possible (14–21 days)</option>
+                            <option>Within 30–60 days</option>
+                            <option>Flexible / Exploring Options</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Capital Partner Fields */}
+                    {role === 'capital' && (
+                      <div>
+                        <label className="block text-xs text-slate-400 font-medium mb-1.5">
+                          Capital Structure Focus
+                        </label>
+                        <select
+                          value={formData.lendingFacility}
+                          onChange={(e) => setFormData({ ...formData, lendingFacility: e.target.value })}
+                          className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-purple-400 focus:outline-none"
+                        >
+                          <option>Private Debt / 1st Lien Senior Bridge Loan</option>
+                          <option>DSCR Rental Mortgage Facility</option>
+                          <option>Equity Joint Venture</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step 3: Contact Info */}
+                  <div className="pt-2 border-t border-slate-800/80 space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-widest text-slate-400 font-mono">
+                      Step 03 · Your Contact Info
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-slate-400 font-medium mb-1.5">Full Name *</label>
+                        <input
+                          type="text"
+                          placeholder="First and Last Name"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          required
+                          className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-400 font-medium mb-1.5">Phone Number *</label>
+                        <input
+                          type="tel"
+                          placeholder="(316) 000-0000"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          required
+                          className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-slate-400 font-medium mb-1.5">Email Address *</label>
+                      <input
+                        type="email"
+                        placeholder="you@email.com"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        required
+                        className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-slate-400 font-medium mb-1.5">Additional Notes (Optional)</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Any specific questions, timelines, or context..."
+                        value={formData.message}
+                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                        className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-blue-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Attached Strategy Brief indicator */}
+                  {briefAttached && (
+                    <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs text-blue-300">
+                      <div className="flex items-center gap-2">
+                        <Bot size={14} className="text-blue-400" />
+                        <span>Active Strategy Brief attached automatically</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-blue-400/80">{briefId}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-blue-500 transition-all shadow-xl shadow-blue-950 cursor-pointer"
+                  >
+                    Submit Strategy Request
+                  </button>
+
+                </form>
+              )}
+
+            </div>
+
+            {/* Right Box: Direct Office & Response Commitment */}
             <div className="space-y-6">
-              <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 space-y-5 shadow-xl">
+              
+              <div className="p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6">
                 <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Direct Contact</div>
                   <h3 className="text-xl font-bold text-white">The OC Group / OCG</h3>
-                  <div className="text-xs text-blue-400 font-mono mt-0.5">Wichita, Kansas</div>
+                  <p className="text-xs text-slate-400 mt-1">Wichita & South-Central Kansas</p>
                 </div>
 
-                <div className="space-y-3 text-xs text-slate-300">
-                  <a href="tel:+17206209929" className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition-all">
+                <div className="space-y-4 text-xs">
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                     <Phone size={16} className="text-blue-400 shrink-0" />
                     <div>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">Direct Phone</div>
-                      <div className="font-semibold text-white">720.620.9929</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-bold">Direct Phone</div>
+                      <div className="text-slate-200 font-semibold">(720) 620-9929</div>
                     </div>
-                  </a>
+                  </div>
 
-                  <a href="mailto:Contact@ocasiocollective.com" className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition-all">
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                     <Mail size={16} className="text-blue-400 shrink-0" />
                     <div>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">Official Email</div>
-                      <div className="font-semibold text-white">Contact@ocasiocollective.com</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-bold">Official Email</div>
+                      <div className="text-slate-200 font-semibold">Contact@ocasiocollective.com</div>
                     </div>
-                  </a>
+                  </div>
 
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                     <MapPin size={16} className="text-blue-400 shrink-0" />
                     <div>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">Operating Headquarters</div>
-                      <div className="font-semibold text-white">Wichita & South-Central Kansas</div>
+                      <div className="text-[10px] text-slate-500 uppercase font-bold">Headquarters</div>
+                      <div className="text-slate-200 font-semibold">Wichita, Kansas</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-[11px] text-slate-400 space-y-1">
-                  <div className="font-semibold text-slate-200">Response Commitment</div>
-                  <p>All strategy inquiries and property submissions are reviewed by Genaro Ocasio and the acquisition team within 24 hours.</p>
+                <div className="p-4 rounded-2xl bg-blue-950/30 border border-blue-900/40">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-300 mb-1">
+                    <Clock size={14} className="text-blue-400" />
+                    <span>Response Commitment</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    All strategy inquiries and property submissions are reviewed by Genaro Ocasio and the acquisition team within 24 hours.
+                  </p>
                 </div>
               </div>
+
             </div>
 
-            {/* Right: Lead Forms */}
-            <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 md:p-8 shadow-2xl space-y-6">
-              {/* Form Tabs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-slate-800 pb-5">
-                {formTabs.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setActiveForm(t.id)}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      activeForm === t.id
-                        ? "bg-blue-600/15 border-blue-500 text-white shadow-md"
-                        : "bg-slate-900/40 border-slate-800 text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <t.icon size={15} className={`mb-1.5 ${activeForm === t.id ? "text-blue-400" : "text-slate-500"}`} />
-                    <div className="text-xs font-bold">{t.label}</div>
-                  </button>
-                ))}
-              </div>
-
-              {activeForm === "investor" && <InvestorForm />}
-              {activeForm === "seller" && <SellerForm />}
-              {activeForm === "wholesaler" && <WholesalerForm />}
-              {activeForm === "lender" && <LenderForm />}
-            </div>
           </div>
-        </section>
-      </main>
 
-      <Footer />
+        </div>
+      </section>
+
     </div>
   );
 }
+
+export default Contact;
+

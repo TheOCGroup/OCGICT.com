@@ -1,281 +1,245 @@
-import React, { useState, useId } from "react";
-import { Calculator, HelpCircle, ArrowRight, ShieldCheck, CheckCircle2, TrendingUp, Layers, RefreshCw } from "lucide-react";
-import { Link } from "wouter";
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { DollarSign, Shield, Calculator, Info, CheckCircle2, ArrowRight, Sparkles, TrendingUp } from 'lucide-react';
 
-export function Rule70Calculator() {
-  const [arv, setArv] = useState<number>(240000);
+export function Calculators() {
+  const [arv, setArv] = useState<number>(250000);
   const [rehab, setRehab] = useState<number>(45000);
-  const arvInputId = useId();
-  const rehabInputId = useId();
 
-  React.useEffect(() => {
-    const handleGAction = (e: any) => {
-      const isMatch = e.detail?.type === "set_calculator_values" || e.detail?.actionId === "SET_CALCULATOR_VALUES";
-      if (isMatch && e.detail.payload) {
-        if (e.detail.payload.arv) setArv(e.detail.payload.arv);
-        if (e.detail.payload.rehab) setRehab(e.detail.payload.rehab);
+  // Synchronize with G Actions
+  useEffect(() => {
+    const handleGAction = (e: CustomEvent<any>) => {
+      const action = e.detail;
+      if (action.actionId === 'SET_CALCULATOR_VALUES' && action.payload) {
+        if (typeof action.payload.arv === 'number') setArv(action.payload.arv);
+        if (typeof action.payload.rehab === 'number') setRehab(action.payload.rehab);
       }
     };
-    window.addEventListener("ocg:g-action", handleGAction);
-    return () => window.removeEventListener("ocg:g-action", handleGAction);
+
+    window.addEventListener('ocg:g-action', handleGAction as EventListener);
+    return () => window.removeEventListener('ocg:g-action', handleGAction as EventListener);
   }, []);
 
-  const seventyPercent = Math.round(arv * 0.70);
-  const mao = Math.max(seventyPercent - rehab, 0);
-  const spread = arv - (mao + rehab);
-  const recommendedReserves = Math.round(rehab * 0.20 + 7500);
+  // Calculated Metrics
+  const seventyPercentBase = arv * 0.7;
+  const mao = Math.max(0, seventyPercentBase - rehab);
+  const grossMarginBuffer = arv * 0.3;
+  const reserveRecommendation = Math.round(rehab * 0.15 + 10000);
+
+  // Property visual reaction scale
+  const valueScale = 1 + (arv - 150000) / 700000;
+  const rehabIntensity = Math.min(1, Math.max(0.2, (rehab - 10000) / 120000));
 
   return (
-    <div className="rounded-3xl border border-slate-800 bg-[#0B0F17] p-6 lg:p-10 shadow-2xl">
-      <div className="max-w-3xl">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">
-          <Calculator size={15} /> Strategic Underwriting Framework
+    <section id="calculator" className="relative py-24 bg-[#0B1220] text-white overflow-hidden border-t border-slate-800">
+      
+      {/* Background Ambience */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-blue-950/30 via-transparent to-transparent" />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        
+        {/* Section Header */}
+        <div className="max-w-4xl mx-auto text-center mb-12">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400 mb-4">
+            <Calculator size={13} />
+            <span>Strategic Underwriting Heuristic</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+            The 70% Rule & MAO Explorer.
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto">
+            In disciplined acquisition underwriting, the 70% framework establishes a strict purchase ceiling so that market shifts and holding costs do not compress investor equity.
+          </p>
         </div>
-        <h3 className="mt-2 text-3xl md:text-4xl font-bold text-white tracking-tight">
-          The 70% Rule & MAO Explorer
-        </h3>
-        <p className="mt-3 text-sm md:text-base leading-relaxed text-slate-400">
-          In acquisition underwriting, the 70% framework establishes an entry ceiling so that unexpected holding periods, material price adjustments, or market shifts do not compress your equity to zero.
-        </p>
-      </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-start">
-        {/* Sliders and Inputs */}
-        <div className="space-y-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-          <div>
-            <div className="flex items-center justify-between text-sm font-semibold text-slate-200">
-              <label htmlFor={arvInputId}>After Repair Value (ARV)</label>
-              <span className="text-lg font-bold text-blue-400">${arv.toLocaleString()}</span>
+        {/* Central Animated Equation Banner (The Hero Equation) */}
+        <div className="max-w-5xl mx-auto mb-10 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-slate-900/90 via-blue-950/50 to-slate-900/90 border border-blue-500/30 shadow-2xl backdrop-blur-md">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center items-center">
+            
+            {/* Term 1: ARV */}
+            <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">After Repair Value</div>
+              <div className="text-xl sm:text-3xl font-extrabold text-blue-400 font-mono mt-1">${arv.toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Projected Market Value</div>
             </div>
-            <p className="text-xs text-slate-500 mb-3">Projected market value of the property once fully renovated.</p>
-            <input
-              id={arvInputId}
-              type="range"
-              min="80000"
-              max="500000"
-              step="5000"
-              value={arv}
-              onChange={(e) => setArv(Number(e.target.value))}
-              aria-label="After Repair Value (ARV)"
-              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-blue-500"
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-slate-500">
-              <span>$80k</span>
-              <span>$250k</span>
-              <span>$500k</span>
-            </div>
-          </div>
 
-          <div>
-            <div className="flex items-center justify-between text-sm font-semibold text-slate-200">
-              <label htmlFor={rehabInputId}>Estimated Renovation Scope (Rehab)</label>
-              <span className="text-lg font-bold text-amber-400">${rehab.toLocaleString()}</span>
+            {/* Term 2: 70% Rule Multiplier */}
+            <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Discipline Cap</div>
+              <div className="text-xl sm:text-3xl font-extrabold text-white font-mono mt-1">× 70%</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">${Math.round(seventyPercentBase).toLocaleString()} Base</div>
             </div>
-            <p className="text-xs text-slate-500 mb-3">Materials, labor, contractor margins, and permitting costs.</p>
-            <input
-              id={rehabInputId}
-              type="range"
-              min="10000"
-              max="150000"
-              step="2500"
-              value={rehab}
-              onChange={(e) => setRehab(Number(e.target.value))}
-              aria-label="Estimated Renovation Scope (Rehab)"
-              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-amber-500"
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-slate-500">
-              <span>$10k</span>
-              <span>$75k</span>
-              <span>$150k</span>
-            </div>
-          </div>
 
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wider text-blue-300 mb-1">
-              Formula Breakdown
+            {/* Term 3: Rehab Scope */}
+            <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Rehab Scope</div>
+              <div className="text-xl sm:text-3xl font-extrabold text-amber-400 font-mono mt-1">− ${rehab.toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Verified Contractor Estimate</div>
             </div>
-            <div className="font-mono text-xs text-slate-300">
-              MAO = (${arv.toLocaleString()} × 70%) − ${rehab.toLocaleString()}
+
+            {/* Term 4: MAO Result */}
+            <div className="p-3 rounded-2xl bg-blue-900/40 border border-blue-400/60 shadow-lg shadow-blue-950">
+              <div className="text-[11px] font-bold text-blue-300 uppercase tracking-wider">Max Allowable Offer</div>
+              <div className="text-xl sm:text-3xl font-black text-emerald-400 font-mono mt-1">${mao.toLocaleString()}</div>
+              <div className="text-[10px] text-blue-200/80 mt-0.5">Strict Purchase Ceiling</div>
             </div>
-            <div className="font-mono text-xs text-blue-400 mt-1">
-              MAO = ${seventyPercent.toLocaleString()} − ${rehab.toLocaleString()} = <strong className="text-white">${mao.toLocaleString()}</strong>
-            </div>
+
           </div>
         </div>
 
-        {/* Output Metrics & OCG Philosophy */}
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-[#0c1322] p-6">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Maximum Allowable Offer (MAO)
-            </span>
-            <div className="mt-1 text-4xl font-extrabold text-white tracking-tight">
-              ${mao.toLocaleString()}
-            </div>
-            <p className="mt-2 text-xs text-slate-400">
-              The highest purchase price you should offer to protect margin, holding costs, and lender debt service.
-            </p>
-
-            <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-800 pt-4 text-xs">
+        {/* Dynamic Sliders & Property Reaction Grid */}
+        <div className="max-w-5xl mx-auto grid gap-8 lg:grid-cols-[1.1fr_0.9fr] items-stretch">
+          
+          {/* Left Column: Interactive Controls */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl flex flex-col justify-between">
+            
+            <div className="space-y-8">
+              {/* Slider 1: ARV */}
               <div>
-                <span className="text-slate-500">Gross Margin Buffer:</span>
-                <div className="font-semibold text-slate-200">${spread.toLocaleString()} (30%)</div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Projected ARV (Resale Value)
+                  </label>
+                  <span className="text-xl font-extrabold text-blue-400 font-mono">${arv.toLocaleString()}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min={80000} 
+                  max={500000} 
+                  step={5000}
+                  value={arv} 
+                  onChange={(e) => setArv(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                  <span>$80k (Starter Infill)</span>
+                  <span>$250k (Wichita Median)</span>
+                  <span>$500k+ (Executive)</span>
+                </div>
               </div>
+
+              {/* Slider 2: Rehab */}
               <div>
-                <span className="text-slate-500">Strategic Reserve Rec:</span>
-                <div className="font-semibold text-emerald-400">${recommendedReserves.toLocaleString()}</div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Estimated Renovation Scope
+                  </label>
+                  <span className="text-xl font-extrabold text-amber-400 font-mono">${rehab.toLocaleString()}</span>
+                </div>
+                <input 
+                  type="range" 
+                  min={10000} 
+                  max={150000} 
+                  step={2500}
+                  value={rehab} 
+                  onChange={(e) => setRehab(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                  <span>$10k (Cosmetic Paint/Floors)</span>
+                  <span>$45k (Full Kitchen/Bath/HVAC)</span>
+                  <span>$150k (Gut / Addition)</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-5 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-              <ShieldCheck size={16} className="text-blue-400" />
-              OCG Financing Philosophy
+            {/* Financing Doctrine Note */}
+            <div className="mt-8 pt-6 border-t border-slate-800">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                <Shield size={14} className="text-blue-400" />
+                <span>OCG Financing Philosophy</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                For renovation projects, OCG aims to explore senior lender capital for acquisition and construction. Your personal liquidity is better held as <strong className="text-slate-200">contingency reserves</strong> and <strong className="text-slate-200">financial flexibility</strong> against unexpected project delays rather than tied up in illiquid dirt.
+              </p>
             </div>
-            <p className="text-xs leading-relaxed text-slate-400">
-              For fix-and-flips, OCG aims to structure lender capital for purchase and rehab where possible. Your personal liquidity is better held as financial strength, reserves, and contingency armor against unforeseen delays rather than being tied up in illiquid dirt.
-            </p>
+
           </div>
 
-          <div className="text-[11px] text-slate-500 leading-normal">
-            <strong>Disclaimer:</strong> The 70% rule is an underwriting heuristic, not a financing guarantee. Actual lender loan-to-cost (LTC), interest rates, and loan-to-value (LTV) depend on market conditions, borrower track record, and verified appraisals.
+          {/* Right Column: Dynamic Value & Risk Breakdown */}
+          <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl flex flex-col justify-between">
+            
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Underwriting Metrics</div>
+              <h3 className="text-lg font-bold text-white mb-6">Capital Allocation Architecture</h3>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div className="text-xs font-bold text-slate-300">Gross Margin Buffer (30%)</div>
+                    <div className="text-[11px] text-slate-500">Holding interest, selling fees & investor return</div>
+                  </div>
+                  <div className="text-lg font-bold text-slate-200 font-mono">${grossMarginBuffer.toLocaleString()}</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex justify-between items-center">
+                  <div>
+                    <div className="text-xs font-bold text-slate-300">Recommended Contingency Reserves</div>
+                    <div className="text-[11px] text-slate-500">15% scope buffer + 6-mo PITI carry cushion</div>
+                  </div>
+                  <div className="text-lg font-bold text-emerald-400 font-mono">${reserveRecommendation.toLocaleString()}</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-900/60">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-300 mb-1">
+                    <CheckCircle2 size={14} className="text-blue-400" />
+                    <span>Decision Rule</span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    If asking price exceeds <span className="font-bold text-emerald-400 font-mono">${mao.toLocaleString()}</span>, the deal fails OCG quantitative screening unless scope is reduced or ARV is proven higher with documented comps.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Prompt G Callout */}
+            <div className="mt-6 pt-4 border-t border-slate-800 text-center">
+              <a 
+                href="#g" 
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                <span>Ask G to underwrite a specific Wichita address</span>
+                <ArrowRight size={13} />
+              </a>
+            </div>
+
           </div>
+
         </div>
+
+        {/* Transparent Heuristic Disclaimer */}
+        <div className="mt-8 max-w-3xl mx-auto text-center">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Disclaimer: The 70% rule is an underwriting heuristic and risk-management benchmark, not a financing guarantee. Actual loan-to-cost (LTC), interest carry, and loan-to-value (LTV) depend on lender guidelines, market conditions, verified appraisals, and contractor scopes.
+          </p>
+        </div>
+
       </div>
-    </div>
+    </section>
   );
 }
+
+export const Rule70Calculator = Calculators;
 
 export function StrategyComparisonMatrix() {
-  const [selectedStrategy, setSelectedStrategy] = useState<"flip" | "brrrr" | "hold" | "unsure">("flip");
-
-  const strategiesData = {
-    flip: {
-      name: "Fix & Flip",
-      headline: "Acquire → Renovate → Sell → Build Capital",
-      capital: "Lender-backed acquisition + rehab; client liquidity preserved as safety reserves",
-      timeline: "4 – 8 Months",
-      involvement: "Managed through OCG construction & design execution",
-      financing: "Hard money / Bridge / Private Capital",
-      exit: "Retail resale to owner-occupant or end investor",
-      bestFor: "Building liquid capital, learning transaction cycles, and growing personal equity"
-    },
-    brrrr: {
-      name: "BRRRR",
-      headline: "Acquire → Renovate → Rent → Refinance → Repeat",
-      capital: "Initial acquisition bridge capital followed by long-term DSCR refinance takeout",
-      timeline: "6 – 12 Months per cycle",
-      involvement: "Renovation coordination + tenant placement + refinance underwriting",
-      financing: "Short-term bridge $\\rightarrow$ Long-term DSCR (30-year fixed)",
-      exit: "Refinance out capital basis and hold cash-flowing asset long term",
-      bestFor: "Investors seeking to recycle the same capital into multiple rental properties"
-    },
-    hold: {
-      name: "Buy & Hold",
-      headline: "Acquire → Stabilize → Operate → Build Equity",
-      capital: "20% – 25% down payment + closing costs + operating reserves",
-      timeline: "Long-term (5 – 30+ Years)",
-      involvement: "Asset stabilization and property management oversight",
-      financing: "Conventional Investment or DSCR Long-Term Debt",
-      exit: "Ongoing cash distribution, loan paydown, and long-term tax advantages",
-      bestFor: "High-income earners or established investors seeking passive wealth and tax shielding"
-    },
-    unsure: {
-      name: "Not Sure Yet",
-      headline: "Goals → Capital → Risk Profile → Optimal Fit",
-      capital: "Flexible diagnostics based on available liquid reserves ($25k to $250k+)",
-      timeline: "Determined after personal strategy diagnostic",
-      involvement: "Tailored to your schedule and desired learning curve",
-      financing: "Evaluated across all available lending structures",
-      exit: "Configured to match your 1-year and 5-year financial objectives",
-      bestFor: "Investors who want objective guidance before committing to a rigid path"
-    }
-  };
-
-  const current = strategiesData[selectedStrategy];
-
   return (
-    <div className="rounded-3xl border border-slate-800 bg-[#0B0F17] p-6 lg:p-10 shadow-2xl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">
-            <Layers size={15} /> Objective-Driven Alignment
-          </div>
-          <h3 className="mt-1 text-3xl font-bold text-white tracking-tight">
-            Compare Investment Pathways
-          </h3>
+    <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+      <h4 className="text-sm font-bold uppercase tracking-wider text-blue-400 mb-3">Strategy Trade-Off Matrix</h4>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+          <div className="font-bold text-white mb-1">Fix & Flip</div>
+          <p className="text-slate-400">High velocity capital creation. Requires active project management.</p>
         </div>
-
-        {/* Strategy Selector Buttons */}
-        <div className="flex flex-wrap gap-2">
-          {(["flip", "brrrr", "hold", "unsure"] as const).map((key) => (
-            <button
-              key={key}
-              onClick={() => setSelectedStrategy(key)}
-              className={`rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
-                selectedStrategy === key
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40"
-                  : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
-              }`}
-            >
-              {strategiesData[key].name}
-            </button>
-          ))}
+        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+          <div className="font-bold text-white mb-1">BRRRR</div>
+          <p className="text-slate-400">Recycled equity growth. Requires disciplined refinance execution.</p>
         </div>
-      </div>
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1fr] items-start">
-        {/* Selected Card Deep Dive */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
-          <div>
-            <span className="text-xs uppercase tracking-widest text-blue-400 font-semibold">
-              Strategy Focus
-            </span>
-            <h4 className="text-2xl font-bold text-white mt-1">{current.name}</h4>
-            <p className="text-xs font-mono text-slate-400 mt-1">{current.headline}</p>
-          </div>
-
-          <div className="rounded-xl bg-blue-950/30 border border-blue-800/30 p-4">
-            <span className="text-[11px] uppercase tracking-wider text-blue-300 font-semibold">
-              Optimal Investor Fit
-            </span>
-            <p className="text-sm text-slate-200 mt-1 leading-relaxed">
-              {current.bestFor}
-            </p>
-          </div>
-
-          <div className="pt-2">
-            <Link
-              href={selectedStrategy === "unsure" ? "#g" : "/contact"}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
-            >
-              {selectedStrategy === "unsure" ? "Consult with G" : `Explore ${current.name} with OCG`}
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Detailed Breakdown Dimensions */}
-        <div className="grid gap-3">
-          {[
-            { label: "Capital Allocation", val: current.capital },
-            { label: "Execution Timeline", val: current.timeline },
-            { label: "Operational Involvement", val: current.involvement },
-            { label: "Financing Structure", val: current.financing },
-            { label: "Target Exit", val: current.exit },
-          ].map((item, idx) => (
-            <div key={idx} className="rounded-xl border border-slate-800/80 bg-slate-900/20 p-4">
-              <div className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
-                {item.label}
-              </div>
-              <div className="mt-1 text-xs md:text-sm text-slate-200 font-medium leading-relaxed">
-                {item.val}
-              </div>
-            </div>
-          ))}
+        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+          <div className="font-bold text-white mb-1">Buy & Hold</div>
+          <p className="text-slate-400">Predictable passive income & tax benefits. Long-term compounding.</p>
         </div>
       </div>
     </div>
   );
 }
+

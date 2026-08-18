@@ -1,277 +1,438 @@
-import React, { useState, useRef, useCallback } from "react";
-import { Sparkles, Hammer, MapPin, DollarSign, MoveHorizontal, ChevronRight } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Building2, 
+  MapPin, 
+  Sparkles, 
+  CheckCircle2, 
+  AlertCircle, 
+  Sliders, 
+  ArrowRight,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Hammer,
+  DollarSign
+} from 'lucide-react';
 
-interface PropertyCase {
+interface TransformationCase {
   id: string;
   name: string;
   neighborhood: string;
-  propertyType: string;
-  sqft: string;
-  yearBuilt: string;
-  beforeImg: string;
-  afterImg: string;
-  estimatedRehab: string;
-  projectedArv: string;
+  yearBuilt: number;
+  squareFeet: number;
+  existingConditionImg: string;
+  conceptualAfterImg: string;
+  estimatedRehab: number;
+  targetArv: number;
   targetBuyer: string;
-  scopeItems: string[];
-  designStrategy: string;
+  narrative: string;
+  hotspots: Array<{
+    id: string;
+    label: string;
+    top: number; // percentage
+    left: number; // percentage
+    category: 'EXTERIOR' | 'MECHANICAL' | 'DESIGN' | 'ROOF' | 'LANDSCAPE';
+    currentIssue: string;
+    proposedIntervention: string;
+    whyItMatters: string;
+    valueStrategy: string;
+    certainty: 'KNOWN' | 'ESTIMATED' | 'PROVISIONAL';
+  }>;
 }
 
-const properties: PropertyCase[] = [
+const TRANSFORMATION_CASES: TransformationCase[] = [
   {
-    id: "bungalow",
-    name: "College Hill Craftsman",
-    neighborhood: "College Hill / Central Wichita",
-    propertyType: "1.5-Story Craftsman Bungalow",
-    sqft: "1,640 sq ft",
-    yearBuilt: "1932",
-    beforeImg: "/images/transformations/bungalow-before.jpg",
-    afterImg: "/images/transformations/bungalow-concept-after.jpg",
-    estimatedRehab: "$48,500",
-    projectedArv: "$235,000",
-    targetBuyer: "Owner-Occupant / First-Time Move-Up Buyer",
-    scopeItems: [
-      "Exterior restoration: Charcoal siding + clean alabaster white trim",
-      "Restored natural cedar porch deck & structural balusters",
-      "New architectural 30-year shingle roof system",
-      "Energy-efficient black clad double-hung windows",
-      "Native Kansas ornamental landscaping & clean concrete approach"
-    ],
-    designStrategy: "Preserving historic craftsman character while infusing modern architectural contrast to maximize neighborhood equity ceiling."
+    id: 'college_hill',
+    name: 'College Hill 1930s Craftsman',
+    neighborhood: 'College Hill / Central Wichita',
+    yearBuilt: 1932,
+    squareFeet: 1640,
+    existingConditionImg: '/images/transformations/bungalow-before.jpg',
+    conceptualAfterImg: '/images/transformations/bungalow-concept-after.jpg',
+    estimatedRehab: 48500,
+    targetArv: 235000,
+    targetBuyer: 'Owner-Occupant / First-Time Move-Up Buyer',
+    narrative: 'Preserving historic craftsman character while infusing modern architectural contrast to maximize neighborhood equity ceiling.',
+    hotspots: [
+      {
+        id: 'roof',
+        label: 'Architectural Roof & Eaves',
+        top: 25,
+        left: 32,
+        category: 'ROOF',
+        currentIssue: 'Weathered 3-tab asphalt shingles nearing end of functional lifecycle with minor soffit rot.',
+        proposedIntervention: 'Complete tear-off and installation of 30-year architectural dimensional shingles with ice-and-water shield.',
+        whyItMatters: 'Protects interior envelope and satisfies strict buyer home inspection contingencies.',
+        valueStrategy: 'Appraisal quality rating upgrade from Q5 to Q3 in Sedgwick County comps.',
+        certainty: 'KNOWN'
+      },
+      {
+        id: 'porch',
+        label: 'Front Porch & Cedar Balusters',
+        top: 65,
+        left: 45,
+        category: 'DESIGN',
+        currentIssue: 'Sagging non-historic porch stairs and peeling paint over original timber framing.',
+        proposedIntervention: 'Structural sistering of porch floor joists, restored natural cedar balustrades, and stained timber posts.',
+        whyItMatters: 'Creates the primary emotional curb appeal moment for College Hill buyers.',
+        valueStrategy: 'Elevates visual pricing tier and accelerates initial days-on-market velocity.',
+        certainty: 'KNOWN'
+      },
+      {
+        id: 'siding',
+        label: 'Charcoal & Alabaster Palette',
+        top: 48,
+        left: 70,
+        category: 'EXTERIOR',
+        currentIssue: 'Chalking green paint with localized moisture intrusion along north-facing clapboards.',
+        proposedIntervention: 'Scraped, primed with elastomeric bonding primer, and finished in matte charcoal with clean alabaster trim.',
+        whyItMatters: 'Establishes contemporary design authority while honoring neighborhood historic fabric.',
+        valueStrategy: 'Expands buyer demographic to design-conscious medical and aviation professionals.',
+        certainty: 'ESTIMATED'
+      },
+      {
+        id: 'landscape',
+        label: 'Native Kansas Landscaping',
+        top: 82,
+        left: 55,
+        category: 'LANDSCAPE',
+        currentIssue: 'Overgrown junipers crowding foundation wall and broken concrete perimeter chain-link fence.',
+        proposedIntervention: 'Chain-link removal, fresh smooth concrete walkway, and drought-tolerant Kansas native grasses and perennials.',
+        whyItMatters: 'Improves drainage grade away from basement foundation walls.',
+        valueStrategy: 'Eliminates water penetration objection during buyer underwriting.',
+        certainty: 'KNOWN'
+      }
+    ]
   },
   {
-    id: "ranch",
-    name: "Crown Heights Mid-Century",
-    neighborhood: "East Wichita / Crown Heights Area",
-    propertyType: "Mid-Century Brick Ranch",
-    sqft: "1,820 sq ft",
-    yearBuilt: "1965",
-    beforeImg: "/images/transformations/ranch-before.jpg",
-    afterImg: "/images/transformations/ranch-concept-after.jpg",
-    estimatedRehab: "$54,000",
-    projectedArv: "$278,000",
-    targetBuyer: "Turnkey Relocation / Young Professional Family",
-    scopeItems: [
-      "Limewashed brick facade with charcoal architectural gable",
-      "Natural warm cedar wood entryway privacy slats & custom door",
-      "Frosted vertical glass modern black garage door",
-      "Architectural low-voltage landscape lighting + rock bed mulch",
-      "Full interior reconfiguration to open-concept kitchen/living"
-    ],
-    designStrategy: "Elevating dated 1960s brick into a crisp modern ranch without exceeding neighborhood comp thresholds."
+    id: 'crown_heights',
+    name: 'Crown Heights Mid-Century Ranch',
+    neighborhood: 'Crown Heights / East Wichita',
+    yearBuilt: 1958,
+    squareFeet: 1820,
+    existingConditionImg: '/images/transformations/ranch-before.jpg',
+    conceptualAfterImg: '/images/transformations/ranch-concept-after.jpg',
+    estimatedRehab: 54000,
+    targetArv: 265000,
+    targetBuyer: 'Young Family / Design-Conscious Professional',
+    narrative: 'Transforming tired 1950s brick into a striking Scandinavian-inspired modern ranch with organic timber portico.',
+    hotspots: [
+      {
+        id: 'brick',
+        label: 'Limewash & Siding Transition',
+        top: 45,
+        left: 28,
+        category: 'EXTERIOR',
+        currentIssue: 'Mismatched aged red brick with heavy staining and outdated decorative iron scrollwork.',
+        proposedIntervention: 'Breathable mineral limewash finish paired with horizontal graphite board-and-batten accents.',
+        whyItMatters: 'Permeable mineral finish prevents moisture trapping while revitalizing facade aesthetics.',
+        valueStrategy: 'Differentiates property from un-renovated 1950s ranch inventory across Crown Heights.',
+        certainty: 'KNOWN'
+      },
+      {
+        id: 'portico',
+        label: 'Architectural Cedar Gabled Portico',
+        top: 40,
+        left: 58,
+        category: 'DESIGN',
+        currentIssue: 'Flat, uninviting entry slab with minimal rain shelter.',
+        proposedIntervention: 'New pitched gabled portico framed with Douglas fir vertical timber slats and modern recessed downlighting.',
+        whyItMatters: 'Adds architectural verticality and focal point to a long horizontal ranch profile.',
+        valueStrategy: 'Increases perceived square footage and photo click-through rate on digital portals.',
+        certainty: 'ESTIMATED'
+      },
+      {
+        id: 'windows',
+        label: 'Black-Clad Low-E Windows',
+        top: 50,
+        left: 76,
+        category: 'MECHANICAL',
+        currentIssue: 'Single-pane aluminum sliders with broken thermal seals causing condensation.',
+        proposedIntervention: 'Energy Star double-pane argon-filled low-E vinyl windows with black exterior cladding.',
+        whyItMatters: 'Reduces HVAC utility costs and dampens neighborhood traffic sound.',
+        valueStrategy: 'Appraisal energy efficiency credit and immediate buyer reassurance.',
+        certainty: 'KNOWN'
+      }
+    ]
   },
   {
-    id: "delano",
-    name: "Delano Historic Worker Cottage",
-    neighborhood: "Historic Delano / West Douglas Corridor",
-    propertyType: "1-Story Historic Worker Cottage",
-    sqft: "1,280 sq ft",
-    yearBuilt: "1922",
-    beforeImg: "/images/transformations/wichita_delano_before.jpg",
-    afterImg: "/images/transformations/wichita_delano_after.jpg",
-    estimatedRehab: "$36,000",
-    projectedArv: "$195,000",
-    targetBuyer: "Downtown Commuter / Value-Add Rental Investor",
-    scopeItems: [
-      "Deep navy-slate exterior siding + crisp warm-white architectural trim",
-      "Restored front porch with natural cedar wood front door & soffit",
-      "Modern matte black exterior cylinder sconces",
-      "Manicured Kansas native perennial landscaping & dark mulch",
-      "Updated high-efficiency HVAC & PEX plumbing run"
-    ],
-    designStrategy: "Cost-disciplined restoration tailored to West Douglas corridor rental demand and entry-level buyer appetite."
+    id: 'delano',
+    name: 'Historic Delano Worker Cottage',
+    neighborhood: 'Historic Delano District',
+    yearBuilt: 1924,
+    squareFeet: 1210,
+    existingConditionImg: '/images/transformations/wichita_delano_before.jpg',
+    conceptualAfterImg: '/images/transformations/wichita_delano_after.jpg',
+    estimatedRehab: 36000,
+    targetArv: 195000,
+    targetBuyer: 'First-Time Homebuyer / Urban Professional',
+    narrative: 'Strategic infill modernization balancing compact efficiency with urban Delano walkability.',
+    hotspots: [
+      {
+        id: 'entry',
+        label: 'Historic Cottage Porch Rebuild',
+        top: 60,
+        left: 42,
+        category: 'DESIGN',
+        currentIssue: 'Weathered porch decking and rotted foundation post skirts.',
+        proposedIntervention: 'Rebuilt pressure-treated framework with cedar tongue-and-groove porch ceiling and matte black fixtures.',
+        whyItMatters: 'Essential for historic district integrity and neighborhood outdoor living.',
+        valueStrategy: 'High-margin entry restoration that commands top dollar per square foot.',
+        certainty: 'KNOWN'
+      },
+      {
+        id: 'siding_delano',
+        label: 'Slate Siding & Architectural Trim',
+        top: 42,
+        left: 68,
+        category: 'EXTERIOR',
+        currentIssue: 'Aged asbestos/composite shingle siding requiring remediation.',
+        proposedIntervention: 'Safe overlay/re-siding with modern deep slate horizontal lap siding and crisp white window framing.',
+        whyItMatters: 'Safe, durable, low-maintenance exterior for the next 30 years.',
+        valueStrategy: 'Enables conventional and FHA financing without condition repair escrows.',
+        certainty: 'KNOWN'
+      }
+    ]
   }
 ];
 
-export default function InteractiveTransformSlider() {
-  const [activeIdx, setActiveIdx] = useState<number>(0);
-  const [sliderPos, setSliderPos] = useState<number>(50);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+export function InteractiveTransformSlider() {
+  const [activeCaseIndex, setActiveCaseIndex] = useState(0);
+  const [sliderPosition, setSliderPosition] = useState(50);
+  const [isDragging, setIsDragging] = useState(false);
+  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    const handleGAction = (e: any) => {
-      const isMatch = e.detail?.type === "load_property_case" || e.detail?.actionId === "SELECT_PROPERTY_TRANSFORMATION";
-      const targetId = e.detail?.payload?.propertyCaseId || e.detail?.payload?.propertyId;
-      if (isMatch && targetId) {
-        const foundIdx = properties.findIndex((p) => p.id === targetId);
-        if (foundIdx !== -1) {
-          setActiveIdx(foundIdx);
-        }
-      }
-    };
-    window.addEventListener("ocg:g-action", handleGAction);
-    return () => window.removeEventListener("ocg:g-action", handleGAction);
-  }, []);
+  const activeCase = TRANSFORMATION_CASES[activeCaseIndex];
+  const selectedHotspot = activeCase.hotspots.find(h => h.id === activeHotspot) || activeCase.hotspots[0];
 
-  const activeProp = properties[activeIdx];
-
-  const handleMove = useCallback((clientX: number) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const percent = Math.min(Math.max((x / rect.width) * 100, 0), 100);
-    setSliderPos(percent);
-  }, []);
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length > 0) {
-      handleMove(e.touches[0].clientX);
-    }
+  const handleSliderMove = (clientX: number, rect: DOMRect) => {
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    setSliderPosition(percent);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      handleMove(e.clientX);
-    }
+  const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    handleSliderMove(e.touches[0].clientX, rect);
+  };
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging && e.buttons !== 1) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    handleSliderMove(e.clientX, rect);
   };
 
   return (
-    <div className="rounded-3xl border border-slate-800 bg-[#0B0F17] p-6 lg:p-8 shadow-2xl">
-      {/* Property Switcher Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-6">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-400">
-            <Sparkles size={14} /> Authentic Wichita Visual World
+    <section id="transformations" className="relative py-24 bg-[#070A0F] text-white overflow-hidden border-t border-slate-800">
+      {/* Background Subtle Gradient */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950/20 via-transparent to-transparent" />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        
+        {/* Section Header */}
+        <div className="max-w-4xl mx-auto text-center mb-12">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400 mb-4">
+            <Sparkles size={13} />
+            <span>Authentic Wichita Architectural World</span>
           </div>
-          <h3 className="mt-1 text-2xl font-bold text-white tracking-tight">
-            Strategic Property Transformation
-          </h3>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+            Strategic Property Transformation.
+          </h2>
+          <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto">
+            We don't simply renovate houses—we unlock neighborhood equity through disciplined architectural design, verified contractor scopes, and target buyer positioning.
+          </p>
+
+          {/* Neighborhood Case Study Tabs */}
+          <div className="flex flex-wrap justify-center gap-2.5 mt-8">
+            {TRANSFORMATION_CASES.map((c, idx) => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setActiveCaseIndex(idx);
+                  setActiveHotspot(null);
+                  setSliderPosition(50);
+                }}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  activeCaseIndex === idx
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40 border border-blue-400'
+                    : 'bg-slate-900/80 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl bg-slate-900/80 p-1.5 border border-slate-800">
-          {properties.map((p, idx) => (
-            <button
-              key={p.id}
-              onClick={() => {
-                setActiveIdx(idx);
-                setSliderPos(50);
-              }}
-              className={`rounded-lg px-4 py-2 text-xs font-semibold tracking-wide transition-all ${
-                activeIdx === idx
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-950"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr] items-center">
-        {/* Interactive Image Split Slider */}
-        <div className="relative">
-          <div
-            ref={containerRef}
-            className="relative h-[340px] sm:h-[420px] md:h-[480px] w-full select-none overflow-hidden rounded-2xl border border-slate-800 cursor-ew-resize shadow-inner"
+        {/* Immersive Transformation Viewport */}
+        <div className="max-w-6xl mx-auto">
+          
+          {/* Main Visual Slider Box */}
+          <div 
+            className="relative rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl bg-slate-950 aspect-[16/9] select-none touch-none cursor-ew-resize group"
             onMouseDown={() => setIsDragging(true)}
             onMouseUp={() => setIsDragging(false)}
             onMouseLeave={() => setIsDragging(false)}
-            onMouseMove={handleMouseMove}
-            onTouchMove={handleTouchMove}
-            onClick={(e) => handleMove(e.clientX)}
+            onMouseMove={onMouseMove}
+            onTouchMove={onTouchMove}
           >
-            {/* After Image (Background) */}
-            <img
-              src={activeProp.afterImg}
-              alt="Conceptual transformation after"
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="lazy"
+            {/* Conceptual After Image (Bottom Layer) */}
+            <img 
+              src={activeCase.conceptualAfterImg}
+              alt="Conceptual Renovation"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
 
-            {/* Before Image (Clipped Overlay) */}
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{ width: `${sliderPos}%` }}
+            {/* Existing Original Condition Image (Clipped Top Layer) */}
+            <div 
+              className="absolute inset-0 overflow-hidden pointer-events-none"
+              style={{ width: `${sliderPosition}%` }}
             >
-              <img
-                src={activeProp.beforeImg}
-                alt="Distressed property before"
-                className="absolute inset-0 h-full w-full object-cover max-w-none"
-                style={{ width: containerRef.current ? `${containerRef.current.clientWidth}px` : "100%" }}
-                loading="lazy"
+              <img 
+                src={activeCase.existingConditionImg}
+                alt="Representative Original Condition"
+                className="absolute inset-0 w-full h-full object-cover max-w-none"
+                style={{ width: '100%', minWidth: '100%' }}
               />
-              <div className="absolute top-4 left-4 rounded-full bg-black/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-200 backdrop-blur-md border border-white/10 flex items-center gap-1.5">
-                <Hammer size={12} className="text-amber-400" /> Existing Condition
-              </div>
+              <div className="absolute inset-0 bg-slate-950/10 pointer-events-none" />
             </div>
 
-            {/* After Label */}
-            <div className="absolute top-4 right-4 rounded-full bg-blue-950/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-blue-200 backdrop-blur-md border border-blue-500/30 flex items-center gap-1.5">
-              <Sparkles size={12} className="text-blue-400" /> Proposed Transformation
-            </div>
+            {/* Interactive Hotspots Overlay */}
+            {activeCase.hotspots.map((spot) => (
+              <button
+                key={spot.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveHotspot(spot.id);
+                }}
+                style={{ top: `${spot.top}%`, left: `${spot.left}%` }}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center p-2 rounded-full transition-all cursor-pointer ${
+                  activeHotspot === spot.id
+                    ? 'bg-blue-500 text-white scale-125 ring-4 ring-blue-400/50 shadow-xl'
+                    : 'bg-slate-900/90 text-blue-300 border border-blue-400/60 hover:scale-110 shadow-lg'
+                }`}
+                title={spot.label}
+              >
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                </span>
+              </button>
+            ))}
 
-            {/* Split Divider Line & Handle */}
-            <div
-              className="absolute inset-y-0 w-0.5 bg-white shadow-[0_0_12px_rgba(255,255,255,0.8)]"
-              style={{ left: `${sliderPos}%` }}
+            {/* Divider Line & Handle */}
+            <div 
+              className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_15px_rgba(255,255,255,0.8)] z-30 pointer-events-none"
+              style={{ left: `${sliderPosition}%` }}
             >
-              <div className="absolute top-1/2 -left-4 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-900 shadow-xl">
-                <MoveHorizontal size={16} />
+              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-white text-slate-900 shadow-2xl flex items-center justify-center border-2 border-blue-600 font-bold text-xs">
+                ⇄
               </div>
             </div>
 
-            {/* Bottom Floating Legend */}
-            <div className="absolute bottom-4 inset-x-4 flex items-center justify-between rounded-xl bg-slate-950/85 px-4 py-2.5 backdrop-blur-md border border-white/10 text-xs">
-              <span className="text-slate-300 flex items-center gap-1">
-                <MapPin size={13} className="text-blue-400" /> {activeProp.neighborhood}
+            {/* Permanent Verified Badges */}
+            <div className="absolute top-4 left-4 z-20 pointer-events-none">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-slate-950/85 backdrop-blur-md border border-slate-700 text-[11px] font-bold uppercase tracking-wider text-amber-400 shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                Representative Original Condition
               </span>
-              <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-300 border border-blue-400/30">
-                Conceptual Transformation
+            </div>
+
+            <div className="absolute top-4 right-4 z-20 pointer-events-none">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-blue-950/85 backdrop-blur-md border border-blue-500/50 text-[11px] font-bold uppercase tracking-wider text-blue-300 shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-blue-400 inline-block animate-pulse" />
+                [ Conceptual Transformation ]
               </span>
+            </div>
+
+            {/* Bottom Location Indicator */}
+            <div className="absolute bottom-4 left-4 z-20 pointer-events-none">
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-semibold text-slate-200">
+                <MapPin size={13} className="text-blue-400" />
+                <span>{activeCase.neighborhood}</span>
+                <span className="text-slate-500">·</span>
+                <span>Built {activeCase.yearBuilt}</span>
+                <span className="text-slate-500">·</span>
+                <span>{activeCase.squareFeet.toLocaleString()} sq ft</span>
+              </div>
             </div>
           </div>
 
-          <p className="mt-3 text-center text-xs text-slate-500 italic">
-            Drag or click slider to compare pre-acquisition condition with OCG value-add design concept.
-          </p>
-        </div>
-
-        {/* Strategic Analysis & Scope Breakdown */}
-        <div className="flex flex-col justify-between space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
-            <div className="grid grid-cols-2 gap-4 border-b border-slate-800 pb-4">
+          {/* Underwriting Metrics & Hotspot Inspector Drawer */}
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            
+            {/* Left Box: Underwriting Summary */}
+            <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400">Estimated Rehab</span>
-                <div className="mt-1 text-2xl font-bold text-white tracking-tight">{activeProp.estimatedRehab}</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Underwriting Overview</div>
+                <h3 className="text-xl font-bold text-white">{activeCase.name}</h3>
+                <p className="mt-2 text-xs text-slate-400 leading-relaxed">{activeCase.narrative}</p>
               </div>
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-slate-400">Target ARV</span>
-                <div className="mt-1 text-2xl font-bold text-blue-400 tracking-tight">{activeProp.projectedArv}</div>
+
+              <div className="mt-6 grid grid-cols-2 gap-4 pt-4 border-t border-slate-800/80">
+                <div>
+                  <div className="text-[11px] font-medium text-slate-400">ESTIMATED REHAB</div>
+                  <div className="text-2xl font-black text-amber-400 font-mono">${activeCase.estimatedRehab.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-medium text-slate-400">TARGET ARV</div>
+                  <div className="text-2xl font-black text-blue-400 font-mono">${activeCase.targetArv.toLocaleString()}</div>
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-300">
-              <div><span className="text-slate-500">Square Footage:</span> {activeProp.sqft}</div>
-              <div><span className="text-slate-500">Year Built:</span> {activeProp.yearBuilt}</div>
-              <div className="col-span-2"><span className="text-slate-500">Target Buyer:</span> {activeProp.targetBuyer}</div>
+            {/* Right 2-Cols: Architectural Hotspot Inspector */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-slate-900/70 border border-slate-800">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Architectural Intervention Focus</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono">
+                    {selectedHotspot.category}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Data Certainty: <span className="font-semibold text-emerald-400">{selectedHotspot.certainty}</span>
+                </div>
+              </div>
+
+              <h4 className="text-lg font-bold text-white">{selectedHotspot.label}</h4>
+
+              <div className="mt-4 grid sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                  <div className="text-slate-400 font-bold uppercase tracking-wider mb-1">Observed Existing Issue</div>
+                  <div className="text-slate-300 leading-relaxed">{selectedHotspot.currentIssue}</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                  <div className="text-slate-400 font-bold uppercase tracking-wider mb-1">Proposed OCG Intervention</div>
+                  <div className="text-slate-300 leading-relaxed">{selectedHotspot.proposedIntervention}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 p-3 rounded-xl bg-blue-950/30 border border-blue-900/40 flex items-start gap-2.5 text-xs">
+                <CheckCircle2 size={16} className="text-blue-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-blue-200">Value-Add Strategy: </span>
+                  <span className="text-blue-300/90">{selectedHotspot.valueStrategy}</span>
+                </div>
+              </div>
             </div>
+
           </div>
 
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300 mb-3">
-              Renovation & Value-Add Strategy
-            </h4>
-            <p className="text-sm leading-relaxed text-slate-400 mb-4">
-              {activeProp.designStrategy}
+          {/* Transparent Integrity Notice */}
+          <div className="mt-4 text-center">
+            <p className="text-[11px] text-slate-500">
+              Data Integrity Notice: Renovation scopes and ARV projections represent modeled acquisition frameworks verified against Sedgwick County micro-neighborhood comps. Conceptual transformations are architectural illustrations.
             </p>
-
-            <ul className="space-y-2">
-              {activeProp.scopeItems.map((item, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-xs text-slate-300">
-                  <ChevronRight size={14} className="text-blue-400 shrink-0 mt-0.5" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-snug">
-            <strong>Data Integrity Notice:</strong> All renovation figures and ARV projections represent modeled frameworks subject to physical contractor scoping and formal title verification. Conceptual transformations are for strategic illustration.
-          </div>
         </div>
+
       </div>
-    </div>
+    </section>
   );
 }
+
+export default InteractiveTransformSlider;
+

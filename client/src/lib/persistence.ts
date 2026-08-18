@@ -54,3 +54,9 @@ export function getCachedStrategyBriefs(): IOCGStrategyBrief[] {
     return [];
   }
 }
+
+export function loadStrategyBrief(): IOCGStrategyBrief | null {
+  const briefs = getCachedStrategyBriefs();
+  return briefs.length > 0 ? briefs[0] : null;
+}
+
