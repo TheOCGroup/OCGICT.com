@@ -1,15 +1,131 @@
+import React from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Search, Calculator, Workflow, Hammer, Landmark, ArrowRight } from "lucide-react";
+import TechnologyEcosystem from "@/components/TechnologyEcosystem";
+import OriginStorySequence from "@/components/OriginStorySequence";
+import { Search, Calculator, Workflow, Hammer, ArrowRight, ShieldCheck, CheckCircle2, Calendar, Bot } from "lucide-react";
 import { Link } from "wouter";
 
-const steps=[
-  ['01','Define the objective','We start with what the investor is trying to accomplish, available resources, timeline, involvement level, and risk tolerance.'],
-  ['02','Discover opportunities','HUNTER supports acquisition discovery and investigation so OCG can focus attention on opportunities worth deeper review.'],
-  ['03','Underwrite the property','VICTOR supports deeper analysis: comps, ARV, rehab, MAO, financing scenarios, risk, and evidence quality.'],
-  ['04','Structure the acquisition','OCG evaluates the appropriate strategy and financing path. For flips, lender capital is explored first when appropriate; DSCR and hold strategies may require liquidity differently.'],
-  ['05','Transform strategically','Renovation scope, design direction, materials, budget, target buyer/renter, and exit strategy are treated as one connected investment decision.'],
-  ['06','Execute + continue','PIPER supports the acquisition pipeline while OCG manages relationships, negotiations, coordination, and next actions. The goal is not merely one closing — it is better investing capability over time.'],
+const steps = [
+  {
+    num: "01",
+    title: "Define Objectives & Capital Profile",
+    body: "We start with what you are trying to accomplish: available liquid reserves, timeline constraints, risk tolerance, and desired involvement level. Determining the strategy comes before capital deployment.",
+  },
+  {
+    num: "02",
+    title: "Opportunity Discovery & Screening (HUNTER)",
+    body: "HUNTER monitors off-market distress signals, municipal filings, tax discrepancies, and estate dispositions across Wichita micro-neighborhoods to surface high-signal prospects.",
+  },
+  {
+    num: "03",
+    title: "Rigorous Underwriting & Scoping (VICTOR)",
+    body: "VICTOR deep-dives into physical condition, photographic evidence, 0.5-mile radius MLS comp clustering, Wichita contractor rate tables, and 70% rule MAO thresholds.",
+  },
+  {
+    num: "04",
+    title: "Strategic Financing & Capital Architecture",
+    body: "OCG configures the financing package. For flips, lender debt is leveraged for acquisition and rehab to preserve your liquidity. For DSCR holds, long-term takeout debt is structured.",
+  },
+  {
+    num: "05",
+    title: "Architectural Renovation & Value Creation",
+    body: "Renovation is treated as investment strategy. Interior layout optimization, material selection, curb appeal enhancement, and cost sensitivity are executed to maximize resale equity.",
+  },
+  {
+    num: "06",
+    title: "Pipeline Operations & Execution (PIPER + OCG)",
+    body: "PIPER tracks inspection contingencies, title clearances, and lender underwriting packets while OCG coordinates contractors, walkthroughs, and ultimate asset monetization.",
+  },
 ];
 
-export default function HowItWorks(){return <div className="min-h-screen bg-[#090b0f] text-white"><Navbar/><main className="pt-20"><section className="container py-24 md:py-32"><div className="max-w-4xl"><div className="section-eyebrow mb-5">How OCG works</div><h1 className="text-5xl md:text-8xl font-semibold tracking-[-0.055em] leading-[0.92]">Property → evidence → possibility → numbers → capital → decision.</h1><p className="mt-7 text-xl leading-relaxed text-white/55 max-w-3xl">The technology compresses and organizes work. The investment decision remains grounded in evidence, professional verification where required, and human judgment.</p></div></section><section className="border-y border-white/8 bg-[#0c1017] py-24"><div className="container grid gap-4">{steps.map(([n,t,b])=><div key={n} className="grid md:grid-cols-[90px_0.7fr_1.3fr] gap-5 items-start rounded-2xl border border-white/8 bg-white/[0.025] p-6 md:p-8"><div className="ocg-step-number">{n}</div><h2 className="text-2xl md:text-3xl font-semibold">{t}</h2><p className="text-sm md:text-base leading-relaxed text-white/52">{b}</p></div>)}</div></section><section className="py-24"><div className="container grid lg:grid-cols-4 gap-4">{[[Search,'HUNTER','Finds'],[Calculator,'VICTOR','Analyzes'],[Workflow,'PIPER','Manages'],[Hammer,'OCG','Executes']].map(([Icon,name,verb]:any)=><div className="tech-card" key={name}><Icon size={21} className="text-blue-300"/><div className="mt-7 text-2xl font-bold">{name}</div><div className="mt-2 text-xs uppercase tracking-[0.13em] text-white/35">{verb}</div></div>)}</div></section><section className="bg-white text-[#0b0d12] py-24"><div className="container grid lg:grid-cols-2 gap-14"><div><div className="section-eyebrow !text-blue-700 mb-4">Capital discipline</div><h2 className="text-4xl md:text-6xl font-semibold tracking-[-0.04em]">Having money does not automatically mean spending it.</h2></div><div><p className="text-lg leading-relaxed text-black/55">On fix-and-flip opportunities, OCG generally explores lender capital for acquisition and renovation when appropriate. Client liquidity can be strategically valuable as reserves and financial strength. Other strategies, especially DSCR and longer-term holds, can require direct capital differently. Exact requirements always depend on the property, borrower, lender, and current program terms.</p><Link href="/contact" className="inline-flex mt-8 items-center gap-2 text-sm font-semibold text-blue-700">Discuss your situation <ArrowRight size={15}/></Link></div></div></section></main><Footer/></div>}
+export default function HowItWorks() {
+  return (
+    <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
+      <Navbar />
+
+      <main className="pt-32 pb-24 space-y-24 md:space-y-36">
+        {/* Header */}
+        <section className="container">
+          <div className="max-w-4xl space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300">
+              The OCG Methodology
+            </div>
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[0.98] text-white">
+              Property → Evidence → Possibility → Numbers → Capital → Decision.
+            </h1>
+            <p className="text-lg md:text-xl text-slate-300 leading-relaxed max-w-3xl">
+              Technology compresses and organizes the work. The investment decision remains grounded in empirical evidence, professional verification, and human judgment.
+            </p>
+          </div>
+        </section>
+
+        {/* 6-Step Methodology Progression */}
+        <section className="container">
+          <div className="grid gap-4">
+            {steps.map((s) => (
+              <div
+                key={s.num}
+                className="grid md:grid-cols-[100px_1fr_1.5fr] gap-6 items-center rounded-3xl border border-slate-800 bg-slate-950 p-6 md:p-8 hover:border-slate-700 transition-all shadow-xl"
+              >
+                <div className="font-mono text-3xl md:text-4xl font-extrabold text-blue-400">
+                  {s.num}
+                </div>
+                <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">
+                  {s.title}
+                </h2>
+                <p className="text-sm md:text-base leading-relaxed text-slate-400">
+                  {s.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Origin Story Component */}
+        <section className="container">
+          <OriginStorySequence />
+        </section>
+
+        {/* Technology Ecosystem Component */}
+        <section className="container">
+          <TechnologyEcosystem />
+        </section>
+
+        {/* Next Step CTA */}
+        <section className="container">
+          <div className="rounded-3xl border border-slate-800 bg-gradient-to-r from-slate-950 to-[#0B132B] p-8 md:p-14 shadow-2xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+            <div className="max-w-2xl space-y-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                Experience OCG Firsthand
+              </span>
+              <h3 className="text-3xl md:text-4xl font-bold text-white">
+                See how our systems apply to your personal investment goals.
+              </h3>
+              <p className="text-sm text-slate-300">
+                Connect with our team for a comprehensive strategic consultation and Wichita market briefing.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/contact"
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+              >
+                <Calendar size={14} /> Book Strategy Session
+              </Link>
+              <a
+                href="#g"
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-slate-200 hover:text-white transition-all"
+              >
+                <Bot size={14} className="text-blue-400" /> Talk with G
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

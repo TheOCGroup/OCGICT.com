@@ -1,13 +1,139 @@
+import React from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { ArrowRight } from "lucide-react";
+import { Rule70Calculator, StrategyComparisonMatrix } from "@/components/Calculators";
+import { ArrowRight, ShieldCheck, CheckCircle2, TrendingUp, Layers, Landmark, Calendar, Bot } from "lucide-react";
 import { Link } from "wouter";
 
 const paths = [
-  { title:'Fix + Flip', subtitle:'Build capital. Learn execution. Reinvest.', body:'For some investors, a disciplined renovation-and-resale project is the right way to get their feet wet, gain experience, and build additional investable capital. OCG generally explores lender-funded acquisition and renovation first when the borrower and deal support it rather than automatically consuming the client’s liquidity.' },
-  { title:'BRRRR', subtitle:'Acquire. Improve. Rent. Refinance. Repeat.', body:'A potential portfolio-growth path when acquisition basis, rehab, rent, refinance assumptions, reserves, and lender requirements align. The refinance is a future event, not a guarantee, so the full structure has to be stress-tested.' },
-  { title:'Buy + Hold', subtitle:'Own durable assets with a clear operating plan.', body:'For investors prioritizing long-term ownership, cash flow, appreciation potential, and equity creation. Financing and reserve needs can differ materially from a flip and may place greater demands on available capital.' },
-  { title:'Creative Structures', subtitle:'Use structure to solve the right problem.', body:'Seller financing, private capital, bridge structures, partnerships, and other legitimate approaches may create flexibility when appropriate. G can educate and model possibilities, but final structures require property, borrower, lender, and professional review.' },
+  {
+    title: "Fix & Flip",
+    subtitle: "Acquire · Renovate · Resale · Build Liquid Capital",
+    body: "For many investors, a disciplined renovation-and-resale project is the optimal way to build capital, learn transaction execution, and expand investable reserves. OCG explores lender-funded acquisition and rehab first so your cash remains intact as an emergency buffer.",
+    capitalRole: "Preserved as emergency safety reserves & lender strength",
+    timeline: "4 – 8 Months",
+  },
+  {
+    title: "BRRRR",
+    subtitle: "Acquire · Renovate · Rent · Refinance · Repeat",
+    body: "A portfolio growth method when purchase basis, rehab scope, rental income, refinance seasoning, and lender debt service coverage (DSCR) align. OCG stress-tests the refinance exit before acquisition to ensure the numbers hold up.",
+    capitalRole: "Short-term bridge capital recycled into long-term equity",
+    timeline: "6 – 12 Months per cycle",
+  },
+  {
+    title: "Buy & Hold",
+    subtitle: "Acquire · Stabilize · Operate · Build Long-Term Wealth",
+    body: "For investors prioritizing steady cash flow, appreciation potential, and equity growth. Down payment requirements (typically 20-25%), closing costs, and ongoing operating reserves place different demands on available liquidity.",
+    capitalRole: "Down payment equity basis + operating safety reserves",
+    timeline: "Long-term (5 – 30+ Years)",
+  },
+  {
+    title: "Creative & Structured Financing",
+    subtitle: "Seller Financing · Private Capital · Bridge Debt",
+    body: "Seller financing, private equity partnerships, and bridge notes provide legitimate structural flexibility when bank lending is ill-suited. G and OCG model these structures strictly within legal and verified underwriting boundaries.",
+    capitalRole: "Tailored to specific partnership or seller agreement",
+    timeline: "Deal-specific",
+  },
 ];
 
-export default function Services(){return <div className="min-h-screen bg-[#090b0f] text-white"><Navbar/><main className="pt-20"><section className="container py-24 md:py-32"><div className="max-w-4xl"><div className="section-eyebrow mb-5">Investment strategies</div><h1 className="text-5xl md:text-8xl font-semibold tracking-[-0.055em] leading-[0.92]">The strategy should fit the investor — not the other way around.</h1><p className="mt-7 text-xl text-white/55 leading-relaxed max-w-3xl">OCG helps investors understand the tradeoffs between building capital, building cash flow, preserving liquidity, financing renovation, and creating a path toward larger long-term goals.</p></div></section><section className="bg-white text-[#0b0d12] py-24"><div className="container grid lg:grid-cols-2 gap-5">{paths.map((p,i)=><div key={p.title} className="strategy-card"><div className="text-xs tracking-[0.18em] text-blue-700">0{i+1}</div><h2 className="mt-7 text-4xl font-semibold">{p.title}</h2><div className="mt-3 text-xs uppercase tracking-[0.1em] text-black/45">{p.subtitle}</div><p className="mt-6 text-base leading-relaxed text-black/58">{p.body}</p></div>)}</div></section><section className="py-24"><div className="container rounded-[30px] border border-white/10 p-8 md:p-14 bg-white/[0.035]"><h2 className="text-4xl md:text-6xl font-semibold tracking-[-0.04em]">Have capital but not a plan?</h2><p className="mt-5 max-w-3xl text-lg text-white/52 leading-relaxed">That is not a problem to hide — it is the beginning of the strategy conversation. We can explore what your liquidity, financing profile, experience, timeline, and goals make worth considering before recommending a specific acquisition structure.</p><Link href="/contact" className="btn-gold mt-8">Book Strategy Session <ArrowRight size={15}/></Link></div></section></main><Footer/></div>}
+export default function Services() {
+  return (
+    <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
+      <Navbar />
+
+      <main className="pt-32 pb-24 space-y-24 md:space-y-36">
+        {/* Page Hero */}
+        <section className="container">
+          <div className="max-w-4xl space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300">
+              <TrendingUp size={14} /> Investment Pathways & Financing Strategy
+            </div>
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[0.98] text-white">
+              The strategy should fit the investor —<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200">
+                not the other way around.
+              </span>
+            </h1>
+            <p className="text-lg md:text-xl text-slate-300 leading-relaxed max-w-3xl">
+              OCG helps you navigate the trade-offs between building liquid capital, expanding cash flow, preserving safety reserves, financing renovation, and creating a disciplined multi-year investment plan.
+            </p>
+          </div>
+        </section>
+
+        {/* Strategy Grid */}
+        <section className="container">
+          <div className="grid lg:grid-cols-2 gap-6">
+            {paths.map((p, i) => (
+              <div
+                key={p.title}
+                className="rounded-3xl border border-slate-800 bg-slate-950 p-8 shadow-xl flex flex-col justify-between space-y-6 hover:border-slate-700 transition-all"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-blue-400 uppercase tracking-widest">
+                      Pathway 0{i + 1}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-500">{p.timeline}</span>
+                  </div>
+                  <h2 className="mt-4 text-3xl font-bold text-white tracking-tight">{p.title}</h2>
+                  <div className="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    {p.subtitle}
+                  </div>
+                  <p className="mt-4 text-sm text-slate-300 leading-relaxed">{p.body}</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-4 text-xs">
+                  <span className="text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                    Strategic Capital Role:
+                  </span>
+                  <div className="text-slate-200 font-semibold mt-1">{p.capitalRole}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Interactive Comparison Matrix */}
+        <section className="container">
+          <StrategyComparisonMatrix />
+        </section>
+
+        {/* Interactive 70% Calculator */}
+        <section className="container">
+          <Rule70Calculator />
+        </section>
+
+        {/* Financing Philosophy Feature */}
+        <section className="container">
+          <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 to-[#0B132B] p-8 md:p-14 shadow-2xl space-y-6">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-400">
+              <ShieldCheck size={16} /> OCG Capital Allocation Philosophy
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-white">
+              Why We Treat Investor Liquidity As Strategic Armor
+            </h3>
+            <p className="text-sm md:text-base text-slate-300 leading-relaxed max-w-3xl">
+              If an investor has $50,000 in liquid capital, our immediate instinct is NOT to spend $50,000 on purchase equity. For fix-and-flips, we seek lender capital to finance the acquisition and renovation when the asset and borrower qualify. That $50,000 serves a far more critical role as proof of execution capacity, holding cost buffers, and protection against supply chain or municipal permitting delays.
+            </p>
+            <div className="pt-4 flex flex-wrap gap-4">
+              <Link
+                href="/contact"
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+              >
+                <Calendar size={14} /> Schedule Strategy Discussion
+              </Link>
+              <a
+                href="#g"
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-slate-200 hover:text-white transition-all"
+              >
+                <Bot size={14} className="text-blue-400" /> Diagnose with G
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}

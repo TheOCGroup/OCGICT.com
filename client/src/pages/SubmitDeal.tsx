@@ -1,20 +1,12 @@
-/*
-  Design: Dark Luxury — "Investment Grade"
-  Page: Seller / Property Preliminary Review
-  Palette: #0d0d0d bg, #F5F0E8 text, #3B3BFF accent
-  Typography: Cormorant Garamond (headings) + Inter (body)
-*/
-
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import {
   Home, DollarSign, User, Phone, Mail, MapPin,
   FileText, ChevronRight, CheckCircle2, Building2,
-  Wrench, Bed, Bath, Ruler, Calendar
+  Wrench, Bed, Bath, Ruler, Calendar, ArrowRight, ShieldCheck, HeartHandshake, AlertCircle, Bot
 } from "lucide-react";
 
 const SUPABASE_URL = "https://lsaerludzkxjewqgbvkg.supabase.co";
@@ -37,8 +29,8 @@ async function submitDeal(data: Record<string, unknown>) {
   }
 }
 
-const inputCls = "w-full bg-white/5 border border-white/10 rounded-sm px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/60 transition-colors";
-const labelCls = "block text-white/50 text-xs font-semibold tracking-widest uppercase mb-2";
+const inputCls = "w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors";
+const labelCls = "block text-slate-400 text-xs font-bold tracking-wider uppercase mb-2";
 
 export default function SubmitDeal() {
   const [, navigate] = useLocation();
@@ -47,34 +39,38 @@ export default function SubmitDeal() {
   const [submitted, setSubmitted] = useState(false);
 
   const [form, setForm] = useState({
-    // Step 1 — About you
-    submitter_name: "",
-    submitter_phone: "",
-    submitter_email: "",
-    submitter_type: "Wholesaler",
-    // Step 2 — Property
+    // Step 1 — Situation & Intent
+    submitter_type: "Property Owner",
+    situation: "Estate / Inherited Property",
+    timeline_preference: "Flexible / Exploring Options",
+    // Step 2 — Property Address & Basics
     property_address: "",
     city: "Wichita",
     state: "KS",
     zip: "",
-    bedrooms: "",
-    bathrooms: "",
+    neighborhood: "East Wichita / Crown Heights",
+    bedrooms: "3",
+    bathrooms: "2",
     sqft: "",
     year_built: "",
-    property_condition: "Fair",
-    // Step 3 — Numbers
+    occupancy_status: "Vacant",
+    // Step 3 — Condition & Priority
+    property_condition: "Fair — Needs Updating",
+    known_repairs: "",
+    seller_priority: "Speed & As-Is Simplicity",
     asking_price: "",
-    arv: "",
-    rehab_estimate: "",
-    strategy: "Fix & Flip",
-    description: "",
+    // Step 4 — Contact Info
+    submitter_name: "",
+    submitter_phone: "",
+    submitter_email: "",
+    notes: "",
   });
 
-  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!form.property_address || !form.submitter_name) {
-      toast.error("Please fill in your name and property address.");
+    if (!form.property_address || !form.submitter_name || !form.submitter_phone) {
+      toast.error("Please fill in your name, contact phone, and property address.");
       return;
     }
     setSubmitting(true);
@@ -94,394 +90,445 @@ export default function SubmitDeal() {
         year_built: form.year_built ? parseInt(form.year_built) : null,
         property_condition: form.property_condition,
         asking_price: form.asking_price ? parseFloat(form.asking_price.replace(/[$,]/g, "")) : null,
-        arv: form.arv ? parseFloat(form.arv.replace(/[$,]/g, "")) : null,
-        rehab_estimate: form.rehab_estimate ? parseFloat(form.rehab_estimate.replace(/[$,]/g, "")) : null,
-        strategy: form.strategy,
-        description: form.description || null,
-        status: "Pending Review",
+        strategy: form.situation,
+        description: `Situation: ${form.situation} | Priority: ${form.seller_priority} | Timeline: ${form.timeline_preference} | Repairs: ${form.known_repairs} | Notes: ${form.notes}`,
       });
       setSubmitted(true);
-    } catch (e) {
-      toast.error("Submission failed. Please try again or call 720.620.9929.");
-      console.error(e);
+      toast.success("Preliminary property review submitted successfully.");
+    } catch (err: any) {
+      toast.error("Submission failed: " + (err.message || "Network error"));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
       <Navbar />
 
-      {/* Hero */}
-      <section className="pt-32 pb-16 border-b border-white/5">
-        <div className="container max-w-3xl">
-          <div className="flex items-center gap-2 text-[#3B3BFF] text-xs font-semibold tracking-widest uppercase mb-5">
-            <div className="w-8 h-px bg-[#3B3BFF]" />
-            SELLERS · PROPERTY OWNERS · DEAL SOURCES
-          </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-white leading-none mb-5"
-            style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-            Tell Us About the Property
-          </h1>
-          <p className="text-white/50 text-lg leading-relaxed max-w-xl">
-            Start with what you know. This preliminary review helps OCG understand the property, the situation, and what information we may need next. G will eventually make this flow conversational so sellers can explain the situation naturally before completing structured details.
-          </p>
-
-          {/* Trust signals */}
-          <div className="flex flex-wrap gap-6 mt-8">
-            {[
-              "Plain-language preliminary review",
-              "Wichita-focused acquisition process",
-              "All condition properties considered",
-            ].map(t => (
-              <div key={t} className="flex items-center gap-2 text-white/40 text-sm">
-                <CheckCircle2 size={14} className="text-[#3B3BFF]" />
-                {t}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Form */}
-      <section className="py-16">
-        <div className="container max-w-3xl">
-
-          {submitted ? (
-            /* Success state */
-            <div className="text-center py-20">
-              <div className="w-20 h-20 bg-[#3B3BFF]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 size={40} className="text-[#3B3BFF]" />
-              </div>
-              <h2 className="text-4xl font-bold text-white mb-4"
-                style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                Property Submitted
-              </h2>
-              <p className="text-white/50 text-lg mb-3">
-                OCG has received the property information for preliminary review. We will follow up about the appropriate next step.
-              </p>
-              <p className="text-white/30 text-sm mb-10">
-                Questions? Call or text <a href="tel:7206209929" className="text-[#3B3BFF] hover:underline">720.620.9929</a>
-              </p>
-              <div className="flex gap-4 justify-center flex-wrap">
-                <button
-                  onClick={() => { setSubmitted(false); setStep(1); setForm(f => ({ ...f, property_address: "", asking_price: "", arv: "", description: "" })); }}
-                  className="border border-white/15 text-white/60 hover:text-white text-sm px-6 py-3 rounded-sm transition-colors"
-                >
-                  Submit Another Property
-                </button>
-                <button
-                  onClick={() => navigate("/")}
-                  className="bg-[#3B3BFF] hover:bg-[#2a2aee] text-white text-sm font-semibold px-6 py-3 rounded-sm transition-colors"
-                >
-                  Explore OCG →
-                </button>
-              </div>
+      <main className="pt-32 pb-24 space-y-16">
+        {/* Header */}
+        <section className="container max-w-4xl">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-300">
+              <HeartHandshake size={14} /> Respectful Seller Advisory & Preliminary Review
             </div>
-          ) : (
-            <>
-              {/* Step indicators */}
-              <div className="flex items-center gap-0 mb-12">
-                {[
-                  { n: 1, label: "About You" },
-                  { n: 2, label: "Property" },
-                  { n: 3, label: "Numbers" },
-                ].map(({ n, label }, i) => (
-                  <div key={n} className="flex items-center">
-                    <button
-                      onClick={() => n < step && setStep(n)}
-                      className={`flex items-center gap-2.5 px-4 py-2 rounded-sm text-sm transition-colors ${
-                        step === n
-                          ? "bg-[#3B3BFF]/15 text-[#3B3BFF] border border-[#3B3BFF]/30"
-                          : n < step
-                          ? "text-white/40 hover:text-white/60 cursor-pointer"
-                          : "text-white/20 cursor-default"
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                        step === n ? "bg-[#3B3BFF] text-white" : n < step ? "bg-white/20 text-white/60" : "bg-white/5 text-white/20"
-                      }`}>{n < step ? "✓" : n}</div>
-                      <span className="hidden sm:inline">{label}</span>
-                    </button>
-                    {i < 2 && <ChevronRight size={14} className="text-white/15 mx-1" />}
-                  </div>
-                ))}
-              </div>
-
-              {/* Step 1 — About You */}
-              {step === 1 && (
-                <div className="space-y-6">
-                  <div className="bg-[#111] border border-white/8 rounded-sm p-6">
-                    <h3 className="text-white font-semibold text-lg mb-6 flex items-center gap-2"
-                      style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                      <User size={18} className="text-[#3B3BFF]" /> Your Information
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}>Full Name *</label>
-                        <input className={inputCls} placeholder="John Smith" value={form.submitter_name}
-                          onChange={e => set("submitter_name", e.target.value)} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Phone</label>
-                        <div className="relative">
-                          <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                          <input className={inputCls + " pl-9"} placeholder="(316) 555-0100" value={form.submitter_phone}
-                            onChange={e => set("submitter_phone", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Email</label>
-                        <div className="relative">
-                          <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                          <input className={inputCls + " pl-9"} placeholder="you@example.com" value={form.submitter_email}
-                            onChange={e => set("submitter_email", e.target.value)} />
-                        </div>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}>I am a...</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {["Wholesaler", "Seller", "Agent/Realtor", "Investor"].map(t => (
-                            <button key={t} onClick={() => set("submitter_type", t)}
-                              className={`py-2.5 px-3 text-xs rounded-sm border transition-colors ${
-                                form.submitter_type === t
-                                  ? "bg-[#3B3BFF]/15 border-[#3B3BFF]/40 text-[#3B3BFF]"
-                                  : "border-white/10 text-white/40 hover:text-white/60"
-                              }`}>
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => {
-                        if (!form.submitter_name) { toast.error("Please enter your name."); return; }
-                        setStep(2);
-                      }}
-                      className="bg-[#3B3BFF] hover:bg-[#2a2aee] text-white text-sm font-semibold tracking-widest uppercase px-8 py-3 rounded-sm transition-colors flex items-center gap-2"
-                    >
-                      Next: Property Details <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2 — Property */}
-              {step === 2 && (
-                <div className="space-y-6">
-                  <div className="bg-[#111] border border-white/8 rounded-sm p-6">
-                    <h3 className="text-white font-semibold text-lg mb-6 flex items-center gap-2"
-                      style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                      <Home size={18} className="text-[#3B3BFF]" /> Property Details
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}>Property Address *</label>
-                        <div className="relative">
-                          <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                          <input className={inputCls + " pl-9"} placeholder="1234 N Main St" value={form.property_address}
-                            onChange={e => set("property_address", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>City</label>
-                        <input className={inputCls} placeholder="Wichita" value={form.city}
-                          onChange={e => set("city", e.target.value)} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelCls}>State</label>
-                          <input className={inputCls} placeholder="KS" value={form.state}
-                            onChange={e => set("state", e.target.value)} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>ZIP</label>
-                          <input className={inputCls} placeholder="67202" value={form.zip}
-                            onChange={e => set("zip", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}><Bed size={11} className="inline mr-1" />Bedrooms</label>
-                        <select className={inputCls} value={form.bedrooms} onChange={e => set("bedrooms", e.target.value)}>
-                          <option value="">Select</option>
-                          {["1","2","3","4","5","6+"].map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}><Bath size={11} className="inline mr-1" />Bathrooms</label>
-                        <select className={inputCls} value={form.bathrooms} onChange={e => set("bathrooms", e.target.value)}>
-                          <option value="">Select</option>
-                          {["1","1.5","2","2.5","3","3.5","4+"].map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls}><Ruler size={11} className="inline mr-1" />Sq Ft</label>
-                        <input className={inputCls} placeholder="1,200" value={form.sqft}
-                          onChange={e => set("sqft", e.target.value)} />
-                      </div>
-                      <div>
-                        <label className={labelCls}><Calendar size={11} className="inline mr-1" />Year Built</label>
-                        <input className={inputCls} placeholder="1965" value={form.year_built}
-                          onChange={e => set("year_built", e.target.value)} />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}><Wrench size={11} className="inline mr-1" />Property Condition</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {["Excellent","Good","Fair","Poor"].map(c => (
-                            <button key={c} onClick={() => set("property_condition", c)}
-                              className={`py-2.5 px-3 text-xs rounded-sm border transition-colors ${
-                                form.property_condition === c
-                                  ? "bg-[#3B3BFF]/15 border-[#3B3BFF]/40 text-[#3B3BFF]"
-                                  : "border-white/10 text-white/40 hover:text-white/60"
-                              }`}>
-                              {c}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-between">
-                    <button onClick={() => setStep(1)}
-                      className="border border-white/10 text-white/40 hover:text-white/70 text-sm px-6 py-3 rounded-sm transition-colors">
-                      ← Back
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!form.property_address) { toast.error("Please enter the property address."); return; }
-                        setStep(3);
-                      }}
-                      className="bg-[#3B3BFF] hover:bg-[#2a2aee] text-white text-sm font-semibold tracking-widest uppercase px-8 py-3 rounded-sm transition-colors flex items-center gap-2"
-                    >
-                      Next: Deal Numbers <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3 — Numbers */}
-              {step === 3 && (
-                <div className="space-y-6">
-                  <div className="bg-[#111] border border-white/8 rounded-sm p-6">
-                    <h3 className="text-white font-semibold text-lg mb-6 flex items-center gap-2"
-                      style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                      <DollarSign size={18} className="text-[#3B3BFF]" /> Deal Numbers
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <div>
-                        <label className={labelCls}>Asking Price</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
-                          <input className={inputCls + " pl-7"} placeholder="75,000" value={form.asking_price}
-                            onChange={e => set("asking_price", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Estimated ARV</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
-                          <input className={inputCls + " pl-7"} placeholder="150,000" value={form.arv}
-                            onChange={e => set("arv", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Est. Rehab Cost</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
-                          <input className={inputCls + " pl-7"} placeholder="30,000" value={form.rehab_estimate}
-                            onChange={e => set("rehab_estimate", e.target.value)} />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Best Exit Strategy</label>
-                        <select className={inputCls} value={form.strategy} onChange={e => set("strategy", e.target.value)}>
-                          {["Fix & Flip","BRRRR","Buy & Hold","Wholesale","Creative Finance","Not Sure"].map(s => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Spread preview */}
-                      {form.asking_price && form.arv && (
-                        <div className="sm:col-span-2 bg-[#0d0d0d] border border-[#3B3BFF]/20 rounded-sm p-4">
-                          <div className="text-white/40 text-xs uppercase tracking-widest mb-2">Estimated Spread</div>
-                          <div className={`text-2xl font-bold ${
-                            (parseFloat(form.arv.replace(/[$,]/g,"")) - parseFloat(form.asking_price.replace(/[$,]/g,"")) - (parseFloat(form.rehab_estimate.replace(/[$,]/g,"")) || 0)) > 30000
-                              ? "text-emerald-400" : "text-yellow-400"
-                          }`}>
-                            ${Math.max(0, parseFloat(form.arv.replace(/[$,]/g,"")) - parseFloat(form.asking_price.replace(/[$,]/g,"")) - (parseFloat(form.rehab_estimate.replace(/[$,]/g,"")) || 0)).toLocaleString()}
-                          </div>
-                          <div className="text-white/25 text-xs mt-1">ARV − Ask − Rehab</div>
-                        </div>
-                      )}
-
-                      <div className="sm:col-span-2">
-                        <label className={labelCls}><FileText size={11} className="inline mr-1" />Additional Notes</label>
-                        <textarea
-                          className={inputCls + " resize-none"}
-                          rows={4}
-                          placeholder="Seller motivation, timeline, occupancy status, any liens or title issues, JV terms you're looking for..."
-                          value={form.description}
-                          onChange={e => set("description", e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Summary card */}
-                  <div className="bg-[#111] border border-white/8 rounded-sm p-5">
-                    <div className="text-white/40 text-xs uppercase tracking-widest mb-3">Submission Summary</div>
-                    <div className="grid grid-cols-2 gap-y-2 text-sm">
-                      <div className="text-white/40">Submitted by</div>
-                      <div className="text-white">{form.submitter_name} ({form.submitter_type})</div>
-                      <div className="text-white/40">Property</div>
-                      <div className="text-white">{form.property_address}, {form.city} {form.state}</div>
-                      {form.asking_price && <><div className="text-white/40">Asking</div><div className="text-white">${parseFloat(form.asking_price.replace(/[$,]/g,"")).toLocaleString()}</div></>}
-                      {form.arv && <><div className="text-white/40">ARV</div><div className="text-white">${parseFloat(form.arv.replace(/[$,]/g,"")).toLocaleString()}</div></>}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <button onClick={() => setStep(2)}
-                      className="border border-white/10 text-white/40 hover:text-white/70 text-sm px-6 py-3 rounded-sm transition-colors">
-                      ← Back
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={submitting}
-                      className="bg-[#3B3BFF] hover:bg-[#2a2aee] disabled:opacity-50 text-white text-sm font-semibold tracking-widest uppercase px-10 py-3 rounded-sm transition-colors flex items-center gap-2"
-                    >
-                      {submitting ? (
-                        <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Submitting...</>
-                      ) : (
-                        <><CheckCircle2 size={14} /> Submit Deal</>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* Bottom CTA */}
-      {!submitted && (
-        <section className="py-12 border-t border-white/5">
-          <div className="container max-w-3xl text-center">
-            <p className="text-white/30 text-sm">
-              Prefer to talk directly?{" "}
-              <a href="tel:7206209929" className="text-[#3B3BFF] hover:underline">Call or text 720.620.9929</a>
-              {" "}· {" "}
-              <a href="mailto:Contact@ocasiocollective.com" className="text-[#3B3BFF] hover:underline">Contact@ocasiocollective.com</a>
+            <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[0.98] text-white">
+              Sell a property with clarity.<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200">
+                No high-pressure wholesaler games.
+              </span>
+            </h1>
+            <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
+              Whether you are managing an inherited estate, handling deferred repairs, or transitioning an asset in Wichita, OCG provides an objective preliminary review and transparent acquisition options.
             </p>
           </div>
         </section>
-      )}
+
+        {/* Multi-Step Form */}
+        <section className="container max-w-4xl">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 md:p-12 shadow-2xl space-y-8">
+            {/* Progress Stepper */}
+            {!submitted && (
+              <div className="grid grid-cols-4 gap-2 border-b border-slate-800 pb-6">
+                {[
+                  { n: 1, label: "Situation" },
+                  { n: 2, label: "Property" },
+                  { n: 3, label: "Condition" },
+                  { n: 4, label: "Contact" },
+                ].map((s) => (
+                  <div
+                    key={s.n}
+                    className={`text-center pb-2 border-b-2 transition-all ${
+                      step >= s.n
+                        ? "border-blue-500 text-blue-400 font-bold"
+                        : "border-slate-800 text-slate-500"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wider font-mono">Step 0{s.n}</span>
+                    <div className="text-xs hidden sm:block">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Submitted View */}
+            {submitted ? (
+              <div className="py-12 text-center space-y-6">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 mx-auto">
+                  <CheckCircle2 size={32} />
+                </div>
+                <h2 className="text-3xl font-bold text-white">Review Request Received</h2>
+                <p className="text-slate-300 max-w-lg mx-auto text-sm leading-relaxed">
+                  Thank you, {form.submitter_name}. OCG acquisition operations (PIPER & VICTOR) are retrieving public record filings for <strong>{form.property_address}</strong>. Genaro and our acquisitions team will review the details and reach out to discuss your options.
+                </p>
+                <div className="pt-4 flex justify-center gap-4">
+                  <button
+                    onClick={() => {
+                      setSubmitted(false);
+                      setStep(1);
+                    }}
+                    className="rounded-xl border border-slate-700 bg-slate-900 px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white"
+                  >
+                    Submit Another Property
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {/* STEP 1: Situation */}
+                {step === 1 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">Tell us about your situation</h3>
+                      <p className="text-xs text-slate-400 mt-1">Understanding your situation helps us give you the right kind of advice.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className={labelCls}>Your Relationship to the Property</label>
+                        <select
+                          value={form.submitter_type}
+                          onChange={(e) => set("submitter_type", e.target.value)}
+                          className={inputCls}
+                        >
+                          <option value="Property Owner">Owner / Title Holder</option>
+                          <option value="Heir / Estate Executor">Heir / Estate Representative</option>
+                          <option value="Tired Landlord">Landlord Disposing Portfolio</option>
+                          <option value="Real Estate Agent">Real Estate Agent / Broker</option>
+                          <option value="Wholesaler">Wholesaler / Acquisition Partner</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Circumstance / Motivation</label>
+                        <select
+                          value={form.situation}
+                          onChange={(e) => set("situation", e.target.value)}
+                          className={inputCls}
+                        >
+                          <option value="Estate / Inherited Property">Inherited Property / Probate</option>
+                          <option value="Downsizing / Senior Transition">Downsizing / Family Transition</option>
+                          <option value="Deferred Maintenance / Major Repairs">Deferred Maintenance / Major Repairs Needed</option>
+                          <option value="Relocating / Need Fast Closing">Relocating / Need Flexible Closing</option>
+                          <option value="Liquidating Rental Asset">Liquidating Rental Asset</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Desired Timeline</label>
+                        <select
+                          value={form.timeline_preference}
+                          onChange={(e) => set("timeline_preference", e.target.value)}
+                          className={inputCls}
+                        >
+                          <option value="ASAP (Under 14 Days)">As fast as possible (Under 14 Days)</option>
+                          <option value="30 Days">30 Days</option>
+                          <option value="60 - 90 Days">60 – 90 Days</option>
+                          <option value="Flexible / Exploring Options">Flexible / Just Exploring Options</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+                      >
+                        Continue to Property Details <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2: Property Address & Specs */}
+                {step === 2 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">Property Details</h3>
+                      <p className="text-xs text-slate-400 mt-1">We pull public records for Sedgwick County to prepare your review.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className={labelCls}>Street Address *</label>
+                        <input
+                          type="text"
+                          value={form.property_address}
+                          onChange={(e) => set("property_address", e.target.value)}
+                          placeholder="e.g. 1420 N Roosevelt St"
+                          className={inputCls}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className={labelCls}>City</label>
+                          <input
+                            type="text"
+                            value={form.city}
+                            onChange={(e) => set("city", e.target.value)}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>State</label>
+                          <input
+                            type="text"
+                            value={form.state}
+                            onChange={(e) => set("state", e.target.value)}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>ZIP</label>
+                          <input
+                            type="text"
+                            value={form.zip}
+                            onChange={(e) => set("zip", e.target.value)}
+                            placeholder="67208"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className={labelCls}>Beds</label>
+                          <input
+                            type="number"
+                            value={form.bedrooms}
+                            onChange={(e) => set("bedrooms", e.target.value)}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Baths</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={form.bathrooms}
+                            onChange={(e) => set("bathrooms", e.target.value)}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Sq Ft</label>
+                          <input
+                            type="text"
+                            value={form.sqft}
+                            onChange={(e) => set("sqft", e.target.value)}
+                            placeholder="1,650"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Year Built</label>
+                          <input
+                            type="text"
+                            value={form.year_built}
+                            onChange={(e) => set("year_built", e.target.value)}
+                            placeholder="1955"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className="rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!form.property_address) {
+                            toast.error("Please provide the property address.");
+                            return;
+                          }
+                          setStep(3);
+                        }}
+                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+                      >
+                        Continue to Condition <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: Condition & Priorities */}
+                {step === 3 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">Condition & Pricing Expectations</h3>
+                      <p className="text-xs text-slate-400 mt-1">We purchase properties 100% as-is. Be completely candid about repairs.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className={labelCls}>Overall Property Condition</label>
+                        <select
+                          value={form.property_condition}
+                          onChange={(e) => set("property_condition", e.target.value)}
+                          className={inputCls}
+                        >
+                          <option value="Move-In Ready / Updated">Move-In Ready / Updated</option>
+                          <option value="Fair — Needs Updating">Fair — Needs Cosmetic Updating</option>
+                          <option value="Needs Significant Renovation">Needs Significant Renovation</option>
+                          <option value="Distressed / Major Structural or Roof Work">Distressed / Heavy Rehab / Fire / Water</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Known Major Repairs (Roof, HVAC, Plumbing, Foundation)</label>
+                        <textarea
+                          rows={2}
+                          value={form.known_repairs}
+                          onChange={(e) => set("known_repairs", e.target.value)}
+                          placeholder="e.g. 15-year-old roof, needs new kitchen/bath, dated electrical panel"
+                          className={inputCls}
+                        />
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className={labelCls}>Target Price (Optional)</label>
+                          <input
+                            type="text"
+                            value={form.asking_price}
+                            onChange={(e) => set("asking_price", e.target.value)}
+                            placeholder="e.g. $125,000"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Primary Seller Priority</label>
+                          <select
+                            value={form.seller_priority}
+                            onChange={(e) => set("seller_priority", e.target.value)}
+                            className={inputCls}
+                          >
+                            <option value="Speed & As-Is Simplicity">Speed & 100% As-Is Simplicity</option>
+                            <option value="Maximizing Net Proceeds">Maximizing Net Proceeds</option>
+                            <option value="Flexible Closing Date">Flexible Closing Date</option>
+                            <option value="Discreet & Private Transaction">Discreet & Private Transaction</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setStep(2)}
+                        className="rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStep(4)}
+                        className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+                      >
+                        Continue to Contact Info <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4: Contact Info & Submission */}
+                {step === 4 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-2xl font-bold text-white">Where should we send the review?</h3>
+                      <p className="text-xs text-slate-400 mt-1">We respect your privacy and will never spam or sell your information.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className={labelCls}>Your Full Name *</label>
+                        <input
+                          type="text"
+                          value={form.submitter_name}
+                          onChange={(e) => set("submitter_name", e.target.value)}
+                          placeholder="e.g. John Smith"
+                          className={inputCls}
+                        />
+                      </div>
+
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className={labelCls}>Phone Number *</label>
+                          <input
+                            type="tel"
+                            value={form.submitter_phone}
+                            onChange={(e) => set("submitter_phone", e.target.value)}
+                            placeholder="(316) 555-0123"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Email Address</label>
+                          <input
+                            type="email"
+                            value={form.submitter_email}
+                            onChange={(e) => set("submitter_email", e.target.value)}
+                            placeholder="john@example.com"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className={labelCls}>Additional Notes or Instructions</label>
+                        <textarea
+                          rows={3}
+                          value={form.notes}
+                          onChange={(e) => set("notes", e.target.value)}
+                          placeholder="Any details on access, probate status, or questions for Genaro and the team..."
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-[11px] text-slate-400 space-y-1">
+                      <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-blue-400" /> Preliminary Review Process
+                      </div>
+                      <p>
+                        Submission initiates preliminary property intelligence retrieval. OCG does not make automated or algorithmic binding offers. A team member will follow up after reviewing public records and comp data.
+                      </p>
+                    </div>
+
+                    <div className="flex justify-between pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setStep(3)}
+                        className="rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={handleSubmit}
+                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-7 py-4 text-xs font-bold uppercase tracking-wider text-white hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 transition-all shadow-lg shadow-blue-950"
+                      >
+                        {submitting ? "Processing..." : "Submit Property for Review"} <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
 
       <Footer />
     </div>

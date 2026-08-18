@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
-import { Menu, X, MessageCircle } from "lucide-react";
+import { Menu, X, Bot, Calendar, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import OCGWordmark from "./OCGWordmark";
 
 const navLinks = [
   { label: "Invest", href: "/invest" },
@@ -15,57 +16,98 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#090b0f]/80 backdrop-blur-xl">
-      <div className="container flex h-20 items-center justify-between gap-5">
-        <Link href="/" className="flex items-center gap-3" aria-label="OCG home">
-          <span className="ocg-wordmark text-[2rem] font-black tracking-[-0.09em] leading-none">OCG</span>
-          <span className="hidden sm:block text-[9px] uppercase tracking-[0.22em] text-white/45 leading-tight">
-            Real Estate Investment<br />+ Acquisition
-          </span>
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-800/80 bg-[#070A0F]/85 backdrop-blur-xl transition-all">
+      <div className="container flex h-20 items-center justify-between gap-6">
+        {/* Brand Wordmark */}
+        <Link href="/" className="flex items-center gap-3.5 group" aria-label="OCG home">
+          <OCGWordmark size="md" showDescriptor={true} />
         </Link>
 
-        <nav className="hidden xl:flex items-center gap-7" aria-label="Primary navigation">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-[12px] font-semibold tracking-[0.08em] uppercase transition-colors ${
-                location === link.href ? "text-white" : "text-white/55 hover:text-white"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+        {/* Desktop Navigation Links */}
+        <nav className="hidden lg:flex items-center gap-8" aria-label="Primary navigation">
+          {navLinks.map((link) => {
+            const isActive = location === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-xs font-bold uppercase tracking-[0.12em] transition-all relative py-1 ${
+                  isActive ? "text-blue-400 font-extrabold" : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {link.label}
+                {isActive && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
-        <div className="hidden xl:flex items-center gap-3">
-          <a href="#g" className="btn-ghost-gold text-xs py-2 px-4">
-            <MessageCircle size={14} /> Talk to G
+        {/* Primary Header CTAs */}
+        <div className="hidden lg:flex items-center gap-3">
+          <a
+            href="#g"
+            className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-200 hover:border-blue-500/40 hover:bg-slate-900 hover:text-white transition-all"
+          >
+            <Bot size={15} className="text-blue-400" />
+            Talk to G
           </a>
-          <Link href="/contact" className="btn-gold text-xs py-2 px-4">Book Strategy Session</Link>
+          <Link
+            href="/contact"
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-blue-500 transition-all shadow-md shadow-blue-950"
+          >
+            <Calendar size={14} />
+            Book Strategy Session
+          </Link>
         </div>
 
+        {/* Mobile Hamburger Toggle */}
         <button
-          className="xl:hidden text-white/80 hover:text-white"
+          className="lg:hidden flex h-10 w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
           onClick={() => setMobileOpen((v) => !v)}
           aria-label="Toggle navigation"
           aria-expanded={mobileOpen}
         >
-          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
+      {/* Mobile Drawer Menu */}
       {mobileOpen && (
-        <div className="xl:hidden border-t border-white/8 bg-[#090b0f]">
-          <div className="container py-6 flex flex-col gap-1">
+        <div className="lg:hidden border-t border-slate-800 bg-[#070A0F] shadow-2xl animate-in slide-in-from-top duration-200">
+          <div className="container py-6 flex flex-col gap-2">
             {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="px-2 py-3 text-sm text-white/70 hover:text-white">
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className={`px-3 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${
+                  location === link.href
+                    ? "bg-blue-600/15 text-blue-400"
+                    : "text-slate-300 hover:bg-slate-900 hover:text-white"
+                }`}
+              >
                 {link.label}
               </Link>
             ))}
-            <div className="mt-5 grid gap-3 border-t border-white/10 pt-5">
-              <a href="#g" className="btn-ghost-gold justify-center"><MessageCircle size={14} /> Talk to G</a>
-              <Link href="/contact" className="btn-gold justify-center">Book Strategy Session</Link>
+            <div className="mt-4 grid gap-2.5 border-t border-slate-800 pt-5">
+              <a
+                href="#g"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 py-3 text-xs font-bold uppercase tracking-wider text-slate-200"
+              >
+                <Bot size={15} className="text-blue-400" />
+                Talk to G
+              </a>
+              <Link
+                href="/contact"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-blue-950"
+              >
+                <Calendar size={14} />
+                Book Strategy Session
+              </Link>
             </div>
           </div>
         </div>
