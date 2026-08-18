@@ -29,16 +29,20 @@ export default function GExperience() {
   ]);
   const [inputVal, setInputVal] = useState<string>("");
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
+  const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
   const [briefing, setBriefing] = useState<StructuredBriefing | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToChatBottom = () => {
+    if (chatScrollContainerRef.current) {
+      chatScrollContainerRef.current.scrollTop = chatScrollContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 1 || isTyping) {
+      scrollToChatBottom();
+    }
   }, [messages, isTyping]);
 
   const starterPrompts = [
@@ -63,7 +67,7 @@ export default function GExperience() {
     if (!textToSend) setInputVal("");
     setIsTyping(true);
 
-    // Intelligent context-aware reasoning engine
+    // Context-aware reasoning engine across OCG frameworks
     setTimeout(() => {
       let gResponse = "";
       let newBriefing: StructuredBriefing | null = null;
@@ -105,7 +109,6 @@ export default function GExperience() {
         gResponse = `Based on what you're asking about "${query}", OCG's methodology focuses on disciplined underwriting, micro-market comps in Wichita, and strategic renovation design. We believe technology should compress the tedious tasks so you and our team can focus on making high-conviction decisions.`;
       }
 
-      // If we have enough context, guide toward human strategy session
       if (newBriefing) {
         setBriefing(newBriefing);
         gResponse += "\n\nI have generated a structured briefing of your situation. Rather than spending 45 minutes chatting with AI, the best next step is to schedule an OCG Strategy Session so Genaro and our team can review your specific opportunities.";
@@ -175,22 +178,28 @@ export default function GExperience() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsVoiceActive(!isVoiceActive)}
-                  title={isVoiceActive ? "Mute Voice Engine" : "Enable Voice Simulation"}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold border transition-all ${
-                    isVoiceActive
-                      ? "bg-blue-600 text-white border-blue-500"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
-                  }`}
+                  onClick={() => setVoiceNotice(!voiceNotice)}
+                  title="Voice capability preview status"
+                  className="flex items-center gap-1.5 rounded-lg bg-slate-900 border border-slate-800 px-3 py-1.5 text-[11px] font-mono text-slate-400 hover:text-slate-200 transition-all"
                 >
-                  {isVoiceActive ? <Mic size={14} /> : <MicOff size={14} />}
-                  <span className="hidden sm:inline">{isVoiceActive ? "Voice Active" : "Voice Ready"}</span>
+                  <Mic size={13} className="text-slate-500" />
+                  <span>Voice (Preview Staging)</span>
                 </button>
               </div>
             </div>
 
+            {/* Voice Notice Banner (when clicked) */}
+            {voiceNotice && (
+              <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200 flex items-center justify-between">
+                <span>
+                  <strong>Staging Notice:</strong> Live voice/barge-in WebRTC pipeline is in development. Full interactive text intelligence is operational below.
+                </span>
+                <button onClick={() => setVoiceNotice(false)} className="text-blue-400 font-bold ml-2">✕</button>
+              </div>
+            )}
+
             {/* Chat Thread */}
-            <div className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
+            <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (
                 <div
                   key={m.id}
@@ -226,7 +235,6 @@ export default function GExperience() {
                   <span>G is reasoning across OCG frameworks...</span>
                 </div>
               )}
-              <div ref={chatEndRef} />
             </div>
 
             {/* Input Bar */}

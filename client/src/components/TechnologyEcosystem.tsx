@@ -17,12 +17,12 @@ const agents: AgentModule[] = [
     name: "HUNTER",
     role: "Deal Finder · Opportunity Intelligence",
     headline: "Discovery & Signal Extraction",
-    description: "Continuously evaluates market activity, public filings, estate dispositions, and off-market distress signals across Wichita neighborhoods to surface viable acquisition targets.",
+    description: "Evaluates market activity, public filings, estate dispositions, and off-market distress signals across Wichita neighborhoods to surface viable acquisition targets.",
     sampleSignals: [
-      "Tax assessment vs historical price discrepancies",
-      "Notice of default / probate record tracking",
+      "Tax assessment vs historical transaction price discrepancies",
+      "Notice of default / Sedgwick County probate tracking",
       "Off-market distress indicators & micro-neighborhood velocity",
-      "Long-term landlord exit signatures"
+      "Long-term landlord portfolio exit signatures"
     ],
     responsibilities: [
       "Property Identification",
@@ -128,7 +128,7 @@ export default function TechnologyEcosystem() {
                 Step 0{idx + 1}
               </span>
               {activeTab === agent.id && (
-                <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
               )}
             </div>
             <div className="mt-2 text-lg font-black text-white">{agent.name}</div>
@@ -168,21 +168,21 @@ export default function TechnologyEcosystem() {
           </div>
         </div>
 
-        {/* Live Operating Signals Mock */}
+        {/* Operating Signals Specification Mock */}
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-inner">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
-              {current.name} // Telemetry & Inputs
+              {current.name} // SPECIFICATION
             </span>
-            <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-emerald-500/20">
-              ACTIVE
+            <span className="rounded bg-slate-900 px-2 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-800">
+              ARCHITECTURE MODEL
             </span>
           </div>
 
           <div className="space-y-2.5">
             {current.sampleSignals.map((sig, idx) => (
               <div key={idx} className="rounded-xl border border-slate-800/80 bg-slate-900/50 p-3 text-xs text-slate-300">
-                <div className="font-mono text-[10px] text-slate-500 mb-1">Signal 0{idx + 1}</div>
+                <div className="font-mono text-[10px] text-slate-500 mb-1">Signal Protocol 0{idx + 1}</div>
                 <div>{sig}</div>
               </div>
             ))}

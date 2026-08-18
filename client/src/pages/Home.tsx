@@ -108,15 +108,15 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Hero Right Visual: Live Operational View */}
+              {/* Hero Right Visual: System Architecture Model (Clearly Labeled Representative Architecture) */}
               <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-2xl backdrop-blur space-y-5">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    OCG_WICHITA_INTELLIGENCE // ACTIVE
+                    <span className="h-2 w-2 rounded-full bg-blue-400" />
+                    SYSTEM ARCHITECTURE MODEL
                   </div>
-                  <span className="text-[10px] uppercase font-mono text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/30">
-                    70% Rule Framework
+                  <span className="text-[10px] uppercase font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                    Representative Framework
                   </span>
                 </div>
 
@@ -147,7 +147,7 @@ export default function Home() {
                 </div>
 
                 <div className="rounded-xl bg-blue-950/20 border border-blue-800/30 p-3 text-[11px] text-blue-200/80">
-                  <strong>Technology Core:</strong> Automation reorganizes tedious underwriting so our team can evaluate opportunities faster without rushing diligence.
+                  <strong>Operating Model:</strong> Internal systems automate repetitive scoping and comparable clustering so human principals focus on deal strategy and execution.
                 </div>
               </div>
             </div>
