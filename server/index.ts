@@ -129,8 +129,8 @@ async function startServer() {
     res.json({
       status: "healthy",
       service: "OCG Production Intelligence Gateway",
-      version: "4.0.0",
-      canonicalRepo: "TheOCGroup/ocg-website",
+      version: "5.0.0",
+      canonicalRepo: "TheOCGroup/OCGICT.com",
       timestamp: new Date().toISOString(),
     });
   });
