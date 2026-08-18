@@ -148,6 +148,10 @@ async function startServer() {
     res.json({ outbox: PiperQueueAdapter.getPendingOutbox() });
   });
 
+  app.get("/api/operations/work-items", (_req, res) => {
+    res.json({ workItems: PiperQueueAdapter.getWorkItems() });
+  });
+
   // ── 4. Observability & Health ───────────────────────────────────
   app.get("/api/telemetry/events", (_req, res) => {
     res.json({ events: OcgObservability.getRecentEvents() });

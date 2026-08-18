@@ -186,7 +186,7 @@ export function TechnologyPipelineSequence() {
                   {activeStep.propertyOverlay}
                 </span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950/80 text-slate-400 border border-slate-800">
-                  {activeStep.name} ENGINE // ACTIVE
+                  {activeStep.id === 'ocg' ? 'OCG PRINCIPAL JUDGMENT' : `${activeStep.name} // SYSTEM SPECIFICATION`}
                 </span>
               </div>
 
