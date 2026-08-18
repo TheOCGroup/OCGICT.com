@@ -1,0 +1,163 @@
+import { IGWebsiteAction, IOCGStrategyBrief } from "../../../shared/contracts";
+import { queryOcgKnowledge } from "./ocgKnowledge";
+import { queryWichitaNeighborhood } from "./wichitaMarketIntelligence";
+
+export interface GEngineResponse {
+  messageText: string;
+  action?: IGWebsiteAction;
+  generatedBrief?: Partial<IOCGStrategyBrief>;
+}
+
+/**
+ * G Intelligence Reasoning & Action Engine
+ * Analyzes conversational input, retrieves verified OCG frameworks and Wichita submarket intelligence,
+ * and generates structured website actions / strategy dossiers.
+ */
+export function processGDialogue(
+  userInput: string,
+  currentHistory: Array<{ sender: "g" | "user"; text: string }>
+): GEngineResponse {
+  const query = userInput.trim();
+  const lower = query.toLowerCase();
+
+  // 1. Check for Wichita Neighborhood Query
+  const neighborhoodMatch = queryWichitaNeighborhood(lower);
+  if (neighborhoodMatch) {
+    const isCollegeHill = neighborhoodMatch.id === "college-hill";
+    const isCrownHeights = neighborhoodMatch.id === "crown-heights";
+
+    let action: IGWebsiteAction | undefined = undefined;
+    if (isCollegeHill) {
+      action = {
+        type: "load_property_case",
+        payload: { propertyId: "bungalow" },
+        uiNotice: "Loaded College Hill Craftsman Architectural Case Study"
+      };
+    } else if (isCrownHeights) {
+      action = {
+        type: "load_property_case",
+        payload: { propertyId: "ranch" },
+        uiNotice: "Loaded Crown Heights Mid-Century Brick Ranch Case Study"
+      };
+    }
+
+    const reply = `**${neighborhoodMatch.name} (${neighborhoodMatch.quadrant} Wichita)**:
+• **Architectural Archetype**: ${neighborhoodMatch.architecturalStyle}
+• **Typical Price Band**: ${neighborhoodMatch.medianPriceRange} (Ceiling: ${neighborhoodMatch.renovationCapCeiling})
+• **Strategic Scope**: ${neighborhoodMatch.typicalScopeProfile}
+• **Target Demographic**: ${neighborhoodMatch.targetBuyerDemographic}
+• **Market Dynamics**: ${neighborhoodMatch.neighborhoodInsights}
+
+${isCollegeHill || isCrownHeights ? "I have also activated the interactive Before/After architectural transformation model above for you to inspect." : ""}`;
+
+    return {
+      messageText: reply,
+      action
+    };
+  }
+
+  // 2. Check for 70% Rule / Underwriting Calculation Request
+  if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("underwrite") || lower.includes("math")) {
+    // Extract potential ARV or numbers if mentioned
+    let arv = 240000;
+    let rehab = 45000;
+
+    if (lower.includes("300k") || lower.includes("300,000")) arv = 300000;
+    else if (lower.includes("200k") || lower.includes("200,000")) arv = 200000;
+    else if (lower.includes("150k") || lower.includes("150,000")) arv = 150000;
+
+    const mao = (arv * 0.70) - rehab;
+
+    return {
+      messageText: `The 70% Rule establishes your acquisition ceiling: **MAO = (ARV × 70%) − Rehab Scope**.
+
+On a modeled **$${arv.toLocaleString()} ARV** with an estimated **$${rehab.toLocaleString()} renovation scope**:
+• **Gross Margin Buffer (30%)**: $${(arv * 0.30).toLocaleString()} (protects holding interest, closing costs, and investor margin)
+• **Maximum Allowable Offer (MAO)**: **$${mao.toLocaleString()}**
+
+I have adjusted the interactive **70% Rule & MAO Explorer** on this page with these parameters so you can stress-test different purchase prices and holding buffers.`,
+      action: {
+        type: "set_calculator_values",
+        payload: { arv, rehab },
+        uiNotice: `Updated 70% MAO Explorer to ARV $${arv.toLocaleString()} / Rehab $${rehab.toLocaleString()}`
+      }
+    };
+  }
+
+  // 3. Check for Capital Allocation / Liquidity Question
+  if (lower.includes("50k") || lower.includes("100k") || lower.includes("capital") || lower.includes("liquidity") || lower.includes("preserve") || lower.includes("cash")) {
+    const briefData: Partial<IOCGStrategyBrief> = {
+      investorStage: "Capital Allocator",
+      availableLiquidityTier: lower.includes("100k") ? "$100k-$250k" : "$50k-$100k",
+      preferredStrategy: "Fix & Flip",
+      riskTolerance: "Conservative (Preserve Capital First)",
+      targetTimeline: "30-90 Days",
+      executiveSummary: "Investor seeking to deploy capital safely without draining liquid cash. OCG recommended senior debt for acquisition/construction while holding liquid reserves as contingency defense."
+    };
+
+    return {
+      messageText: `A common misstep is deploying all available cash into property acquisition.
+
+**OCG's Financing Philosophy**:
+1. **Senior Lender Debt**: For Fix & Flip projects, we structure lender capital to finance purchase and 100% of renovation draws whenever viable.
+2. **The Liquidity Shield**: Your liquid reserves serve as strategic defense against unforeseen material cost shifts or permit extensions.
+3. **Lender Confidence**: Lenders require 6-12 months of interest reserves. Retaining your cash ensures favorable loan terms and allows scaling into multiple opportunities.
+
+I have assembled this into your **Structured Strategy Brief** on the right.`,
+      generatedBrief: briefData,
+      action: {
+        type: "generate_strategy_brief",
+        payload: { briefingData: briefData },
+        uiNotice: "Generated Structured Investor Strategy Brief"
+      }
+    };
+  }
+
+  // 4. Check for Seller / Inherited / Estate Inquiry
+  if (lower.includes("sell") || lower.includes("inherited") || lower.includes("probate") || lower.includes("estate") || lower.includes("repairs") || lower.includes("house")) {
+    const sellerBrief: Partial<IOCGStrategyBrief> = {
+      investorStage: "Seller / Disposing",
+      availableLiquidityTier: "Equity / Real Estate Only",
+      preferredStrategy: "Direct Sale / Liquidation",
+      targetTimeline: "Immediate (0-30 Days)",
+      riskTolerance: "Conservative (Preserve Capital First)",
+      executiveSummary: "Homeowner or estate heir seeking transparent preliminary review of Wichita property condition without high-pressure wholesaler tactics."
+    };
+
+    return {
+      messageText: `Inherited properties and estate transitions in Wichita deserve a transparent, respectful review.
+
+**How OCG Evaluates Off-Market Properties**:
+• **Objective Preliminary Assessment**: We review Sedgwick County parcel records, historical sales, and structural condition without high-pressure games.
+• **Flexible Terms**: You select the closing timeline, leave unwanted items behind, and pay zero wholesaler commissions or assignment fees.
+• **Direct Execution**: If we extend an offer, it is backed by verified acquisition capital.
+
+I have prepared a preliminary intake brief. You can review the 4-step seller advisory process or book a direct consultation with Genaro.`,
+      generatedBrief: sellerBrief,
+      action: {
+        type: "activate_seller_intake",
+        payload: { sellerStep: 1, briefingData: sellerBrief },
+        uiNotice: "Prepared Seller Advisory Dossier"
+      }
+    };
+  }
+
+  // 5. General Knowledge Fallback
+  const knowledgeMatch = queryOcgKnowledge(lower);
+  if (knowledgeMatch) {
+    return {
+      messageText: `**${knowledgeMatch.title}**:
+
+${knowledgeMatch.detailedFramework}
+
+*Next Step*: ${knowledgeMatch.actionRecommendation || "Consult with OCG team."}`
+    };
+  }
+
+  // 6. Context-Aware Default Response
+  return {
+    messageText: `OCG operates with disciplined underwriting, micro-market comps in Wichita, and strategic renovation design. 
+
+Whether you are evaluating a **Fix & Flip**, scaling a **BRRRR rental portfolio**, exploring the **70% Rule**, or need an objective review of a **Wichita property to sell**, tell me your primary objective and I will configure the tools and prepare your strategy dossier.`
+  };
+}

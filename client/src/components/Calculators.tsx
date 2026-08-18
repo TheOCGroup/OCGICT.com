@@ -8,6 +8,17 @@ export function Rule70Calculator() {
   const arvInputId = useId();
   const rehabInputId = useId();
 
+  React.useEffect(() => {
+    const handleGAction = (e: any) => {
+      if (e.detail?.type === "set_calculator_values" && e.detail.payload) {
+        if (e.detail.payload.arv) setArv(e.detail.payload.arv);
+        if (e.detail.payload.rehab) setRehab(e.detail.payload.rehab);
+      }
+    };
+    window.addEventListener("ocg:g-action", handleGAction);
+    return () => window.removeEventListener("ocg:g-action", handleGAction);
+  }, []);
+
   const seventyPercent = Math.round(arv * 0.70);
   const mao = Math.max(seventyPercent - rehab, 0);
   const spread = arv - (mao + rehab);

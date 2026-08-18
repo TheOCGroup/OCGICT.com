@@ -68,6 +68,20 @@ export default function InteractiveTransformSlider() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  React.useEffect(() => {
+    const handleGAction = (e: any) => {
+      if (e.detail?.type === "load_property_case" && e.detail.payload?.propertyId) {
+        const targetId = e.detail.payload.propertyId;
+        const foundIdx = properties.findIndex((p) => p.id === targetId);
+        if (foundIdx !== -1) {
+          setActiveIdx(foundIdx);
+        }
+      }
+    };
+    window.addEventListener("ocg:g-action", handleGAction);
+    return () => window.removeEventListener("ocg:g-action", handleGAction);
+  }, []);
+
   const activeProp = properties[activeIdx];
 
   const handleMove = useCallback((clientX: number) => {

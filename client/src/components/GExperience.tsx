@@ -1,22 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Bot, Send, Sparkles, Mic, MicOff, ArrowRight, ShieldCheck, HelpCircle, FileText, CheckCircle2, User, RefreshCw, Layers } from "lucide-react";
+import { Bot, Send, Sparkles, Mic, ArrowRight, ShieldCheck, FileText, CheckCircle2, User, Download, Copy, Check } from "lucide-react";
 import { Link } from "wouter";
+import { processGDialogue } from "@/intelligence/gActionDispatcher";
+import { persistStrategyBrief } from "@/lib/persistence";
+import { IOCGStrategyBrief, IGWebsiteAction } from "../../../shared/contracts";
 
 interface Message {
   id: string;
   sender: "g" | "user";
   text: string;
   actionTag?: string;
-  actionPayload?: any;
-}
-
-interface StructuredBriefing {
-  investorStage: string;
-  availableLiquidity: string;
-  preferredStrategy: string;
-  timeline: string;
-  riskConsideration: string;
-  summary: string;
 }
 
 export default function GExperience() {
@@ -24,13 +17,15 @@ export default function GExperience() {
     {
       id: "1",
       sender: "g",
-      text: "I am G — OCG's Investment Intelligence. Whether you're exploring your first flip, building a Wichita rental portfolio with BRRRR, or deciding how to deploy available capital safely, tell me what you're trying to accomplish.",
+      text: "I am G — OCG's Investment Intelligence. Whether you're exploring your first flip, building a Wichita rental portfolio with BRRRR, assessing a neighborhood like College Hill or Crown Heights, or deciding how to allocate capital safely, tell me what you're trying to accomplish.",
     },
   ]);
   const [inputVal, setInputVal] = useState<string>("");
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
-  const [briefing, setBriefing] = useState<StructuredBriefing | null>(null);
+  const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
+  const [briefing, setBriefing] = useState<IOCGStrategyBrief | null>(null);
   const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToChatBottom = () => {
@@ -47,11 +42,21 @@ export default function GExperience() {
 
   const starterPrompts = [
     "I have $50k but I'm not sure which strategy fits me.",
-    "Explain how the 70% rule works on a Wichita flip.",
-    "Compare BRRRR vs Buy & Hold for cash flow.",
+    "Show me how the 70% rule works on a $300k Wichita flip.",
+    "Tell me about investing in College Hill vs Crown Heights.",
     "My family has an inherited house in Wichita we need to sell.",
     "How does OCG preserve investor liquidity on flips?"
   ];
+
+  const dispatchWebsiteAction = (action?: IGWebsiteAction) => {
+    if (!action) return;
+    if (action.uiNotice) {
+      setActiveActionNotice(action.uiNotice);
+      setTimeout(() => setActiveActionNotice(null), 5000);
+    }
+    // Broadcast custom event for site components (calculators, sliders, etc.)
+    window.dispatchEvent(new CustomEvent("ocg:g-action", { detail: action }));
+  };
 
   const handleSendMessage = (textToSend?: string) => {
     const query = textToSend || inputVal;
@@ -67,51 +72,25 @@ export default function GExperience() {
     if (!textToSend) setInputVal("");
     setIsTyping(true);
 
-    // Context-aware reasoning engine across OCG frameworks
-    setTimeout(() => {
-      let gResponse = "";
-      let newBriefing: StructuredBriefing | null = null;
-      const lower = query.toLowerCase();
+    setTimeout(async () => {
+      const response = processGDialogue(query, messages);
+      dispatchWebsiteAction(response.action);
 
-      if (lower.includes("50k") || lower.includes("capital") || lower.includes("liquidity") || lower.includes("preserve")) {
-        gResponse = "A common mistake is assuming that having $50,000 means spending $50,000 into a deal. For Fix & Flip opportunities, OCG structures lender capital for purchase and rehab when appropriate. Your $50k has higher strategic value as an emergency reserve buffer, lender confidence, and protection against timeline delays. DSCR and buy-and-hold strategies require capital differently (e.g. 20-25% down payment + closing costs).";
-        newBriefing = {
-          investorStage: "Active Capital / Evaluation Phase",
-          availableLiquidity: "$50,000 Liquid Reserves",
-          preferredStrategy: "Fix & Flip (Lender-Funded) or BRRRR Exploration",
-          timeline: "30 - 90 Days",
-          riskConsideration: "Preserve liquidity as contingency buffer against material/holding overruns.",
-          summary: "Prospect has $50k available capital. Guided on OCG capital preservation philosophy (using lender debt for rehab/acquisition, keeping liquid capital as reserves)."
+      if (response.generatedBrief) {
+        const fullBrief: IOCGStrategyBrief = {
+          id: `brief_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          investorStage: response.generatedBrief.investorStage || "Active Operator",
+          availableLiquidityTier: response.generatedBrief.availableLiquidityTier || "$50k-$100k",
+          preferredStrategy: response.generatedBrief.preferredStrategy || "Fix & Flip",
+          targetTimeline: response.generatedBrief.targetTimeline || "30-90 Days",
+          riskTolerance: response.generatedBrief.riskTolerance || "Conservative (Preserve Capital First)",
+          executiveSummary: response.generatedBrief.executiveSummary || "Inquiry analyzed through G Intelligence.",
+          leadSource: "Website G Conversation",
+          status: "Draft"
         };
-      } else if (lower.includes("70%") || lower.includes("rule") || lower.includes("mao")) {
-        gResponse = "The 70% Rule is an underwriting framework: MAO = (ARV × 70%) − Rehab. For instance, on a $240,000 Wichita ARV with a $45,000 rehab scope, your MAO is $123,000. That 30% gross margin buffer protects against holding interest, closing costs, and price adjustments. It is a decision guide, not a lender guarantee.";
-      } else if (lower.includes("brrrr") || lower.includes("flip") || lower.includes("compare") || lower.includes("hold")) {
-        gResponse = "Here is how to think about the distinction: Fix & Flip generates lump-sum capital and teaches transaction execution, but incurs short-term capital gains. BRRRR recycles that basis by refinancing into long-term DSCR debt once stabilized. If you're building capital first, a flip is often the pragmatic initial step. If you already have established capital, BRRRR or direct Buy & Hold builds long-term wealth.";
-        newBriefing = {
-          investorStage: "Strategy Exploration",
-          availableLiquidity: "Undisclosed / Exploring Options",
-          preferredStrategy: "BRRRR vs Fix & Flip Comparative Analysis",
-          timeline: "60 - 180 Days",
-          riskConsideration: "Refinance seasoning rules and DSCR debt service coverage thresholds in Wichita.",
-          summary: "Prospect exploring trade-offs between cash creation (Flips) vs equity recycling (BRRRR)."
-        };
-      } else if (lower.includes("sell") || lower.includes("inherited") || lower.includes("mother") || lower.includes("house")) {
-        gResponse = "I understand. Inherited properties and off-market transitions require a respectful, non-rushed approach. OCG reviews property condition, Sedgwick County public records, needed repairs, and your timeline to give you a clear, transparent assessment without high-pressure wholesaler tactics.";
-        newBriefing = {
-          investorStage: "Property Seller / Disposition",
-          availableLiquidity: "N/A (Property Owner)",
-          preferredStrategy: "Direct Acquisition / Preliminary Property Review",
-          timeline: "Flexible / As Needed",
-          riskConsideration: "Inherited estate timeline and condition scoping.",
-          summary: "Homeowner or heir seeking transparent property evaluation without wholesaler games."
-        };
-      } else {
-        gResponse = `Based on what you're asking about "${query}", OCG's methodology focuses on disciplined underwriting, micro-market comps in Wichita, and strategic renovation design. We believe technology should compress the tedious tasks so you and our team can focus on making high-conviction decisions.`;
-      }
-
-      if (newBriefing) {
-        setBriefing(newBriefing);
-        gResponse += "\n\nI have generated a structured briefing of your situation. Rather than spending 45 minutes chatting with AI, the best next step is to schedule an OCG Strategy Session so Genaro and our team can review your specific opportunities.";
+        setBriefing(fullBrief);
+        await persistStrategyBrief(fullBrief);
       }
 
       setMessages((prev) => [
@@ -119,16 +98,23 @@ export default function GExperience() {
         {
           id: (Date.now() + 1).toString(),
           sender: "g",
-          text: gResponse,
+          text: response.messageText,
         },
       ]);
       setIsTyping(false);
-    }, 850);
+    }, 750);
+  };
+
+  const copyBriefJson = () => {
+    if (!briefing) return;
+    navigator.clipboard.writeText(JSON.stringify(briefing, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   return (
     <section id="g" className="relative overflow-hidden bg-[#070A0F] py-24 md:py-32 border-y border-slate-800">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(37,99,235,0.15),transparent_40%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(37,99,235,0.15),transparent_40%)] pointer-events-none" />
 
       <div className="container relative z-10">
         <div className="max-w-3xl">
@@ -142,7 +128,7 @@ export default function GExperience() {
             </span>
           </h2>
           <p className="mt-4 text-sm md:text-base text-slate-400 leading-relaxed">
-            G is trained across OCG's financing philosophy, Wichita housing stock, 70% rule underwriting, and investor diagnostics. Ask a question, explore a scenario, or start a preliminary property review.
+            G is trained across OCG's financing philosophy, Wichita housing stock, 70% rule underwriting, and investor diagnostics. Ask a question, explore a scenario, or generate an OCG Strategy Brief.
           </p>
         </div>
 
@@ -159,9 +145,17 @@ export default function GExperience() {
           ))}
         </div>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1.3fr_0.7fr] items-start">
+        {/* Website Action Trigger Banner (when tool is executed) */}
+        {activeActionNotice && (
+          <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-500/40 bg-blue-950/60 px-4 py-2 text-xs text-blue-200 shadow-lg animate-pulse">
+            <Sparkles size={14} className="text-blue-400" />
+            <span><strong>G Action Executed:</strong> {activeActionNotice}</span>
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-8 lg:grid-cols-[1.3fr_0.7fr] items-start">
           {/* Conversational Terminal */}
-          <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5 md:p-7 shadow-2xl flex flex-col h-[560px]">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5 md:p-7 shadow-2xl flex flex-col h-[580px]">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
@@ -172,7 +166,7 @@ export default function GExperience() {
                   <div className="font-bold text-white text-sm flex items-center gap-2">
                     G <span className="text-[10px] uppercase font-mono text-blue-400 px-2 py-0.5 bg-blue-950/80 rounded border border-blue-800/40">OCG Intelligence Core</span>
                   </div>
-                  <div className="text-[11px] text-slate-400">Context-Aware Real Estate Advisor</div>
+                  <div className="text-[11px] text-slate-400">Context-Aware Real Estate & Underwriting System</div>
                 </div>
               </div>
 
@@ -192,7 +186,7 @@ export default function GExperience() {
             {voiceNotice && (
               <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200 flex items-center justify-between">
                 <span>
-                  <strong>Staging Notice:</strong> Live voice/barge-in WebRTC pipeline is in development. Full interactive text intelligence is operational below.
+                  <strong>Staging Notice:</strong> Live streaming audio with WebRTC barge-in is in development. Full interactive text intelligence and website-action dispatching are operational below.
                 </span>
                 <button onClick={() => setVoiceNotice(false)} className="text-blue-400 font-bold ml-2">✕</button>
               </div>
@@ -232,7 +226,7 @@ export default function GExperience() {
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-950 text-blue-400">
                     <Bot size={14} />
                   </div>
-                  <span>G is reasoning across OCG frameworks...</span>
+                  <span>G is analyzing OCG underwriting models and Wichita intelligence...</span>
                 </div>
               )}
             </div>
@@ -262,44 +256,56 @@ export default function GExperience() {
             </form>
           </div>
 
-          {/* Structured Briefing & Human Strategy Handoff */}
+          {/* Structured OCG Strategy Brief & Human Strategy Handoff */}
           <div className="space-y-5">
             <div className="rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-                  <FileText size={14} /> Structured Handoff Briefing
+                  <FileText size={14} /> OCG Strategy Brief
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Live Intake</span>
+                {briefing && (
+                  <button
+                    onClick={copyBriefJson}
+                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg transition-all"
+                  >
+                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    <span>{copied ? "Copied JSON" : "Copy Brief"}</span>
+                  </button>
+                )}
               </div>
 
               {briefing ? (
                 <div className="space-y-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Investor Classification</span>
-                    <div className="font-semibold text-white">{briefing.investorStage}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Investor Stage</span>
+                    <span className="font-semibold text-white">{briefing.investorStage}</span>
                   </div>
-                  <div>
+                  <div className="flex justify-between">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Available Liquidity</span>
-                    <div className="font-semibold text-emerald-400">{briefing.availableLiquidity}</div>
+                    <span className="font-semibold text-emerald-400">{briefing.availableLiquidityTier}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Strategy Alignment</span>
-                    <div className="font-semibold text-blue-300">{briefing.preferredStrategy}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Strategy Fit</span>
+                    <span className="font-semibold text-blue-300">{briefing.preferredStrategy}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Risk Note</span>
-                    <div className="text-slate-300">{briefing.riskConsideration}</div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 uppercase tracking-wider text-[10px]">Timeline</span>
+                    <span className="text-slate-200">{briefing.targetTimeline}</span>
                   </div>
-                  <div className="rounded-xl bg-slate-900 p-3 border border-slate-800">
+                  <div className="rounded-xl bg-slate-900 p-3 border border-slate-800 space-y-1">
                     <span className="text-slate-500 uppercase tracking-wider text-[10px]">Executive Summary</span>
-                    <p className="mt-1 text-slate-300 text-[11px] leading-relaxed">{briefing.summary}</p>
+                    <p className="text-slate-300 text-[11px] leading-relaxed">{briefing.executiveSummary}</p>
+                  </div>
+                  <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-blue-400" />
+                    Persisted to OCG Intake Protocol (ID: {briefing.id.slice(0, 14)}...)
                   </div>
                 </div>
               ) : (
                 <div className="py-8 text-center text-slate-500 space-y-2">
                   <Bot size={28} className="mx-auto text-slate-600 opacity-60" />
-                  <p className="text-xs">
-                    Engage with G to automatically generate an executive strategy dossier for your appointment with Genaro and the OCG team.
+                  <p className="text-xs leading-relaxed">
+                    Chat with G to generate an executive **OCG Strategy Brief** structured for our acquisition and underwriting team.
                   </p>
                 </div>
               )}
@@ -316,7 +322,7 @@ export default function GExperience() {
 
             <div className="rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 text-[11px] text-slate-500 leading-relaxed">
               <ShieldCheck size={14} className="text-blue-400 inline mr-1" />
-              <strong>Professional Boundary Notice:</strong> G provides educational frameworks, property intelligence, and strategy exploration. G does not issue loan approvals, legal counsel, or certified structural appraisals. All transactions are reviewed and executed by OCG human leadership.
+              <strong>Professional Boundary Notice:</strong> G provides educational frameworks, property intelligence, and strategy exploration. G does not issue loan approvals, legal counsel, or certified appraisals. All transactions are reviewed and executed by OCG human leadership.
             </div>
           </div>
         </div>
