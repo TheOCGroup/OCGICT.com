@@ -238,10 +238,10 @@ export class GIntelligenceGateway {
   }
 
   private static detectLiquidityTier(lower: string): IOCGStrategyBrief["clientContext"]["availableLiquidityTier"]["value"] | undefined {
-    const matches = [...lower.matchAll(/\$?([0-9]+(?:\.[0-9]+)?)\s*(k|000)?/g)];
+    const matches = [...lower.matchAll(/\$?([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+(?:\.[0-9]+)?)\s*(k|000)?/g)];
     if (!matches.length) return undefined;
     const match = matches[matches.length - 1];
-    const base = Number(match[1]);
+    const base = Number(match[1].replace(/,/g, ""));
     const amount = match[2] ? base * 1000 : base;
     if (!Number.isFinite(amount) || amount < 10000) return undefined;
     if (amount < 25000) return "$10k-$25k";
