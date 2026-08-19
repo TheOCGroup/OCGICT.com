@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { ArrowRight, Building2, CheckCircle2, Handshake, Landmark, Mail, Phone, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, Building2, CheckCircle2, Handshake, Landmark, Mail, Phone, ShieldCheck } from "lucide-react";
 
 type Audience = "investor" | "seller" | "capital" | "partner";
 
@@ -12,8 +12,8 @@ const audienceOptions: Array<{ id: Audience; label: string; icon: typeof Buildin
 
 export function Contact() {
   const [audience, setAudience] = useState<Audience>("investor");
-  const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
-  const [error, setError] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "success" | "staging" | "error">("idle");
+  const [serverMessage, setServerMessage] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -30,7 +30,7 @@ export function Contact() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setStatus("sending");
-    setError("");
+    setServerMessage("");
 
     try {
       const response = await fetch("/api/contact", {
@@ -40,16 +40,19 @@ export function Contact() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to send your inquiry.");
-      setStatus("success");
+      setServerMessage(data.message || "Your inquiry was received.");
+      setStatus(data.status === "RECEIVED" ? "success" : "staging");
     } catch (err) {
       setStatus("error");
-      setError((err as Error).message || "Unable to send your inquiry.");
+      setServerMessage((err as Error).message || "Unable to send your inquiry.");
     }
   }
 
   function field(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
+
+  const resolved = status === "success" || status === "staging";
 
   return (
     <main className="min-h-screen bg-[#F7F7F4] text-[#0B0F17]">
@@ -83,11 +86,14 @@ export function Contact() {
       <section className="px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            {status === "success" ? (
+            {resolved ? (
               <div className="flex min-h-[430px] flex-col items-center justify-center text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700"><CheckCircle2 size={30} /></div>
-                <h2 className="mt-6 text-3xl font-black tracking-tight">We received your inquiry.</h2>
-                <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">It has been placed into OCG's intake queue for review. The next step depends on the type of conversation you selected.</p>
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full ${status === "success" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {status === "success" ? <CheckCircle2 size={30} /> : <AlertCircle size={30} />}
+                </div>
+                <h2 className="mt-6 text-3xl font-black tracking-tight">{status === "success" ? "We received your inquiry." : "The intake flow is ready; durable storage still needs its production connection."}</h2>
+                <p className="mt-3 max-w-lg text-sm leading-7 text-slate-600">{serverMessage}</p>
+                {status === "staging" && <p className="mt-3 max-w-lg text-xs leading-6 text-slate-500">This staging message is intentional. The public site should not claim a lead is durably stored until the production Supabase connection is configured.</p>}
               </div>
             ) : (
               <form onSubmit={submit} className="space-y-6">
@@ -116,7 +122,7 @@ export function Contact() {
 
                 <label className="block text-sm font-semibold">What should we know?<textarea rows={5} value={form.message} onChange={(e) => field("message", e.target.value)} placeholder="A few sentences is enough." className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-[#F7F7F4] px-4 py-3 font-normal outline-none focus:border-blue-500" /></label>
 
-                {status === "error" && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+                {status === "error" && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{serverMessage}</div>}
 
                 <button disabled={status === "sending"} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 text-sm font-black text-white transition hover:bg-blue-500 disabled:opacity-50">
                   {status === "sending" ? "Sending…" : "Send to OCG"} <ArrowRight size={16} />
@@ -132,8 +138,8 @@ export function Contact() {
               <p className="mt-3 text-sm leading-7 text-slate-300">G can help you think through the website, but consequential property, financing, and acquisition decisions remain subject to OCG review and verification.</p>
             </div>
             <div className="rounded-[26px] border border-slate-200 bg-white p-6">
-              <div className="flex items-center gap-3"><Mail size={18} className="text-blue-700" /><span className="font-black">Prefer email?</span></div>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Use the form so your inquiry is classified and routed to the right OCG workflow.</p>
+              <div className="flex items-center gap-3"><Mail size={18} className="text-blue-700" /><span className="font-black">One intake, right destination.</span></div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Your selected audience determines how the inquiry is classified before it reaches the OCG operating queue.</p>
             </div>
             <div className="rounded-[26px] border border-slate-200 bg-white p-6">
               <div className="flex items-center gap-3"><Phone size={18} className="text-blue-700" /><span className="font-black">Need help choosing a path?</span></div>
