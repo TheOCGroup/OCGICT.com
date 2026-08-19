@@ -1,4 +1,5 @@
-import { ArrowRight, BrainCircuit, BriefcaseBusiness, Radar, Wrench } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { ArrowRight, BrainCircuit, BriefcaseBusiness, CheckCircle2, Radar, Wrench } from "lucide-react";
 import { Link } from "wouter";
 
 const coverage = [
@@ -9,6 +10,37 @@ const coverage = [
 ];
 
 export default function LabReport() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "subscribed" | "staging" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  async function subscribe(event: FormEvent) {
+    event.preventDefault();
+    setStatus("sending");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "ocg-lab-report-gateway" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to subscribe.");
+
+      if (data.status === "SUBSCRIBED") {
+        setStatus("subscribed");
+        setMessage("You’re subscribed to the next Lab Report.");
+      } else {
+        setStatus("staging");
+        setMessage("Your interest was captured in staging. Persistent newsletter delivery is being connected before public launch.");
+      }
+    } catch (error) {
+      setStatus("error");
+      setMessage((error as Error).message || "Unable to subscribe.");
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#F7F7F4] text-[#0B0F17]">
       <section className="px-4 pb-20 pt-32 sm:px-6 lg:px-8 lg:pb-28">
@@ -48,7 +80,36 @@ export default function LabReport() {
         </div>
       </section>
 
-      <section className="px-4 py-16 text-center sm:px-6 lg:px-8">
+      <section className="px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-6xl gap-8 rounded-[34px] bg-[#0B0F17] p-7 text-white sm:p-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">Get the next issue</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Stay connected to what we’re learning.</h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300">One email when a new issue is published. No generic marketing blast, and no interruption to the OCG real-estate experience.</p>
+          </div>
+
+          <div>
+            {status === "subscribed" ? (
+              <div className="rounded-[24px] border border-emerald-400/30 bg-emerald-400/10 p-5 text-sm text-emerald-100">
+                <div className="flex items-center gap-2 font-black"><CheckCircle2 size={18} /> Subscribed</div>
+                <p className="mt-2 text-emerald-100/80">{message}</p>
+              </div>
+            ) : (
+              <form onSubmit={subscribe} className="space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@email.com" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-blue-400/60" />
+                  <button disabled={status === "sending"} className="rounded-xl bg-blue-600 px-5 py-3.5 text-xs font-black uppercase tracking-[0.1em] text-white transition hover:bg-blue-500 disabled:opacity-50">
+                    {status === "sending" ? "Submitting…" : "Get The Next Issue"}
+                  </button>
+                </div>
+                {message && <div className={`text-xs leading-5 ${status === "error" ? "text-red-300" : status === "staging" ? "text-amber-200" : "text-slate-400"}`}>{message}</div>}
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 pb-16 text-center sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl">
           <p className="text-sm leading-7 text-slate-600">Came here for real estate instead?</p>
           <Link href="/" className="mt-3 inline-flex items-center gap-2 text-sm font-black text-blue-700 hover:text-blue-600">Return to OCG <ArrowRight size={14} /></Link>
