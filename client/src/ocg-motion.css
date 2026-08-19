@@ -1,0 +1,11 @@
+@keyframes heroDrift {
+  0% { transform: scale(1.03) translate3d(0, 0, 0); }
+  100% { transform: scale(1.075) translate3d(-0.6%, -0.35%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="heroDrift"] {
+    animation: none !important;
+    transform: none !important;
+  }
+}
