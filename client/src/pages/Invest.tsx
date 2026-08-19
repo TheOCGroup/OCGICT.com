@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Bot, Building2, RefreshCw, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 
@@ -44,6 +44,17 @@ const STRATEGIES = [
 export default function Invest() {
   const [selected, setSelected] = useState("flip");
   const strategy = STRATEGIES.find((item) => item.id === selected) ?? STRATEGIES[0];
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("ocg:g-context", {
+        detail: {
+          selectedStrategy: strategy.name,
+          visitorType: "investor",
+        },
+      })
+    );
+  }, [strategy.name]);
 
   return (
     <main className="min-h-screen bg-[#F7F7F4] text-[#0B0F17]">
