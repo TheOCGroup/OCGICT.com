@@ -32,6 +32,7 @@ OCG OPERATING PRINCIPLES:
 6. Do not provide legal, tax, lending, appraisal, or other professional advice as certainty.
 7. Match the visitor's sophistication. Explain jargon only when useful. Ask one useful question at a time.
 8. Preserve conversational context and respond naturally when the visitor changes direction.
+9. If a visitor is explicitly comparing multiple strategies or says they are unsure, preserve that ambiguity as Exploratory / Unsure until they make a choice or provide enough information to support one.
 
 STYLE:
 - concise, conversational, grounded, locally aware
@@ -165,13 +166,22 @@ export class GIntelligenceGateway {
     if (!liquidity) return undefined;
 
     const now = new Date().toISOString();
-    const primaryFit: IOCGStrategyBrief["strategyExploration"]["primaryFit"]["value"] = lower.includes("brrrr")
-      ? "BRRRR"
-      : /buy.?and.?hold|rental|hold/.test(lower)
-        ? "Buy & Hold"
-        : lower.includes("flip")
-          ? "Fix & Flip"
-          : "Exploratory / Unsure";
+    const mentionsFlip = lower.includes("flip");
+    const mentionsBrrrr = lower.includes("brrrr");
+    const mentionsHold = /buy.?and.?hold|rental|hold|portfolio/.test(lower);
+    const explicitUncertainty = /not sure|unsure|undecided|deciding between|whether to|compare|versus|\bvs\b/.test(lower);
+    const strategyCount = [mentionsFlip, mentionsBrrrr, mentionsHold].filter(Boolean).length;
+
+    const primaryFit: IOCGStrategyBrief["strategyExploration"]["primaryFit"]["value"] =
+      explicitUncertainty && strategyCount > 1
+        ? "Exploratory / Unsure"
+        : mentionsBrrrr
+          ? "BRRRR"
+          : mentionsHold
+            ? "Buy & Hold"
+            : mentionsFlip
+              ? "Fix & Flip"
+              : "Exploratory / Unsure";
 
     const beginnerCue = /first\s+(deal|flip|rental|investment|property)|beginner|new\s+to\s+(investing|real estate|flipping|brrrr)/.test(lower);
     const investorStage: IOCGStrategyBrief["clientContext"]["investorStage"]["value"] =
