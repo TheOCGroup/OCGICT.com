@@ -27,9 +27,9 @@ export default function OCGLab() {
               OCG LAB is the technology company in the OCG ecosystem. It builds intelligent systems, automation, business applications, and digital tools from problems encountered in real operations—including the technology demonstrated across OCG.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="https://theocglabreport.netlify.app/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-[#0B0F17] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-slate-800">
+              <Link href="/lab-report" className="inline-flex items-center gap-2 rounded-xl bg-[#0B0F17] px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-slate-800">
                 Read The Lab Report <ArrowRight size={14} />
-              </a>
+              </Link>
               <Link href="/" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-800 transition hover:border-slate-400">Back to OCG</Link>
             </div>
           </div>
