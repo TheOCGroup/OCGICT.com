@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Send, Sparkles, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { GActionRegistry } from "@/intelligence/actionRegistry";
@@ -14,6 +14,14 @@ type GContext = {
 type MiniMessage = {
   role: "user" | "assistant";
   content: string;
+};
+
+type GPageState = {
+  selectedStrategy?: string;
+  selectedProperty?: string;
+  calculator?: Record<string, number>;
+  sellerStep?: number;
+  visitorType?: string;
 };
 
 const CONTEXT: Record<string, GContext> = {
@@ -83,6 +91,7 @@ export function GlobalGCompanion() {
   const [thinking, setThinking] = useState(false);
   const [messages, setMessages] = useState<MiniMessage[]>([]);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [pageState, setPageState] = useState<GPageState>({});
   const [sessionId] = useState(() => `global_g_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -94,6 +103,21 @@ export function GlobalGCompanion() {
       suggestions: ["What should I look at here?", "How can OCG help?", "Show me the next step"],
     };
   }, [location]);
+
+  useEffect(() => {
+    setPageState({});
+  }, [location]);
+
+  useEffect(() => {
+    const handlePageContext = (event: Event) => {
+      const detail = (event as CustomEvent<GPageState>).detail;
+      if (!detail || typeof detail !== "object") return;
+      setPageState((current) => ({ ...current, ...detail }));
+    };
+
+    window.addEventListener("ocg:g-context", handlePageContext as EventListener);
+    return () => window.removeEventListener("ocg:g-context", handlePageContext as EventListener);
+  }, []);
 
   if (!context) return null;
 
@@ -125,7 +149,11 @@ export function GlobalGCompanion() {
           sessionId,
           message: trimmed,
           history: messages,
-          clientContext: { route: location, section: context.label },
+          clientContext: {
+            route: location,
+            section: context.label,
+            ...pageState,
+          },
         }),
       });
 
@@ -170,6 +198,7 @@ export function GlobalGCompanion() {
   }
 
   const latestAnswer = [...messages].reverse().find((message) => message.role === "assistant")?.content;
+  const contextDetail = pageState.selectedStrategy ? ` · ${pageState.selectedStrategy}` : "";
 
   return (
     <div className="fixed bottom-4 right-4 z-[80] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
@@ -178,7 +207,7 @@ export function GlobalGCompanion() {
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-300">
               <Sparkles size={13} />
-              <span>{context.label}</span>
+              <span>{context.label}{contextDetail}</span>
             </div>
             <button type="button" onClick={close} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" aria-label="Close G">
               <X size={16} />
