@@ -22,7 +22,44 @@ export interface NewsletterSubscribeRequest {
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const subscribers = new Map<string, { email: string; source: string; subscribedAt: string }>();
+
+async function persistLead(record: {
+  name: string;
+  email: string;
+  phone?: string;
+  source: string;
+  notes: string;
+}) {
+  const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
+  const key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return "NOT_CONFIGURED" as const;
+
+  const response = await fetch(`${url}/rest/v1/leads`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      name: record.name,
+      email: record.email,
+      phone: record.phone || "",
+      source: record.source,
+      notes: record.notes,
+      status: "new",
+      created_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Lead persistence failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ""}`);
+  }
+
+  return "SUPABASE" as const;
+}
 
 export class PublicEngagementService {
   static async submitContact(input: PublicContactRequest) {
@@ -41,6 +78,22 @@ export class PublicEngagementService {
             ? "OCG Partnership"
             : input.strategyInterest || "OCG Strategy Conversation";
 
+    const persistence = await persistLead({
+      name,
+      email,
+      phone: input.phone?.trim(),
+      source: `OCG_WEBSITE_${audience.toUpperCase()}`,
+      notes: JSON.stringify({
+        audience,
+        propertyAddress: input.propertyAddress?.trim() || undefined,
+        strategyInterest: input.strategyInterest || undefined,
+        capitalAmount: input.capitalAmount || undefined,
+        timeline: input.timeline || undefined,
+        message: input.message?.trim() || undefined,
+        source: input.source || "contact-page",
+      }),
+    });
+
     const handoff = await PiperQueueAdapter.enqueueLead({
       briefId: `PUBLIC_${Date.now()}`,
       fullName: name,
@@ -56,16 +109,22 @@ export class PublicEngagementService {
     OcgObservability.log("PUBLIC_CONTACT_SUBMITTED", {
       audience,
       source: input.source || "contact-page",
+      persistence,
       outboxId: handoff.outboxId,
       workItemId: handoff.workItemId,
     });
 
     return {
-      status: "RECEIVED",
+      status: persistence === "SUPABASE" ? "RECEIVED" : "CAPTURED_STAGING_ONLY",
+      persistence,
       handoffStatus: handoff.status,
       trackingId: handoff.outboxId,
       workItemId: handoff.workItemId,
-    };
+      message:
+        persistence === "SUPABASE"
+          ? "Your inquiry was saved for OCG review."
+          : "The intake workflow is working, but durable lead persistence is not configured in this environment yet.",
+    } as const;
   }
 
   static async subscribeNewsletter(input: NewsletterSubscribeRequest) {
@@ -73,30 +132,23 @@ export class PublicEngagementService {
     if (!email || !EMAIL.test(email)) throw new Error("A valid email address is required");
 
     const source = input.source || "lab-report";
-    const webhook = process.env.NEWSLETTER_WEBHOOK_URL;
+    const persistence = await persistLead({
+      name: "Lab Report Subscriber",
+      email,
+      source: "LAB_REPORT_SUBSCRIBER",
+      notes: JSON.stringify({ source, subscription: "The Lab Report" }),
+    });
 
-    if (webhook) {
-      const response = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source, subscribedAt: new Date().toISOString() }),
-      });
-      if (!response.ok) throw new Error("Newsletter subscription provider rejected the request");
-      OcgObservability.log("NEWSLETTER_SUBSCRIBED", { source, persistence: "REMOTE_WEBHOOK" });
-      return { status: "SUBSCRIBED", persistence: "REMOTE_WEBHOOK" } as const;
+    if (persistence === "SUPABASE") {
+      OcgObservability.log("NEWSLETTER_SUBSCRIBED", { source, persistence });
+      return { status: "SUBSCRIBED", persistence, message: "You’re subscribed to the next Lab Report." } as const;
     }
 
-    const subscribedAt = new Date().toISOString();
-    subscribers.set(email, { email, source, subscribedAt });
-    OcgObservability.log("NEWSLETTER_INTEREST_CAPTURED", { source, persistence: "STAGING_MEMORY" });
+    OcgObservability.log("NEWSLETTER_INTEREST_CAPTURED", { source, persistence });
     return {
       status: "CAPTURED_STAGING_ONLY",
-      persistence: "STAGING_MEMORY",
-      message: "Subscription interest was captured in staging. Persistent newsletter delivery is not connected yet.",
+      persistence,
+      message: "The signup flow is working, but durable newsletter persistence is not configured in this environment yet.",
     } as const;
-  }
-
-  static getStagingSubscribers() {
-    return [...subscribers.values()];
   }
 }
