@@ -32,5 +32,8 @@ jobs:
       - name: Seller acquisition regression suite
         run: pnpm exec tsx server/__tests__/sellerOffer.test.ts
 
+      - name: G gateway regression suite
+        run: pnpm exec tsx server/__tests__/gGateway.test.ts
+
       - name: Production build
         run: pnpm run build
