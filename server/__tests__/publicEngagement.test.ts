@@ -3,6 +3,9 @@ import { PublicEngagementService } from "../services/publicEngagementService";
 import { PiperQueueAdapter } from "../services/piperAdapter";
 
 async function run() {
+  delete process.env.SUPABASE_URL;
+  delete process.env.SUPABASE_ANON_KEY;
+
   const before = PiperQueueAdapter.getWorkItems().length;
 
   const contact = await PublicEngagementService.submitContact({
@@ -16,7 +19,8 @@ async function run() {
     source: "regression-test",
   });
 
-  assert.equal(contact.status, "RECEIVED");
+  assert.equal(contact.status, "CAPTURED_STAGING_ONLY");
+  assert.equal(contact.persistence, "NOT_CONFIGURED");
   assert.ok(contact.trackingId.startsWith("OUTBOX_LEAD_"));
   assert.equal(PiperQueueAdapter.getWorkItems().length, before + 1);
   const newest = PiperQueueAdapter.getWorkItems()[0];
@@ -34,8 +38,8 @@ async function run() {
   });
 
   assert.equal(newsletter.status, "CAPTURED_STAGING_ONLY");
-  assert.equal(newsletter.persistence, "STAGING_MEMORY");
-  assert.match(newsletter.message, /not connected yet/i);
+  assert.equal(newsletter.persistence, "NOT_CONFIGURED");
+  assert.match(newsletter.message, /not configured/i);
 
   await assert.rejects(
     () => PublicEngagementService.subscribeNewsletter({ email: "bad" }),
