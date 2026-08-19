@@ -35,5 +35,8 @@ jobs:
       - name: G gateway regression suite
         run: pnpm exec tsx server/__tests__/gGateway.test.ts
 
+      - name: Public engagement regression suite
+        run: pnpm exec tsx server/__tests__/publicEngagement.test.ts
+
       - name: Production build
         run: pnpm run build
