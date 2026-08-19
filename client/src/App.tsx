@@ -10,7 +10,7 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Services from "./pages/Services";
 import Invest from "./pages/Invest";
-import Sell from "./pages/Sell";
+import SellExperience from "./pages/SellExperience";
 import HowItWorks from "./pages/HowItWorks";
 import Marketplace from "./pages/Marketplace";
 import LenderNetwork from "./pages/LenderNetwork";
@@ -54,7 +54,7 @@ function Router() {
       <Route path="/case-studies" component={CaseStudies} />
       <Route path="/contact" component={Contact} />
       <Route path="/submit-deal" component={SubmitDeal} />
-      <Route path="/sell" component={Sell} />
+      <Route path="/sell" component={SellExperience} />
       <Route path="/ocg-lab" component={OCGLab} />
       <Route path="/lab-report" component={LabReport} />
 
