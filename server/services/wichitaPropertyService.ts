@@ -23,32 +23,33 @@ export interface WichitaPublicPropertyRecord {
   yearBuilt: number;
   livingAreaSqft: number;
   provenance: {
-    source: "Sedgwick County Property Tax & Appraisal (MAB) / GIS";
+    source: string;
     retrievalTimestamp: string;
     certainty: DataCertaintyLevel;
+    mode: "STAGING_FIXTURE" | "LIVE_PUBLIC_RECORD";
   };
 }
 
 /**
- * Wichita & Sedgwick County Property Data Service
- * Retrieves public property records, zoning classifications, and tax appraisal data.
+ * Wichita & Sedgwick County Property Data Service.
+ *
+ * IMPORTANT: the current repository ships with representative staging fixtures only.
+ * They exercise seller/VICTOR workflows but are NOT a live Sedgwick County retrieval.
+ * A future production adapter may return LIVE_PUBLIC_RECORD data once separately verified.
  */
 export class WichitaPropertyService {
-  /**
-   * Look up public property records for Wichita addresses
-   */
   public static async lookupPublicRecord(query: PropertyLookupQuery): Promise<WichitaPublicPropertyRecord | null> {
-    const startTime = Date.now();
     const cleanAddr = query.address.trim().toUpperCase();
 
     OcgObservability.log("RETRIEVAL_SOURCE_ACCESSED", {
-      source: "Sedgwick County MAB / GIS",
+      source: "OCG representative Wichita staging fixture",
       query: cleanAddr,
+      mode: "STAGING_FIXTURE",
     });
 
-    // In local staging environment, provide verified public records for canonical Wichita corridors
-    // In production environment, this connects to the Sedgwick County GIS & Tax API proxy.
-    const mockDb: Record<string, Partial<WichitaPublicPropertyRecord>> = {
+    // Representative fixtures for deterministic workflow/QA coverage.
+    // These values must never be presented as freshly retrieved county records.
+    const fixtureDb: Record<string, Partial<WichitaPublicPropertyRecord>> = {
       "248 S RUTAN": {
         parcelId: "00142857",
         situsAddress: "248 S RUTAN AVE, WICHITA, KS 67218",
@@ -56,7 +57,7 @@ export class WichitaPropertyService {
         appraisedLandValue: 28500,
         appraisedBuildingValue: 124200,
         totalAppraisedValue: 152700,
-        priorYearTaxes: 2184.50,
+        priorYearTaxes: 2184.5,
         taxStatus: "Current",
         zoningCode: "SF-5",
         zoningDescription: "Single-Family Residential (5,000 sq ft min)",
@@ -72,7 +73,7 @@ export class WichitaPropertyService {
         appraisedLandValue: 34000,
         appraisedBuildingValue: 148500,
         totalAppraisedValue: 182500,
-        priorYearTaxes: 2610.20,
+        priorYearTaxes: 2610.2,
         taxStatus: "Current",
         zoningCode: "SF-5",
         zoningDescription: "Single-Family Residential",
@@ -88,7 +89,7 @@ export class WichitaPropertyService {
         appraisedLandValue: 16500,
         appraisedBuildingValue: 74200,
         totalAppraisedValue: 90700,
-        priorYearTaxes: 1298.40,
+        priorYearTaxes: 1298.4,
         taxStatus: "Current",
         zoningCode: "TF-3",
         zoningDescription: "Two-Family Residential / Multi-Option",
@@ -99,20 +100,18 @@ export class WichitaPropertyService {
       },
     };
 
-    if (!cleanAddr) {
-      return null;
-    }
+    if (!cleanAddr) return null;
 
-    const matchedEntry = Object.entries(mockDb).find(([key]) => cleanAddr.includes(key));
+    const matchedEntry = Object.entries(fixtureDb).find(([key]) => cleanAddr.includes(key));
     if (!matchedEntry) {
-      // Per OCG No-Pretending rule: do not synthesize fake parcel records.
-      // Return null so confidence gate properly marks HUMAN_REVIEW_REQUIRED.
-      OcgObservability.log("RETRIEVAL_UNMATCHED_HONEST_FAILURE", { query: cleanAddr });
+      OcgObservability.log("RETRIEVAL_UNMATCHED_HONEST_FAILURE", {
+        query: cleanAddr,
+        mode: "STAGING_FIXTURE",
+      });
       return null;
     }
 
     const record = matchedEntry[1];
-    const now = new Date().toISOString();
     return {
       parcelId: record.parcelId!,
       situsAddress: record.situsAddress!,
@@ -129,21 +128,22 @@ export class WichitaPropertyService {
       yearBuilt: record.yearBuilt!,
       livingAreaSqft: record.livingAreaSqft!,
       provenance: {
-        source: "Sedgwick County Property Tax & Appraisal (MAB) / GIS",
-        retrievalTimestamp: now,
-        certainty: "KNOWN",
+        source: "OCG representative Wichita staging fixture — not live county retrieval",
+        retrievalTimestamp: new Date().toISOString(),
+        certainty: "PROVISIONAL",
+        mode: "STAGING_FIXTURE",
       },
     };
   }
 
-  /**
-   * Convert public property record to canonical IPropertyIntelligenceRecord for VICTOR
-   */
+  /** Convert a source record to the canonical VICTOR property-intelligence shape. */
   public static toPropertyIntelligenceRecord(pub: WichitaPublicPropertyRecord): IPropertyIntelligenceRecord {
     const now = pub.provenance.retrievalTimestamp;
+    const source = pub.provenance.source;
+    const sourceCertainty = pub.provenance.certainty;
     const estArv = Math.round(pub.livingAreaSqft * 145);
     const estRehab = Math.round(pub.livingAreaSqft * 32);
-    const mao = Math.max(Math.round(estArv * 0.70) - estRehab, 0);
+    const mao = Math.max(Math.round(estArv * 0.7) - estRehab, 0);
 
     return {
       id: `prop_${pub.parcelId}`,
@@ -153,14 +153,14 @@ export class WichitaPropertyService {
       zip: pub.situsAddress.match(/\b\d{5}\b/)?.[0] || "67208",
       sedgwickCountyParcelId: {
         value: pub.parcelId,
-        certainty: "KNOWN",
-        source: "Sedgwick County Appraisal MAB",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
       legalDescription: {
         value: pub.legalDescription,
-        certainty: "KNOWN",
-        source: "Sedgwick County Deed Register",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
       propertyType: {
@@ -171,14 +171,14 @@ export class WichitaPropertyService {
       },
       sqft: {
         value: pub.livingAreaSqft,
-        certainty: "KNOWN",
-        source: "Sedgwick County Public Record",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
       yearBuilt: {
         value: pub.yearBuilt,
-        certainty: "KNOWN",
-        source: "Sedgwick County Public Record",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
       bedrooms: {
@@ -196,26 +196,26 @@ export class WichitaPropertyService {
       arvRetailEstimate: {
         value: estArv,
         certainty: "ESTIMATED",
-        source: "VICTOR Preliminary Comp Clustering Heuristic",
+        source: "VICTOR preliminary $/sqft heuristic — not verified closed comps",
         retrievalTimestamp: now,
-        confidenceScore: 0.82,
+        confidenceScore: pub.provenance.mode === "LIVE_PUBLIC_RECORD" ? 0.7 : 0.5,
       },
       rehabScopeEstimate: {
         value: estRehab,
         certainty: "ESTIMATED",
-        source: "Wichita $/sqft Unit Rate Table",
+        source: "Wichita representative $/sqft unit-rate heuristic",
         retrievalTimestamp: now,
       },
       maximumAllowableOffer: {
         value: mao,
         certainty: "ESTIMATED",
-        source: "70% Rule Underwriting: (ARV * 0.70) - Rehab",
+        source: "70% screening framework: (estimated ARV × 0.70) − estimated rehab",
         retrievalTimestamp: now,
       },
       projectedMonthlyRent: {
         value: Math.round(estArv * 0.008),
         certainty: "ESTIMATED",
-        source: "Wichita Submarket Rent Matrix",
+        source: "Representative Wichita rent heuristic — market verification required",
         retrievalTimestamp: now,
       },
       foundationInspectionStatus: "PROFESSIONAL_VERIFICATION_REQ",
@@ -223,14 +223,14 @@ export class WichitaPropertyService {
       mepSystemsCondition: "PROFESSIONAL_VERIFICATION_REQ",
       floodPlainZone: {
         value: pub.floodPlainStatus,
-        certainty: "KNOWN",
-        source: "FEMA / Sedgwick County GIS",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
       taxDelinquencyStatus: {
         value: pub.taxStatus === "Delinquent" ? "Delinquent" : "Current",
-        certainty: "KNOWN",
-        source: "Sedgwick County Treasurer",
+        certainty: sourceCertainty,
+        source,
         retrievalTimestamp: now,
       },
     };

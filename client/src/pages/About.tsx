@@ -1,224 +1,101 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'wouter';
-import { 
-  Building2, 
-  Sparkles, 
-  Shield, 
-  CheckCircle2, 
-  ArrowRight, 
-  Cpu, 
-  Palette, 
-  FileCheck, 
-  Hammer, 
-  Briefcase, 
-  Bot,
-  ExternalLink,
-  Layers,
-  MapPin
-} from 'lucide-react';
-import OCGWordmark from '@/components/OCGWordmark';
+import { ArrowRight, Building2, Compass, Cpu, Palette, ShieldCheck, Wrench } from "lucide-react";
+import { Link } from "wouter";
 
-const FOUNDER_CONVERGENCE = [
-  {
-    phase: '01',
-    title: 'Interior Design & Spatial Architecture',
-    desc: 'Understanding how layout, natural light, materials, and historic character command emotional appeal and price ceilings in Wichita neighborhoods.',
-    icon: Palette,
-    tag: 'Aesthetic Authority'
-  },
-  {
-    phase: '02',
-    title: 'Insurance & Risk Underwriting',
-    desc: 'Deep grounding in catastrophic loss mitigation, building envelope vulnerabilities, title risks, and downside capital protection.',
-    icon: Shield,
-    tag: 'Risk Management'
-  },
-  {
-    phase: '03',
-    title: 'Licensed Real Estate Brokerage',
-    desc: 'Transactional precision, local zoning nuances, off-market contracts, and direct seller representation without intermediation noise.',
-    icon: Briefcase,
-    tag: 'Market Fluency'
-  },
-  {
-    phase: '04',
-    title: 'General Renovation Execution',
-    desc: 'Physical site management, contractor trade scoping, materials pricing tables, and strict milestone schedule discipline.',
-    icon: Hammer,
-    tag: 'Physical Execution'
-  },
-  {
-    phase: '05',
-    title: 'Acquisition & Capital Strategy',
-    desc: 'Structuring senior debt, private investor capital allocations, liquidity reserves, and multi-year wealth accumulation.',
-    icon: Building2,
-    tag: 'Capital Strategy'
-  },
-  {
-    phase: '06',
-    title: 'AI Systems & OCG LAB',
-    desc: 'Engineering HUNTER, VICTOR, PIPER, and G to automate repetitive data synthesis so humans focus exclusively on high-conviction judgment.',
-    icon: Cpu,
-    tag: 'Intelligent Systems'
-  }
+const disciplines = [
+  { icon: Palette, label: "Interior Design", copy: "Understanding how layout, material choices, and presentation influence how people experience a property." },
+  { icon: ShieldCheck, label: "Insurance + Risk", copy: "Learning to think in terms of exposure, protection, contingencies, and what can go wrong before it does." },
+  { icon: Building2, label: "Real Estate", copy: "Acquisition, negotiation, property evaluation, investor needs, and the realities of moving a transaction forward." },
+  { icon: Wrench, label: "Renovation", copy: "Connecting condition, scope, design, cost, sequencing, and the end user instead of treating rehab as a line item." },
+  { icon: Compass, label: "Investment", copy: "Matching strategy, capital, financing, risk, timeline, and exit rather than forcing every investor into the same model." },
+  { icon: Cpu, label: "AI + Systems", copy: "Building tools to compress research, organize evidence, coordinate work, and make the operating process easier to execute." },
 ];
 
-export function About() {
+export default function About() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#070A0F] text-slate-100 selection:bg-blue-600 selection:text-white">
-      
-      {/* 1. ABOUT HERO */}
-      <section className="relative py-20 lg:py-28 bg-gradient-to-b from-[#0B1220] via-[#070A0F] to-[#070A0F] border-b border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl text-center">
-          
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-400 mb-6 shadow-lg">
-            <Sparkles size={14} />
-            <span>The OCG Convergence</span>
+    <main className="min-h-screen bg-[#F7F7F4] text-[#0B0F17]">
+      <section className="border-b border-slate-200 px-4 pb-20 pt-32 sm:px-6 lg:px-8 lg:pb-28">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">About OCG</div>
+              <h1 className="mt-4 text-5xl font-black leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
+                Real-estate experience shaped the company.
+              </h1>
+              <h2 className="mt-5 max-w-3xl text-2xl font-semibold tracking-tight text-slate-600 sm:text-3xl">Necessity shaped the technology.</h2>
+              <p className="mt-7 max-w-3xl text-base leading-8 text-slate-600 sm:text-lg">
+                OCG grew from a practical problem: real-estate opportunities move quickly, but responsible decisions still require research, condition thinking, renovation scope, numbers, financing, and execution. The company began building intelligent systems because the process needed to move faster without pretending the judgment could be automated away.
+              </p>
+            </div>
+
+            <aside className="rounded-[32px] border border-slate-200 bg-white p-7 shadow-sm">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Founder</div>
+              <div className="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-[#F2F1ED] p-8 text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 text-xl font-black text-slate-600">GO</div>
+                <div className="mt-4 text-sm font-black">Genaro Ocasio</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">Founder photography will replace this deliberate placeholder. No synthetic founder image is used.</p>
+              </div>
+            </aside>
           </div>
-
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
-            Real estate experience shaped the company.<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-200 to-slate-300">
-              Necessity shaped the technology.
-            </span>
-          </h1>
-
-          <p className="mt-6 text-base sm:text-lg text-slate-300 leading-relaxed max-w-3xl mx-auto font-normal">
-            OCG is an operating real estate investment and acquisition company founded by Genaro Ocasio. We combine disciplined financial underwriting, architectural renovation design, risk management, and purpose-built automation to execute with precision in the Wichita market.
-          </p>
-
         </div>
       </section>
 
-      {/* 2. FOUNDER NARRATIVE & MULTIDISCIPLINARY CONVERGENCE */}
-      <section className="py-24 bg-[#070A0F] border-b border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          
-          <div className="max-w-3xl mb-16">
-            <div className="text-xs font-bold uppercase tracking-widest text-blue-400 mb-2">Multidisciplinary Foundation</div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Where Design, Risk, Real Estate, and AI Meet.
-            </h2>
-            <p className="mt-4 text-base text-slate-300 leading-relaxed">
-              Most real estate investment firms approach deals purely as numbers on a spreadsheet. Most tech platforms have never swung a hammer. OCG is built on the convergence of six foundational disciplines.
-            </p>
+      <section className="px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="max-w-3xl">
+            <div className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">The convergence</div>
+            <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-5xl">Six disciplines. One operating point of view.</h2>
+            <p className="mt-4 text-base leading-7 text-slate-600">They are not separate careers pasted onto a bio. Each one changed how OCG approaches property, risk, value, capital, design, and execution.</p>
           </div>
 
-          {/* Convergence Flow Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
-            {FOUNDER_CONVERGENCE.map((disc) => {
-              const Icon = disc.icon;
-              return (
-                <div 
-                  key={disc.phase}
-                  className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-blue-500/50 transition-all shadow-xl flex flex-col justify-between group"
-                >
-                  <div>
-                    <div className="flex justify-between items-center mb-6">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                        <Icon size={22} />
-                      </div>
-                      <span className="text-xs font-bold font-mono px-2.5 py-1 rounded bg-slate-950 text-slate-400 border border-slate-800">
-                        PHASE {disc.phase}
-                      </span>
+          <div className="relative mt-12">
+            <div className="absolute bottom-0 left-5 top-0 hidden w-px bg-gradient-to-b from-blue-600 via-slate-300 to-slate-200 md:block" />
+            <div className="grid gap-4 md:pl-14 lg:grid-cols-2">
+              {disciplines.map(({ icon: Icon, label, copy }, index) => (
+                <article key={label} className="group relative rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><Icon size={20} /></div>
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">0{index + 1}</div>
+                      <h3 className="mt-1 text-xl font-black tracking-tight">{label}</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
                     </div>
-
-                    <div className="text-[11px] font-bold uppercase tracking-widest text-blue-400 mb-1">{disc.tag}</div>
-                    <h3 className="text-lg font-bold text-white mb-2">{disc.title}</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">{disc.desc}</p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Founder Identity Card */}
-          <div className="p-8 sm:p-10 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-blue-950/40 border border-slate-800 shadow-2xl">
-            <div className="grid md:grid-cols-[1fr_2fr] gap-8 items-center">
-              
-              {/* Founder Monogram / Authentic Identity Block */}
-              <div className="flex flex-col items-center justify-center p-8 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-2xl font-black text-white shadow-xl mb-4">
-                  GO
-                </div>
-                <div className="font-extrabold text-white text-lg">Genaro Ocasio</div>
-                <div className="text-xs font-mono text-blue-400 mt-0.5">Founder & Principal · OCG</div>
-                <div className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5">
-                  <MapPin size={12} className="text-blue-400" />
-                  <span>Wichita, Kansas</span>
-                </div>
-              </div>
-
-              {/* Founder Statement */}
-              <div className="space-y-4">
-                <blockquote className="text-lg sm:text-xl font-medium text-slate-200 italic leading-relaxed">
-                  "We built OCG because we wanted a company that treats real estate with architectural respect, protects capital with strict underwriting discipline, and uses artificial intelligence not as a gimmick, but as an operational engine."
-                </blockquote>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Genaro brings years of hands-on experience in Wichita housing stock, from historic College Hill Craftsman renovations to East Wichita mid-century stabilization, backed by rigorous risk analysis and proprietary software systems.
-                </p>
-              </div>
-
+                </article>
+              ))}
             </div>
           </div>
-
         </div>
       </section>
 
-      {/* 3. OCG LAB SHOWROOM & INVENTIVE ENGINE */}
-      <section id="lab" className="py-24 bg-[#0B1220] border-b border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          
-          <div className="p-8 sm:p-12 rounded-3xl bg-slate-900/90 border border-blue-500/30 shadow-2xl text-center">
-            
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400 mb-4">
-              <Bot size={14} />
-              <span>Proprietary Technology Engine</span>
+      <section className="bg-[#0B1220] px-4 py-20 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-blue-300">Why technology entered the picture</div>
+              <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] sm:text-5xl">We did not start with AI. We started with a bottleneck.</h2>
+              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
+                Limited showing windows and off-market timelines made it difficult to inspect, scope, compare, underwrite, design, coordinate financing, and decide quickly enough. OCG began building the systems it wished it had. The technology exists to organize evidence and accelerate the work—not to replace professional verification or human judgment.
+              </p>
             </div>
-
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight">
-              Powered by technology developed by <span className="text-blue-400">OCG LAB</span>.
-            </h2>
-
-            <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed">
-              OCG LAB is the technology and AI research unit of OCG. We build custom agentic workflows, multi-agent underwriting pipelines, spatial property visualizations, and conversational interfaces tailored to real-world real estate operations.
-            </p>
-
-            <div className="mt-8 grid sm:grid-cols-3 gap-4 text-left max-w-4xl mx-auto">
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">HUNTER System</div>
-                <div className="text-xs text-slate-400">Autonomous public data ingestion, probate scraping, and opportunity signal identification.</div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">VICTOR Engine</div>
-                <div className="text-xs text-slate-400">Quantitative MAO modeling, contractor unit rate scoping, and multi-scenario underwriting.</div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">G Intelligence</div>
-                <div className="text-xs text-slate-400">Context-aware conversational advisory, property retrieval, and Strategy Brief synthesis.</div>
-              </div>
+            <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-7">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-300">Operating principle</div>
+              <blockquote className="mt-4 text-2xl font-black leading-tight tracking-tight sm:text-3xl">Technology does not make the decision. It helps us make a better one.</blockquote>
+              <Link href="/how-ocg-works" className="mt-7 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-300">See how OCG works <ArrowRight size={14} /></Link>
             </div>
-
-            <div className="mt-10 flex justify-center">
-              <Link
-                href="/contact"
-                className="px-8 py-4 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-blue-500 transition-all shadow-xl shadow-blue-950 cursor-pointer"
-              >
-                Schedule an OCG Strategy Session
-              </Link>
-            </div>
-
           </div>
-
         </div>
       </section>
 
-    </div>
+      <section className="px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col justify-between gap-6 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm md:flex-row md:items-center">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Start where you are</div>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">Investor, seller, partner, or simply exploring?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">OCG should make the next conversation clear without forcing everyone through the same funnel.</p>
+          </div>
+          <Link href="/contact" className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-blue-500">Start a conversation <ArrowRight size={14} /></Link>
+        </div>
+      </section>
+    </main>
   );
 }
-
-export default About;
-

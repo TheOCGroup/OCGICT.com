@@ -21,7 +21,10 @@ export type OCGEventType =
   | "PIPER_ADAPTER_INVOKED"
   | "PIPER_LEAD_ENQUEUED"
   | "SELLER_INTAKE_PROCESSING_STARTED"
-  | "SELLER_INTAKE_PROCESSED_SUCCESSFULLY";
+  | "SELLER_INTAKE_PROCESSED_SUCCESSFULLY"
+  | "PUBLIC_CONTACT_SUBMITTED"
+  | "NEWSLETTER_SUBSCRIBED"
+  | "NEWSLETTER_INTEREST_CAPTURED";
 
 export interface IOcgTelemetryEvent {
   eventId: string;
@@ -47,10 +50,9 @@ export class OcgObservability {
 
     this.events.push(event);
     if (this.events.length > 500) {
-      this.events.shift(); // keep bounded memory buffer
+      this.events.shift();
     }
 
-    // Structured stdout log (formatted for cloud logging / Datadog / CloudWatch)
     console.log(`[OCG-TELEMETRY] [${event.eventType}] duration=${durationMs ?? 0}ms meta=${JSON.stringify(event.metadata)}`);
   }
 

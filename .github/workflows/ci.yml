@@ -1,0 +1,42 @@
+name: OCG Website CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, aiden/founder-experience-v2]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm run check
+
+      - name: Seller acquisition regression suite
+        run: pnpm exec tsx server/__tests__/sellerOffer.test.ts
+
+      - name: G gateway regression suite
+        run: pnpm exec tsx server/__tests__/gGateway.test.ts
+
+      - name: Public engagement regression suite
+        run: pnpm exec tsx server/__tests__/publicEngagement.test.ts
+
+      - name: Production build
+        run: pnpm run build
