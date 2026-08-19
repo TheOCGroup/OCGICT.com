@@ -158,7 +158,6 @@ export class GIntelligenceGateway {
     const investorIntent = /invest|flip|brrrr|buy.?and.?hold|capital|portfolio/.test(lower);
     const sellerIntent = /sell|inherited|probate|estate|landlord|property i own/.test(lower);
 
-    // Seller intake belongs in the seller acquisition record, not an invented investor strategy brief.
     if (sellerIntent && !investorIntent) return undefined;
     if (!investorIntent) return undefined;
 
@@ -174,8 +173,9 @@ export class GIntelligenceGateway {
           ? "Fix & Flip"
           : "Exploratory / Unsure";
 
+    const beginnerCue = /first\s+(deal|flip|rental|investment|property)|beginner|new\s+to\s+(investing|real estate|flipping|brrrr)/.test(lower);
     const investorStage: IOCGStrategyBrief["clientContext"]["investorStage"]["value"] =
-      /first deal|beginner|new to/.test(lower) ? "Beginner" : lower.includes("capital") ? "Capital Allocator" : "Active Operator";
+      beginnerCue ? "Beginner" : lower.includes("capital") ? "Capital Allocator" : "Active Operator";
 
     return {
       id: `brief_${Date.now()}`,
