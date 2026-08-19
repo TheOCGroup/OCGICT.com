@@ -17,6 +17,8 @@ import LenderNetwork from "./pages/LenderNetwork";
 import CaseStudies from "./pages/CaseStudies";
 import Contact from "./pages/Contact";
 import SubmitDeal from "./pages/SubmitDeal";
+import OCGLab from "./pages/OCGLab";
+import LabReport from "./pages/LabReport";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminListings from "./pages/admin/AdminListings";
 import AdminListingForm from "./pages/admin/AdminListingForm";
@@ -53,6 +55,8 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/submit-deal" component={SubmitDeal} />
       <Route path="/sell" component={Sell} />
+      <Route path="/ocg-lab" component={OCGLab} />
+      <Route path="/lab-report" component={LabReport} />
 
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin">
