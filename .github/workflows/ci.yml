@@ -29,5 +29,8 @@ jobs:
       - name: TypeScript check
         run: pnpm run check
 
+      - name: Seller acquisition regression suite
+        run: pnpm exec tsx server/__tests__/sellerOffer.test.ts
+
       - name: Production build
         run: pnpm run build
