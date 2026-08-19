@@ -32,7 +32,11 @@ async function run() {
     message: "I have $120,000 and I am not sure whether to flip or build a rental portfolio.",
   });
   assert.equal(mixed.strategyBrief?.clientContext.availableLiquidityTier.value, "$100k-$250k");
-  assert.equal(mixed.strategyBrief?.strategyExploration.primaryFit.value, "Fix & Flip");
+  assert.equal(
+    mixed.strategyBrief?.strategyExploration.primaryFit.value,
+    "Exploratory / Unsure",
+    "G must preserve explicit ambiguity instead of inventing a preferred strategy"
+  );
 
   console.log("G gateway regression suite passed");
 }
