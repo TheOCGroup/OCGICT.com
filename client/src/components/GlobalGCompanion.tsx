@@ -98,6 +98,7 @@ export function GlobalGCompanion() {
   if (!context) return null;
 
   async function askG(question: string) {
+    if (!context) return;
     const trimmed = question.trim();
     if (!trimmed || thinking) return;
 
