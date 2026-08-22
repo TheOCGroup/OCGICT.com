@@ -23,91 +23,105 @@ export interface WichitaPublicPropertyRecord {
   yearBuilt: number;
   livingAreaSqft: number;
   provenance: {
-    source: "Sedgwick County Property Tax & Appraisal (MAB) / GIS";
+    source: string;
     retrievalTimestamp: string;
     certainty: DataCertaintyLevel;
   };
 }
 
+function getDataMode(): "production" | "development" | "demo" {
+  const configured = (process.env.OCGICT_DATA_MODE || "").toLowerCase();
+  if (configured === "demo") return "demo";
+  if (configured === "development") return "development";
+  return "production";
+}
+
 /**
- * Wichita & Sedgwick County Property Data Service
- * Retrieves public property records, zoning classifications, and tax appraisal data.
+ * Wichita & Sedgwick County Property Data Service.
+ *
+ * Production rule: this service MUST NOT silently substitute demo parcel records
+ * for an unavailable live provider. Until the real Sedgwick County provider is
+ * connected, production lookups return null and the seller workflow must route
+ * to manual review.
  */
 export class WichitaPropertyService {
-  /**
-   * Look up public property records for Wichita addresses
-   */
   public static async lookupPublicRecord(query: PropertyLookupQuery): Promise<WichitaPublicPropertyRecord | null> {
-    const startTime = Date.now();
     const cleanAddr = query.address.trim().toUpperCase();
+    const mode = getDataMode();
+
+    if (!cleanAddr) return null;
 
     OcgObservability.log("RETRIEVAL_SOURCE_ACCESSED", {
-      source: "Sedgwick County MAB / GIS",
+      source: mode === "production" ? "Sedgwick County live provider" : "OCGICT demo property dataset",
       query: cleanAddr,
+      mode,
     });
 
-    // In local staging environment, provide verified public records for canonical Wichita corridors
-    // In production environment, this connects to the Sedgwick County GIS & Tax API proxy.
-    const mockDb: Record<string, Partial<WichitaPublicPropertyRecord>> = {
+    // HARD PRODUCTION GATE.
+    // A live Sedgwick County adapter will replace this return when connected.
+    if (mode === "production") {
+      OcgObservability.log("PROPERTY_PROVIDER_NOT_CONNECTED", {
+        query: cleanAddr,
+        behavior: "MANUAL_REVIEW_REQUIRED",
+      });
+      return null;
+    }
+
+    // Development/demo-only representative data. Never exposed as verified live data.
+    const demoDb: Record<string, Partial<WichitaPublicPropertyRecord>> = {
       "248 S RUTAN": {
-        parcelId: "00142857",
+        parcelId: "DEMO-00142857",
         situsAddress: "248 S RUTAN AVE, WICHITA, KS 67218",
-        taxDistrict: "0101 WICHITA CITY",
+        taxDistrict: "DEMO WICHITA",
         appraisedLandValue: 28500,
         appraisedBuildingValue: 124200,
         totalAppraisedValue: 152700,
         priorYearTaxes: 2184.50,
         taxStatus: "Current",
         zoningCode: "SF-5",
-        zoningDescription: "Single-Family Residential (5,000 sq ft min)",
+        zoningDescription: "Single-Family Residential (Demo)",
         floodPlainStatus: "Zone X (Low Risk)",
-        legalDescription: "LOTS 14-16 INC BLOCK 4 COLLEGE HILL 2ND ADD.",
+        legalDescription: "DEMO RECORD — NOT FOR PRODUCTION UNDERWRITING",
         yearBuilt: 1932,
         livingAreaSqft: 1640,
       },
       "1421 N GLENDALE": {
-        parcelId: "00198421",
+        parcelId: "DEMO-00198421",
         situsAddress: "1421 N GLENDALE AVE, WICHITA, KS 67208",
-        taxDistrict: "0101 WICHITA CITY",
+        taxDistrict: "DEMO WICHITA",
         appraisedLandValue: 34000,
         appraisedBuildingValue: 148500,
         totalAppraisedValue: 182500,
         priorYearTaxes: 2610.20,
         taxStatus: "Current",
         zoningCode: "SF-5",
-        zoningDescription: "Single-Family Residential",
+        zoningDescription: "Single-Family Residential (Demo)",
         floodPlainStatus: "Zone X (Low Risk)",
-        legalDescription: "LOT 8 BLOCK 2 CROWN HEIGHTS ADD.",
+        legalDescription: "DEMO RECORD — NOT FOR PRODUCTION UNDERWRITING",
         yearBuilt: 1965,
         livingAreaSqft: 1820,
       },
       "814 N DELANO": {
-        parcelId: "00244109",
+        parcelId: "DEMO-00244109",
         situsAddress: "814 N DELANO ST, WICHITA, KS 67203",
-        taxDistrict: "0101 WICHITA CITY",
+        taxDistrict: "DEMO WICHITA",
         appraisedLandValue: 16500,
         appraisedBuildingValue: 74200,
         totalAppraisedValue: 90700,
         priorYearTaxes: 1298.40,
         taxStatus: "Current",
         zoningCode: "TF-3",
-        zoningDescription: "Two-Family Residential / Multi-Option",
+        zoningDescription: "Two-Family Residential / Multi-Option (Demo)",
         floodPlainStatus: "Zone X (Low Risk)",
-        legalDescription: "LOTS 3-5 BLOCK 8 DELANO ADD.",
+        legalDescription: "DEMO RECORD — NOT FOR PRODUCTION UNDERWRITING",
         yearBuilt: 1922,
         livingAreaSqft: 1280,
       },
     };
 
-    if (!cleanAddr) {
-      return null;
-    }
-
-    const matchedEntry = Object.entries(mockDb).find(([key]) => cleanAddr.includes(key));
+    const matchedEntry = Object.entries(demoDb).find(([key]) => cleanAddr.includes(key));
     if (!matchedEntry) {
-      // Per OCG No-Pretending rule: do not synthesize fake parcel records.
-      // Return null so confidence gate properly marks HUMAN_REVIEW_REQUIRED.
-      OcgObservability.log("RETRIEVAL_UNMATCHED_HONEST_FAILURE", { query: cleanAddr });
+      OcgObservability.log("RETRIEVAL_UNMATCHED_HONEST_FAILURE", { query: cleanAddr, mode });
       return null;
     }
 
@@ -129,16 +143,13 @@ export class WichitaPropertyService {
       yearBuilt: record.yearBuilt!,
       livingAreaSqft: record.livingAreaSqft!,
       provenance: {
-        source: "Sedgwick County Property Tax & Appraisal (MAB) / GIS",
+        source: "OCGICT DEMO DATASET — NOT LIVE SEDGWICK COUNTY DATA",
         retrievalTimestamp: now,
-        certainty: "KNOWN",
+        certainty: "PROVISIONAL",
       },
     };
   }
 
-  /**
-   * Convert public property record to canonical IPropertyIntelligenceRecord for VICTOR
-   */
   public static toPropertyIntelligenceRecord(pub: WichitaPublicPropertyRecord): IPropertyIntelligenceRecord {
     const now = pub.provenance.retrievalTimestamp;
     const estArv = Math.round(pub.livingAreaSqft * 145);
@@ -151,88 +162,22 @@ export class WichitaPropertyService {
       city: "Wichita",
       state: "KS",
       zip: pub.situsAddress.match(/\b\d{5}\b/)?.[0] || "67208",
-      sedgwickCountyParcelId: {
-        value: pub.parcelId,
-        certainty: "KNOWN",
-        source: "Sedgwick County Appraisal MAB",
-        retrievalTimestamp: now,
-      },
-      legalDescription: {
-        value: pub.legalDescription,
-        certainty: "KNOWN",
-        source: "Sedgwick County Deed Register",
-        retrievalTimestamp: now,
-      },
-      propertyType: {
-        value: pub.yearBuilt < 1945 ? "Single Family Craftsman" : "Mid-Century Ranch",
-        certainty: "ESTIMATED",
-        source: "Year Built Classification Heuristic",
-        retrievalTimestamp: now,
-      },
-      sqft: {
-        value: pub.livingAreaSqft,
-        certainty: "KNOWN",
-        source: "Sedgwick County Public Record",
-        retrievalTimestamp: now,
-      },
-      yearBuilt: {
-        value: pub.yearBuilt,
-        certainty: "KNOWN",
-        source: "Sedgwick County Public Record",
-        retrievalTimestamp: now,
-      },
-      bedrooms: {
-        value: pub.livingAreaSqft > 1600 ? 3 : 2,
-        certainty: "PROVISIONAL",
-        source: "Architectural Archetype Modeling",
-        retrievalTimestamp: now,
-      },
-      bathrooms: {
-        value: pub.livingAreaSqft > 1500 ? 2 : 1,
-        certainty: "PROVISIONAL",
-        source: "Architectural Archetype Modeling",
-        retrievalTimestamp: now,
-      },
-      arvRetailEstimate: {
-        value: estArv,
-        certainty: "ESTIMATED",
-        source: "VICTOR Preliminary Comp Clustering Heuristic",
-        retrievalTimestamp: now,
-        confidenceScore: 0.82,
-      },
-      rehabScopeEstimate: {
-        value: estRehab,
-        certainty: "ESTIMATED",
-        source: "Wichita $/sqft Unit Rate Table",
-        retrievalTimestamp: now,
-      },
-      maximumAllowableOffer: {
-        value: mao,
-        certainty: "ESTIMATED",
-        source: "70% Rule Underwriting: (ARV * 0.70) - Rehab",
-        retrievalTimestamp: now,
-      },
-      projectedMonthlyRent: {
-        value: Math.round(estArv * 0.008),
-        certainty: "ESTIMATED",
-        source: "Wichita Submarket Rent Matrix",
-        retrievalTimestamp: now,
-      },
+      sedgwickCountyParcelId: { value: pub.parcelId, certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
+      legalDescription: { value: pub.legalDescription, certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
+      propertyType: { value: pub.yearBuilt < 1945 ? "Single Family Craftsman" : "Mid-Century Ranch", certainty: "ESTIMATED", source: "Year Built Classification Heuristic", retrievalTimestamp: now },
+      sqft: { value: pub.livingAreaSqft, certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
+      yearBuilt: { value: pub.yearBuilt, certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
+      bedrooms: { value: pub.livingAreaSqft > 1600 ? 3 : 2, certainty: "PROVISIONAL", source: "Architectural Archetype Modeling", retrievalTimestamp: now },
+      bathrooms: { value: pub.livingAreaSqft > 1500 ? 2 : 1, certainty: "PROVISIONAL", source: "Architectural Archetype Modeling", retrievalTimestamp: now },
+      arvRetailEstimate: { value: estArv, certainty: "ESTIMATED", source: "DEMO/HEURISTIC — HUMAN VERIFICATION REQUIRED", retrievalTimestamp: now, confidenceScore: 0.5 },
+      rehabScopeEstimate: { value: estRehab, certainty: "ESTIMATED", source: "Wichita Unit Rate Heuristic", retrievalTimestamp: now },
+      maximumAllowableOffer: { value: mao, certainty: "ESTIMATED", source: "70% Rule Heuristic — NOT SELLER-FACING IN PRODUCTION", retrievalTimestamp: now },
+      projectedMonthlyRent: { value: Math.round(estArv * 0.008), certainty: "ESTIMATED", source: "Wichita Rent Heuristic", retrievalTimestamp: now },
       foundationInspectionStatus: "PROFESSIONAL_VERIFICATION_REQ",
       roofAgeAndCondition: "PROFESSIONAL_VERIFICATION_REQ",
       mepSystemsCondition: "PROFESSIONAL_VERIFICATION_REQ",
-      floodPlainZone: {
-        value: pub.floodPlainStatus,
-        certainty: "KNOWN",
-        source: "FEMA / Sedgwick County GIS",
-        retrievalTimestamp: now,
-      },
-      taxDelinquencyStatus: {
-        value: pub.taxStatus === "Delinquent" ? "Delinquent" : "Current",
-        certainty: "KNOWN",
-        source: "Sedgwick County Treasurer",
-        retrievalTimestamp: now,
-      },
+      floodPlainZone: { value: pub.floodPlainStatus, certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
+      taxDelinquencyStatus: { value: pub.taxStatus === "Delinquent" ? "Delinquent" : "Current", certainty: pub.provenance.certainty, source: pub.provenance.source, retrievalTimestamp: now },
     };
   }
 }
