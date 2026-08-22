@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { PersistentG } from "./components/PersistentG";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
 import Home from "./pages/Home";
@@ -14,21 +15,19 @@ import LenderNetwork from "./pages/LenderNetwork";
 import CaseStudies from "./pages/CaseStudies";
 import Contact from "./pages/Contact";
 import SubmitDeal from "./pages/SubmitDeal";
+import { Sell } from "./pages/Sell";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminListings from "./pages/admin/AdminListings";
 import AdminListingForm from "./pages/admin/AdminListingForm";
 import AdminSubmissions from "./pages/admin/AdminSubmissions";
 import { useEffect } from "react";
 
-// Protected route — redirects to /admin/login if not authenticated
 function AdminGuard({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated } = useAdminAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate("/admin/login");
-    }
+    if (!isAuthenticated) navigate("/admin/login");
   }, [isAuthenticated, navigate]);
 
   if (!isAuthenticated) return null;
@@ -38,7 +37,6 @@ function AdminGuard({ component: Component }: { component: React.ComponentType }
 function Router() {
   return (
     <Switch>
-      {/* Public routes */}
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/services" component={Services} />
@@ -51,24 +49,14 @@ function Router() {
       <Route path="/case-studies" component={CaseStudies} />
       <Route path="/contact" component={Contact} />
       <Route path="/submit-deal" component={SubmitDeal} />
-      <Route path="/sell" component={SubmitDeal} />
+      <Route path="/sell" component={Sell} />
 
-      {/* Admin routes */}
       <Route path="/admin/login" component={AdminLogin} />
-      <Route path="/admin">
-        {() => <AdminGuard component={AdminListings} />}
-      </Route>
-      <Route path="/admin/listings/new">
-        {() => <AdminGuard component={AdminListingForm} />}
-      </Route>
-      <Route path="/admin/listings/:id/edit">
-        {() => <AdminGuard component={AdminListingForm} />}
-      </Route>
-      <Route path="/admin/submissions">
-        {() => <AdminGuard component={AdminSubmissions} />}
-      </Route>
+      <Route path="/admin">{() => <AdminGuard component={AdminListings} />}</Route>
+      <Route path="/admin/listings/new">{() => <AdminGuard component={AdminListingForm} />}</Route>
+      <Route path="/admin/listings/:id/edit">{() => <AdminGuard component={AdminListingForm} />}</Route>
+      <Route path="/admin/submissions">{() => <AdminGuard component={AdminSubmissions} />}</Route>
 
-      {/* Fallback */}
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -83,6 +71,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <Router />
+            <PersistentG />
           </TooltipProvider>
         </AdminAuthProvider>
       </ThemeProvider>
