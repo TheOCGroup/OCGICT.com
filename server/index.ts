@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { GIntelligenceGateway } from "./services/gIntelligenceGateway";
 import { getActiveStreamingModelProvider } from "./services/streamingModelProvider";
 import { HunterAdapter, VictorAdapter } from "./services/systemAdapters";
-import { PiperQueueAdapter } from "./services/piperAdapter";
+import { PiperQueueAdapter, SellerActionType } from "./services/piperAdapter";
 import { WichitaPropertyService } from "./services/wichitaPropertyService";
 import { SellerUnderwritingService } from "./services/sellerUnderwritingService";
 import { OcgObservability } from "./services/observability";
@@ -13,13 +13,19 @@ import { OcgObservability } from "./services/observability";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const allowedSellerActions: SellerActionType[] = [
+  "ACCEPT_PRELIMINARY_OFFER",
+  "COUNTEROFFER",
+  "REQUEST_CALL",
+  "REQUEST_WALKTHROUGH",
+];
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
 
-  // Security Headers & CORS
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
@@ -28,7 +34,6 @@ async function startServer() {
     next();
   });
 
-  // ── 1. G Intelligence Gateway Endpoints ─────────────────────────
   app.post("/api/g/chat", async (req, res) => {
     try {
       const response = await GIntelligenceGateway.processMessage(req.body);
@@ -38,23 +43,18 @@ async function startServer() {
     }
   });
 
-  // Streaming SSE Endpoint for G Dialogue
   app.post("/api/g/stream", async (req, res) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-
     try {
       const provider = getActiveStreamingModelProvider();
       const messages = [
         { role: "system" as const, content: "You are G — OCG Investment Intelligence." },
         { role: "user" as const, content: req.body.message || "" },
       ];
-
       const stream = await provider.generateStream({ messages });
-      for await (const chunk of stream) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      }
+      for await (const chunk of stream) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
       res.end();
     } catch (err: any) {
       res.write(`data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`);
@@ -62,13 +62,10 @@ async function startServer() {
     }
   });
 
-  // ── 2. Wichita Public Property Intelligence Endpoints ───────────
   app.get("/api/property/lookup", async (req, res) => {
     try {
       const address = (req.query.address as string) || "";
-      if (!address) {
-        return res.status(400).json({ error: "Missing required query parameter: address" });
-      }
+      if (!address) return res.status(400).json({ error: "Missing required query parameter: address" });
       const record = await WichitaPropertyService.lookupPublicRecord({ address });
       res.json({ record });
     } catch (err: any) {
@@ -79,23 +76,17 @@ async function startServer() {
   app.post("/api/property/victor-payload", async (req, res) => {
     try {
       const { publicRecord } = req.body;
-      if (!publicRecord) {
-        return res.status(400).json({ error: "Missing required body: publicRecord" });
-      }
-      const victorRecord = WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord);
-      res.json({ victorRecord });
+      if (!publicRecord) return res.status(400).json({ error: "Missing required body: publicRecord" });
+      res.json({ victorRecord: WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord) });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // ── 2b. Seller Acquisition & Preliminary Offer Pipeline ───────────
   app.post("/api/seller/property-lookup", async (req, res) => {
     try {
-      const { address } = req.body;
-      if (!address) {
-        return res.status(400).json({ error: "Missing address" });
-      }
+      const address = String(req.body?.address || "").trim();
+      if (!address) return res.status(400).json({ error: "Missing address" });
       const publicRecord = await WichitaPropertyService.lookupPublicRecord({ address });
       res.json({ address, publicRecord, found: !!publicRecord });
     } catch (err: any) {
@@ -106,9 +97,8 @@ async function startServer() {
   app.post("/api/seller/preliminary-offer", async (req, res) => {
     try {
       const payload = req.body;
-      if (!payload || !payload.address) {
-        return res.status(400).json({ error: "Missing required seller intake payload: address" });
-      }
+      if (!payload?.address) return res.status(400).json({ error: "Missing required seller intake payload: address" });
+      if (!payload?.fullName || !payload?.email || !payload?.phone) return res.status(400).json({ error: "Name, email, and phone are required" });
       const offerResult = await SellerUnderwritingService.processSellerIntake(payload);
       res.json(offerResult);
     } catch (err: any) {
@@ -116,71 +106,75 @@ async function startServer() {
     }
   });
 
-  // ── 3. HUNTER / VICTOR / PIPER Adapter Endpoints ────────────────
-  app.post("/api/adapters/hunter", async (req, res) => {
+  app.post("/api/seller/action", async (req, res) => {
     try {
-      const response = await HunterAdapter.querySignals(req.body);
-      res.json(response);
+      const offerId = String(req.body?.offerId || "").trim();
+      const action = req.body?.action as SellerActionType;
+      if (!offerId) return res.status(400).json({ error: "Missing offerId" });
+      if (!allowedSellerActions.includes(action)) return res.status(400).json({ error: "Invalid seller action" });
+
+      const counterAmount = req.body?.counterAmount == null ? undefined : Number(req.body.counterAmount);
+      if (action === "COUNTEROFFER" && (!Number.isFinite(counterAmount) || Number(counterAmount) <= 0)) {
+        return res.status(400).json({ error: "A valid counteroffer amount is required" });
+      }
+
+      const record = await PiperQueueAdapter.recordSellerAction({
+        offerId,
+        action,
+        counterAmount,
+        preferredWindow: req.body?.preferredWindow ? String(req.body.preferredWindow) : undefined,
+        notes: req.body?.notes ? String(req.body.notes).slice(0, 1000) : undefined,
+      });
+      res.status(201).json({
+        ok: true,
+        record,
+        message: action === "ACCEPT_PRELIMINARY_OFFER"
+          ? "Your preliminary acceptance was recorded. It remains subject to walkthrough, verification, title review, and a separate written purchase agreement."
+          : "Your request was recorded for OCG review.",
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  app.post("/api/adapters/hunter", async (req, res) => {
+    try { res.json(await HunterAdapter.querySignals(req.body)); }
+    catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
   app.post("/api/adapters/victor", async (req, res) => {
-    try {
-      const response = await VictorAdapter.underwriteDeal(req.body);
-      res.json(response);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    try { res.json(await VictorAdapter.underwriteDeal(req.body)); }
+    catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
   app.post("/api/adapters/piper", async (req, res) => {
-    try {
-      const response = await PiperQueueAdapter.enqueueStrategyBrief(req.body);
-      res.json(response);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
+    try { res.json(await PiperQueueAdapter.enqueueStrategyBrief(req.body)); }
+    catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
-  app.get("/api/adapters/piper/outbox", (_req, res) => {
-    res.json({ outbox: PiperQueueAdapter.getPendingOutbox() });
-  });
-
-  app.get("/api/operations/work-items", (_req, res) => {
-    res.json({ workItems: PiperQueueAdapter.getWorkItems() });
-  });
-
-  // ── 4. Observability & Health ───────────────────────────────────
-  app.get("/api/telemetry/events", (_req, res) => {
-    res.json({ events: OcgObservability.getRecentEvents() });
-  });
+  app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
+  app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
+  app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
 
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "healthy",
       service: "OCG Production Intelligence Gateway",
-      version: "5.0.0",
+      version: "5.1.0",
+      dataMode: process.env.OCGICT_DATA_MODE || "production",
       canonicalRepo: "TheOCGroup/OCGICT.com",
       timestamp: new Date().toISOString(),
     });
   });
 
-  // ── 5. Static Assets & Client-Side Routing ──────────────────────
-  const staticPath =
-    process.env.NODE_ENV === "production"
-      ? path.resolve(__dirname, "public")
-      : path.resolve(__dirname, "..", "dist", "public");
+  const staticPath = process.env.NODE_ENV === "production"
+    ? path.resolve(__dirname, "public")
+    : path.resolve(__dirname, "..", "dist", "public");
 
   app.use(express.static(staticPath));
-
-  app.get("*", (_req, res) => {
-    res.sendFile(path.join(staticPath, "index.html"));
-  });
+  app.get("*", (_req, res) => res.sendFile(path.join(staticPath, "index.html")));
 
   const port = process.env.PORT || 3000;
-
   server.listen(port, () => {
     console.log(`[OCG SERVER] Production Gateway running on http://localhost:${port}/`);
     OcgObservability.log("G_SESSION_STARTED", { serverPort: port, status: "online" });
