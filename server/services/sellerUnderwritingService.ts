@@ -1,26 +1,30 @@
-import { 
-  ISellerIntakePayload, 
-  ISellerOfferResult, 
-  IOfferConfidenceGate, 
+import {
+  ISellerIntakePayload,
+  ISellerOfferResult,
+  IOfferConfidenceGate,
   IComparableSale,
-  DataCertaintyLevel 
+  DataCertaintyLevel,
 } from "../../shared/contracts";
 import { WichitaPropertyService, WichitaPublicPropertyRecord } from "./wichitaPropertyService";
 import { PiperOutboxService } from "./piperAdapter";
 import { OcgObservability } from "./observability";
 
+function getDataMode(): "production" | "development" | "demo" {
+  const configured = (process.env.OCGICT_DATA_MODE || "").toLowerCase();
+  if (configured === "demo") return "demo";
+  if (configured === "development") return "development";
+  return "production";
+}
+
 export class SellerUnderwritingService {
-  
-  /**
-   * Process Seller Acquisition Intake and generate a guarded preliminary offer result.
-   */
   public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
+    const dataMode = getDataMode();
     const cleanAddress = (payload.address || "").trim();
-    const sellerSituation = payload.sellerSituation || payload.situation || "Direct Sale / Exploring Options";
-    const propertyCondition = payload.propertyCondition || payload.conditionLevel || "Standard Updates";
-    const desiredTimeline = payload.desiredTimeline || payload.timeline || "30-60 Days";
-    const primaryPriority = payload.primaryPriority || payload.priority || "Fair Value";
+    const sellerSituation = payload.sellerSituation || payload.situation || "Exploring Options";
+    const propertyCondition = payload.propertyCondition || payload.conditionLevel || "Dated / Needs Updates";
+    const desiredTimeline = payload.desiredTimeline || payload.timeline || "Flexible";
+    const primaryPriority = payload.primaryPriority || payload.priority || "No Repairs / As-Is";
     const fullName = payload.fullName || payload.sellerName || "Direct Property Owner";
     const email = payload.email || payload.sellerEmail || "";
     const phone = payload.phone || payload.sellerPhone || "";
@@ -29,79 +33,77 @@ export class SellerUnderwritingService {
       address: cleanAddress,
       condition: propertyCondition,
       situation: sellerSituation,
+      dataMode,
     });
 
-    // 1. Parallel Property Records & Comps Lookup
     const [publicRecord, comps] = await Promise.all([
       WichitaPropertyService.lookupPublicRecord({ address: cleanAddress }),
-      this.fetchComparableSales(cleanAddress)
+      this.fetchComparableSales(cleanAddress, dataMode),
     ]);
 
-    // Determine Property Identity & Core Metrics
-    const livingAreaSqft = publicRecord?.livingAreaSqft || this.estimateSqftFromType(propertyCondition);
-    const yearBuilt = publicRecord?.yearBuilt || 1955;
-    const propertyType = publicRecord?.zoningDescription || "Single Family Residential";
-    const totalAppraised = publicRecord?.totalAppraisedValue || 135000;
+    // Never invent missing property facts in production. Zero values are used only
+    // as neutral placeholders in the response contract when the record is unavailable.
+    const livingAreaSqft = publicRecord?.livingAreaSqft ?? 0;
+    const yearBuilt = publicRecord?.yearBuilt ?? 0;
+    const propertyType = publicRecord?.zoningDescription || "Property details pending verification";
+    const totalAppraised = publicRecord?.totalAppraisedValue ?? 0;
     const parcelId = publicRecord?.parcelId;
 
-    // 2. Deterministic ARV Estimation from Comps / County Baseline
-    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(comps, publicRecord, livingAreaSqft);
+    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(comps, livingAreaSqft);
 
-    // 3. Deterministic Unit-Rate Rehab Budget Estimation
-    const { estimatedRehabBudget, rehabBreakdown, repairConfidence, structuralRiskDetected } = 
-      this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt);
+    const rehab = livingAreaSqft > 0
+      ? this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt)
+      : this.emptyRehabResult();
 
-    // 4. Deterministic Internal Underwriting (MAO = ARV * 0.70 - Rehab)
     const acquisitionMultiplier = 0.70;
-    const grossArvCap = Math.round(estimatedArv * acquisitionMultiplier);
-    const internalMaoCeiling = Math.max(0, grossArvCap - estimatedRehabBudget);
+    const grossArvCap = estimatedArv > 0 ? Math.round(estimatedArv * acquisitionMultiplier) : 0;
+    const internalMaoCeiling = estimatedArv > 0
+      ? Math.max(0, grossArvCap - rehab.estimatedRehabBudget)
+      : 0;
 
-    // 5. Confidence Gating & Threshold Evaluation
-    const probateOrLegalFlag = sellerSituation.toLowerCase().includes("probate") || sellerSituation.toLowerCase().includes("inherited") || sellerSituation.toLowerCase().includes("estate");
-    const propertyMatchConfidence = publicRecord ? 0.95 : 0.60;
-    const compQualityScore = comps.length >= 3 ? 0.88 : comps.length > 0 ? 0.65 : 0.30;
-    
+    const probateOrLegalFlag = ["probate", "inherited", "estate"].some((term) => sellerSituation.toLowerCase().includes(term));
+    const propertyMatchConfidence = publicRecord ? (dataMode === "production" ? 0.95 : 0.65) : 0;
+    const compQualityScore = comps.length >= 3 ? (dataMode === "production" ? 0.88 : 0.60) : comps.length > 0 ? 0.45 : 0;
+
     const confidenceGate = this.evaluateConfidenceGate({
       propertyMatchConfidence,
       compQualityScore,
       arvConfidence,
-      repairEstimateConfidence: repairConfidence,
-      dataFreshnessDays: 45,
+      repairEstimateConfidence: rehab.repairConfidence,
+      dataFreshnessDays: dataMode === "production" && comps.length > 0 ? 45 : 9999,
       ownershipConsistency: !probateOrLegalFlag,
-      structuralRiskDetected,
+      structuralRiskDetected: rehab.structuralRiskDetected,
       probateOrLegalFlag,
-      hasPublicRecord: !!publicRecord
+      hasPublicRecord: !!publicRecord,
+      liveCompsAvailable: dataMode === "production" && comps.length >= 3,
+      productionMode: dataMode === "production",
     });
 
-    // 6. Controlled Seller Offer Decision Layer (MAO is ceiling, NOT raw offer)
     const sellerOfferPresentation = this.buildOfferPresentation({
       confidenceGate,
       internalMaoCeiling,
       estimatedArv,
-      estimatedRehabBudget,
-      structuralRiskDetected,
-      probateOrLegalFlag,
-      cleanAddress
+      estimatedRehabBudget: rehab.estimatedRehabBudget,
     });
 
-    // 7. Data Certainty & Provenance Annotation
-    const certaintyLevel: DataCertaintyLevel = 
-      confidenceGate.tier === "HIGH_CONFIDENCE" ? "ESTIMATED" :
-      confidenceGate.tier === "MEDIUM_CONFIDENCE" ? "PROVISIONAL" :
-      "PROFESSIONAL_VERIFICATION_REQ";
+    const certaintyLevel: DataCertaintyLevel =
+      confidenceGate.tier === "HIGH_CONFIDENCE"
+        ? "ESTIMATED"
+        : confidenceGate.tier === "MEDIUM_CONFIDENCE"
+          ? "PROVISIONAL"
+          : "PROFESSIONAL_VERIFICATION_REQ";
 
-    // 8. Enqueue Lead to PIPER Outbox
     const trackingId = `SELLER_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     await PiperOutboxService.enqueueLead({
       briefId: trackingId,
-      fullName: fullName,
-      email: email,
-      phone: phone,
+      fullName,
+      email,
+      phone,
       address: cleanAddress,
       targetStrategy: "Direct Sale / Liquidation",
       liquidityTier: "Equity / Real Estate Only",
       timeline: desiredTimeline,
-      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Notes: ${payload.sellerNotes || 'None'}.`
+      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Notes: ${payload.sellerNotes || "None"}.`,
     });
 
     const result: ISellerOfferResult = {
@@ -111,26 +113,26 @@ export class SellerUnderwritingService {
         address: cleanAddress,
         city: payload.city || "Wichita",
         state: payload.state || "KS",
-        zip: payload.zip || "67218",
+        zip: payload.zip || "",
         parcelId,
         livingAreaSqft,
         yearBuilt,
         propertyType,
-        taxDistrict: publicRecord?.taxDistrict || "0101 WICHITA CITY",
-        totalAppraisedValue: totalAppraised
+        taxDistrict: publicRecord?.taxDistrict || "Pending verification",
+        totalAppraisedValue: totalAppraised,
       },
       provenance: {
-        recordsSource: publicRecord ? "Sedgwick County GIS / Appraiser Records" : "Seller Self-Reported (Unverified)",
+        recordsSource: publicRecord?.provenance.source || "Live property provider unavailable — manual review required",
         retrievalTimestamp: new Date().toISOString(),
-        certaintyLevel
+        certaintyLevel,
       },
       internalUnderwriting: {
         estimatedArv,
         acquisitionMultiplier,
         grossArvCap,
-        estimatedRehabBudget,
-        rehabBreakdown,
-        internalMaoCeiling
+        estimatedRehabBudget: rehab.estimatedRehabBudget,
+        rehabBreakdown: rehab.rehabBreakdown,
+        internalMaoCeiling,
       },
       sellerOfferPresentation,
       confidenceGate,
@@ -139,226 +141,128 @@ export class SellerUnderwritingService {
         outboxTrackingId: trackingId,
         status: "READY_FOR_PIPER",
         assignedStage: "1. Intake & Preliminary Triage",
-        leadCategory: "SELLER_ACQUISITION_DIRECT"
-      }
+        leadCategory: "SELLER_ACQUISITION_DIRECT",
+      },
     };
 
     OcgObservability.log("SELLER_INTAKE_PROCESSED_SUCCESSFULLY", {
       trackingId,
       status: sellerOfferPresentation.status,
       confidenceScore: confidenceGate.overallConfidenceScore,
-      durationMs: Date.now() - startTime
+      dataMode,
+      durationMs: Date.now() - startTime,
     });
 
     return result;
   }
 
   /**
-   * Fetch comparable sales for Wichita neighborhoods
+   * LIVE COMPARABLE PROVIDER PLACEHOLDER.
+   * Production returns no comps until the approved Wichita/Sedgwick provider is connected.
+   * Demo examples are allowed only outside production and are explicitly labeled DEMO.
    */
-  private static async fetchComparableSales(address: string): Promise<IComparableSale[]> {
+  private static async fetchComparableSales(address: string, dataMode: "production" | "development" | "demo"): Promise<IComparableSale[]> {
+    if (dataMode === "production") {
+      OcgObservability.log("COMPARABLE_PROVIDER_NOT_CONNECTED", {
+        address,
+        behavior: "MANUAL_REVIEW_REQUIRED",
+      });
+      return [];
+    }
+
     const upper = address.toUpperCase();
+    const demo = (id: string, compAddress: string, distanceMiles: number, salePrice: number, saleDate: string, sqft: number, yearBuilt: number, similarityScore: number): IComparableSale => ({
+      id: `DEMO-${id}`,
+      address: compAddress,
+      distanceMiles,
+      salePrice,
+      saleDate,
+      sqft,
+      pricePerSqft: Number((salePrice / sqft).toFixed(2)),
+      yearBuilt,
+      similarityScore,
+      source: "OCGICT DEMO COMPARABLE — NOT LIVE MLS/DEED DATA",
+    });
 
-    if (upper.includes("RUTAN") || upper.includes("COLLEGE HILL") || upper.includes("67218")) {
+    if (upper.includes("RUTAN") || upper.includes("COLLEGE HILL")) {
       return [
-        {
-          id: "comp_1",
-          address: "214 S Rutan Ave, Wichita, KS",
-          distanceMiles: 0.1,
-          salePrice: 242000,
-          saleDate: "2026-06-14",
-          sqft: 1680,
-          pricePerSqft: 144.05,
-          yearBuilt: 1934,
-          similarityScore: 0.94,
-          source: "Sedgwick County Recorded Deed Comps"
-        },
-        {
-          id: "comp_2",
-          address: "310 S Clifton Ave, Wichita, KS",
-          distanceMiles: 0.25,
-          salePrice: 238500,
-          saleDate: "2026-05-22",
-          sqft: 1590,
-          pricePerSqft: 150.00,
-          yearBuilt: 1930,
-          similarityScore: 0.91,
-          source: "Sedgwick County Recorded Deed Comps"
-        },
-        {
-          id: "comp_3",
-          address: "255 S Holyoke Ave, Wichita, KS",
-          distanceMiles: 0.35,
-          salePrice: 249000,
-          saleDate: "2026-07-02",
-          sqft: 1720,
-          pricePerSqft: 144.77,
-          yearBuilt: 1938,
-          similarityScore: 0.88,
-          source: "Sedgwick County Recorded Deed Comps"
-        }
+        demo("1", "Demo College Hill Comp A", 0.1, 242000, "2026-06-14", 1680, 1934, 0.94),
+        demo("2", "Demo College Hill Comp B", 0.25, 238500, "2026-05-22", 1590, 1930, 0.91),
+        demo("3", "Demo College Hill Comp C", 0.35, 249000, "2026-07-02", 1720, 1938, 0.88),
       ];
     }
 
-    if (upper.includes("GLENDALE") || upper.includes("CROWN HEIGHTS") || upper.includes("67208")) {
-      return [
-        {
-          id: "comp_4",
-          address: "1350 N Glendale Ave, Wichita, KS",
-          distanceMiles: 0.12,
-          salePrice: 268000,
-          saleDate: "2026-04-18",
-          sqft: 1850,
-          pricePerSqft: 144.86,
-          yearBuilt: 1962,
-          similarityScore: 0.92,
-          source: "Sedgwick County Recorded Deed Comps"
-        },
-        {
-          id: "comp_5",
-          address: "1405 N Edgemoor St, Wichita, KS",
-          distanceMiles: 0.3,
-          salePrice: 262000,
-          saleDate: "2026-06-29",
-          sqft: 1790,
-          pricePerSqft: 146.37,
-          yearBuilt: 1960,
-          similarityScore: 0.89,
-          source: "Sedgwick County Recorded Deed Comps"
-        }
-      ];
-    }
-
-    if (upper.includes("DELANO") || upper.includes("67203")) {
-      return [
-        {
-          id: "comp_6",
-          address: "740 N Delano St, Wichita, KS",
-          distanceMiles: 0.15,
-          salePrice: 192000,
-          saleDate: "2026-05-11",
-          sqft: 1250,
-          pricePerSqft: 153.60,
-          yearBuilt: 1925,
-          similarityScore: 0.93,
-          source: "Sedgwick County Recorded Deed Comps"
-        }
-      ];
-    }
-
-    // Default Wichita median comps if general address
-    return [
-      {
-        id: "comp_gen_1",
-        address: "Wichita Submarket Radius Sale 1",
-        distanceMiles: 0.6,
-        salePrice: 215000,
-        saleDate: "2026-05-30",
-        sqft: 1500,
-        pricePerSqft: 143.33,
-        yearBuilt: 1950,
-        similarityScore: 0.78,
-        source: "Sedgwick County General Comps"
-      }
-    ];
+    return [];
   }
 
-  /**
-   * Deterministic ARV calculation based on comps and living area sqft
-   */
-  private static calculateEstimatedArv(
-    comps: IComparableSale[], 
-    publicRecord: WichitaPublicPropertyRecord | null, 
-    livingAreaSqft: number
-  ): { estimatedArv: number; arvConfidence: number } {
-    if (comps.length > 0) {
-      const weightedPpsqft = comps.reduce((acc, c) => acc + c.pricePerSqft * c.similarityScore, 0) /
-        comps.reduce((acc, c) => acc + c.similarityScore, 0);
-      
-      const arv = Math.round((weightedPpsqft * livingAreaSqft) / 1000) * 1000;
-      const arvConfidence = comps.length >= 3 ? 0.90 : comps.length === 2 ? 0.80 : 0.65;
-      return { estimatedArv: arv, arvConfidence };
+  private static calculateEstimatedArv(comps: IComparableSale[], livingAreaSqft: number): { estimatedArv: number; arvConfidence: number } {
+    if (comps.length === 0 || livingAreaSqft <= 0) {
+      return { estimatedArv: 0, arvConfidence: 0 };
     }
 
-    // Fallback based on County Appraised Value with historical market appreciation multiplier
-    const baseVal = publicRecord?.totalAppraisedValue ? publicRecord.totalAppraisedValue * 1.35 : 185000;
-    const arv = Math.round(baseVal / 1000) * 1000;
-    return { estimatedArv: arv, arvConfidence: 0.50 };
+    const denominator = comps.reduce((acc, c) => acc + c.similarityScore, 0);
+    if (denominator <= 0) return { estimatedArv: 0, arvConfidence: 0 };
+
+    const weightedPpsqft = comps.reduce((acc, c) => acc + c.pricePerSqft * c.similarityScore, 0) / denominator;
+    const arv = Math.round((weightedPpsqft * livingAreaSqft) / 1000) * 1000;
+    const arvConfidence = comps.length >= 3 ? 0.90 : comps.length === 2 ? 0.75 : 0.55;
+    return { estimatedArv: arv, arvConfidence };
   }
 
-  /**
-   * Calculate trade-verified unit-rate renovation scope based on condition
-   */
+  private static emptyRehabResult() {
+    return {
+      estimatedRehabBudget: 0,
+      rehabBreakdown: {
+        exteriorRoof: 0,
+        interiorCosmetic: 0,
+        mechanicalsHvac: 0,
+        contingencyReserves: 0,
+      },
+      repairConfidence: 0,
+      structuralRiskDetected: false,
+    };
+  }
+
   private static calculateRehabScope(payload: ISellerIntakePayload, sqft: number, yearBuilt: number) {
-    let baseRatePerSqft = 22; // Cosmetic
+    let baseRatePerSqft = 22;
     let structuralRiskDetected = false;
-    let repairConfidence = 0.85;
+    let repairConfidence = 0.65; // seller-reported condition only; vision/walkthrough still required
 
     switch (payload.propertyCondition) {
-      case "Move-In Ready":
-        baseRatePerSqft = 10;
-        repairConfidence = 0.90;
-        break;
-      case "Dated / Needs Updates":
-        baseRatePerSqft = 25;
-        repairConfidence = 0.85;
-        break;
-      case "Needs Major Cosmetic & Mechanical Rehab":
-        baseRatePerSqft = 38;
-        repairConfidence = 0.80;
-        break;
-      case "Full Gut / Major Deferred Maintenance":
-        baseRatePerSqft = 55;
-        repairConfidence = 0.70;
-        break;
-      case "Severe Structural / Fire Damage":
-        baseRatePerSqft = 80;
-        structuralRiskDetected = true;
-        repairConfidence = 0.40;
-        break;
+      case "Move-In Ready": baseRatePerSqft = 10; break;
+      case "Dated / Needs Updates": baseRatePerSqft = 25; break;
+      case "Needs Major Cosmetic & Mechanical Rehab": baseRatePerSqft = 38; break;
+      case "Full Gut / Major Deferred Maintenance": baseRatePerSqft = 55; repairConfidence = 0.55; break;
+      case "Severe Structural / Fire Damage": baseRatePerSqft = 80; structuralRiskDetected = true; repairConfidence = 0.30; break;
     }
 
-    // Add age mechanical factor for homes built prior to 1960
-    if (yearBuilt < 1960) {
-      baseRatePerSqft += 4;
-    }
+    if (yearBuilt > 0 && yearBuilt < 1960) baseRatePerSqft += 4;
 
-    // Additional known repairs add-ons
     let knownRepairsAddon = 0;
-    if (payload.knownRepairs && payload.knownRepairs.length > 0) {
-      payload.knownRepairs.forEach(rep => {
-        if (rep.includes("Roof")) knownRepairsAddon += 8500;
-        if (rep.includes("HVAC")) knownRepairsAddon += 6800;
-        if (rep.includes("Foundation")) {
-          knownRepairsAddon += 12000;
-          structuralRiskDetected = true;
-        }
-        if (rep.includes("Plumbing")) knownRepairsAddon += 5500;
-      });
+    for (const rep of payload.knownRepairs || []) {
+      if (rep.includes("Roof")) knownRepairsAddon += 8500;
+      if (rep.includes("HVAC")) knownRepairsAddon += 6800;
+      if (rep.includes("Foundation")) { knownRepairsAddon += 12000; structuralRiskDetected = true; }
+      if (rep.includes("Plumbing")) knownRepairsAddon += 5500;
     }
 
     const baseRehab = sqft * baseRatePerSqft + knownRepairsAddon;
     const contingencyReserves = Math.round(baseRehab * 0.15);
     const totalRehab = Math.round((baseRehab + contingencyReserves) / 500) * 500;
 
-    const breakdown = {
-      exteriorRoof: Math.round(totalRehab * 0.30),
-      interiorCosmetic: Math.round(totalRehab * 0.35),
-      mechanicalsHvac: Math.round(totalRehab * 0.20),
-      contingencyReserves
-    };
-
     return {
       estimatedRehabBudget: totalRehab,
-      rehabBreakdown: breakdown,
+      rehabBreakdown: {
+        exteriorRoof: Math.round(totalRehab * 0.30),
+        interiorCosmetic: Math.round(totalRehab * 0.35),
+        mechanicalsHvac: Math.round(totalRehab * 0.20),
+        contingencyReserves,
+      },
       repairConfidence,
-      structuralRiskDetected
+      structuralRiskDetected,
     };
   }
 
-  /**
-   * Evaluate confidence gate thresholds
-   */
   private static evaluateConfidenceGate(params: {
     propertyMatchConfidence: number;
     compQualityScore: number;
@@ -369,48 +273,54 @@ export class SellerUnderwritingService {
     structuralRiskDetected: boolean;
     probateOrLegalFlag: boolean;
     hasPublicRecord: boolean;
+    liveCompsAvailable: boolean;
+    productionMode: boolean;
   }): IOfferConfidenceGate {
     const reasons: string[] = [];
-    const requiredVerifications: string[] = [];
+    const requiredHumanVerifications: string[] = [];
 
-    // Calculate composite confidence score (0.00 - 1.00)
-    const compositeScore = Number(
-      (
-        params.propertyMatchConfidence * 0.25 +
-        params.compQualityScore * 0.30 +
-        params.arvConfidence * 0.25 +
-        params.repairEstimateConfidence * 0.20
-      ).toFixed(2)
-    );
+    const compositeScore = Number((
+      params.propertyMatchConfidence * 0.25 +
+      params.compQualityScore * 0.30 +
+      params.arvConfidence * 0.25 +
+      params.repairEstimateConfidence * 0.20
+    ).toFixed(2));
 
-    // Human review conditions
+    if (!params.hasPublicRecord) {
+      reasons.push("Live parcel/property records are not yet verified for this submission.");
+      requiredHumanVerifications.push("Verify property record and parcel identity");
+    }
+    if (!params.liveCompsAvailable) {
+      reasons.push("Live renovated comparable-sale evidence is not currently available to the automated offer engine.");
+      requiredHumanVerifications.push("Run live comparable-sale review");
+    }
     if (params.structuralRiskDetected) {
-      reasons.push("Structural or fire damage flags detected requiring on-site structural engineer inspection.");
-      requiredVerifications.push("Licensed structural foundation inspection");
+      reasons.push("Potential structural risk requires an on-site review.");
+      requiredHumanVerifications.push("Property walkthrough / structural review");
     }
     if (params.probateOrLegalFlag) {
-      reasons.push("Estate / Probate context requires verification of legal representative authority and title clarity.");
-      requiredVerifications.push("Title company estate authorization verification");
-    }
-    if (!params.hasPublicRecord) {
-      reasons.push("Public parcel records could not be verified automatically for this address.");
-      requiredVerifications.push("Sedgwick County parcel cross-reference");
+      reasons.push("Estate/probate context requires title and authority verification.");
+      requiredHumanVerifications.push("Title / estate authority verification");
     }
 
-    // Determine Tier
-    let tier: IOfferConfidenceGate["tier"] = "HIGH_CONFIDENCE";
+    let tier: IOfferConfidenceGate["tier"] = "HUMAN_REVIEW_REQUIRED";
 
-    if (params.structuralRiskDetected || !params.hasPublicRecord || compositeScore < 0.55) {
-      tier = "HUMAN_REVIEW_REQUIRED";
-    } else if (compositeScore < 0.78 || params.probateOrLegalFlag || params.compQualityScore < 0.75) {
+    if (
+      params.productionMode &&
+      params.hasPublicRecord &&
+      params.liveCompsAvailable &&
+      !params.structuralRiskDetected &&
+      compositeScore >= 0.82 &&
+      params.compQualityScore >= 0.80 &&
+      params.arvConfidence >= 0.80 &&
+      params.repairEstimateConfidence >= 0.75
+    ) {
+      tier = "HIGH_CONFIDENCE";
+      requiredHumanVerifications.push("Standard walkthrough and title review");
+    } else if (!params.productionMode && compositeScore >= 0.65 && params.hasPublicRecord) {
+      // Development/demo can exercise result screens, but this is never a production-live offer.
       tier = "MEDIUM_CONFIDENCE";
-      if (params.compQualityScore < 0.75) {
-        reasons.push("Micro-market comp density is limited; on-site condition assessment recommended.");
-      }
-      requiredVerifications.push("Physical walkthrough to verify finishes and mechanicals");
-    } else {
-      reasons.push("High-density recorded sales comps and verified Sedgwick County public records available.");
-      requiredVerifications.push("Standard preliminary title search and physical walkthrough");
+      reasons.push("Development/demo intelligence only; not eligible for a production automated offer.");
     }
 
     return {
@@ -424,138 +334,50 @@ export class SellerUnderwritingService {
         dataFreshnessDays: params.dataFreshnessDays,
         ownershipConsistency: params.ownershipConsistency,
         structuralRiskDetected: params.structuralRiskDetected,
-        probateOrLegalFlag: params.probateOrLegalFlag
+        probateOrLegalFlag: params.probateOrLegalFlag,
       },
       reasonsForTier: reasons,
-      requiredHumanVerifications: requiredVerifications
+      requiredHumanVerifications,
     };
   }
 
-  /**
-   * Build the customer-facing seller offer presentation
-   */
   private static buildOfferPresentation(params: {
     confidenceGate: IOfferConfidenceGate;
     internalMaoCeiling: number;
     estimatedArv: number;
     estimatedRehabBudget: number;
-    structuralRiskDetected: boolean;
-    probateOrLegalFlag: boolean;
-    cleanAddress: string;
   }): ISellerOfferResult["sellerOfferPresentation"] {
-    const { confidenceGate, internalMaoCeiling } = params;
+    const disclaimer = "This is a non-binding preliminary property review. Any preliminary offer is subject to property walkthrough, verification of condition and property data, title review, and mutual execution of a separate written purchase agreement.";
 
-    const baseDisclaimer = 
-      "Legal Notice: This preliminary property review is an automated non-binding estimate derived from available Sedgwick County public records and neighborhood sales models. It does not constitute a formal purchase contract, appraisal, or guarantee of funds. Final written acquisition offers are subject to physical walkthrough inspection, verification of mechanical/structural condition, clear marketable title, and mutual agreement.";
-
-    if (confidenceGate.tier === "HIGH_CONFIDENCE") {
-      // Range: ~96% to 103% of internal MAO, rounded to neat thousands
-      const minOffer = Math.round((internalMaoCeiling * 0.96) / 1000) * 1000;
-      const maxOffer = Math.round((internalMaoCeiling * 1.03) / 1000) * 1000;
-
+    if (params.confidenceGate.tier === "HIGH_CONFIDENCE" && params.internalMaoCeiling > 0) {
+      const minOffer = Math.round((params.internalMaoCeiling * 0.96) / 1000) * 1000;
+      const maxOffer = Math.round((params.internalMaoCeiling * 1.03) / 1000) * 1000;
       return {
         status: "PRELIMINARY_OFFER_AVAILABLE",
-        headline: "Preliminary OCG Offer Range Available",
+        headline: "Your Preliminary OCG Offer Range",
         offerRangeMin: minOffer,
         offerRangeMax: maxOffer,
-        singlePointEstimate: internalMaoCeiling,
-        displayTerms: {
-          isBinding: false,
-          asIsCondition: true,
-          commissionFree: true,
-          subjectToWalkthrough: true,
-          subjectToTitleReview: true
-        },
+        singlePointEstimate: params.internalMaoCeiling,
+        displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
         explanation: {
-          whatOcgReviewed: [
-            "Sedgwick County public tax rolls and parcel square footage",
-            "Recent closed comparable sales within the immediate Wichita micro-neighborhood",
-            "Reported property condition against trade-level contractor renovation rates",
-            "70% acquisition framework guaranteeing zero seller-paid repairs or staging"
-          ],
-          whatRemainsToBeVerified: [
-            "Brief physical walkthrough to confirm interior layout and roof/HVAC age",
-            "Preliminary title search ensuring clear marketable deed transfer"
-          ],
-          nextSteps: [
-            "Schedule a 15-minute introductory walkthrough with Genaro Ocasio",
-            "Receive a formal written As-Is Purchase Agreement with no repair contingencies",
-            "Select your preferred closing date between 14 and 60 days"
-          ]
+          whatOcgReviewed: ["Verified property record", "Live comparable-sale evidence", "Reported/verified condition inputs", "OCG acquisition formula"],
+          whatRemainsToBeVerified: ["Physical walkthrough", "Final condition verification", "Title review"],
+          nextSteps: ["Accept the preliminary offer or submit a counter", "Select a walkthrough window", "OCG verifies property condition before final written terms"],
         },
-        legalDisclaimer: baseDisclaimer
+        legalDisclaimer: disclaimer,
       };
     }
 
-    if (confidenceGate.tier === "MEDIUM_CONFIDENCE") {
-      const minEstimate = Math.round((internalMaoCeiling * 0.90) / 1000) * 1000;
-      const maxEstimate = Math.round((internalMaoCeiling * 1.05) / 1000) * 1000;
-
-      return {
-        status: "PRELIMINARY_ESTIMATE",
-        headline: "Preliminary Acquisition Estimate (Subject to On-Site Verification)",
-        offerRangeMin: minEstimate,
-        offerRangeMax: maxEstimate,
-        singlePointEstimate: internalMaoCeiling,
-        displayTerms: {
-          isBinding: false,
-          asIsCondition: true,
-          commissionFree: true,
-          subjectToWalkthrough: true,
-          subjectToTitleReview: true
-        },
-        explanation: {
-          whatOcgReviewed: [
-            "Public record square footage and submarket appraisal baseline",
-            "Preliminary neighborhood price-per-square-foot benchmarks",
-            "Reported circumstance and preliminary condition notes"
-          ],
-          whatRemainsToBeVerified: [
-            "On-site verification of mechanical systems (HVAC, plumbing, electrical)",
-            "Confirmation of estate/probate authority or title documentation",
-            "Detailed trade contractor walkthrough to finalize renovation scope"
-          ],
-          nextSteps: [
-            "Review preliminary figures with an OCG acquisition principal",
-            "Schedule a no-obligation on-site property walkthrough",
-            "Lock in a firm, written cash purchase offer"
-          ]
-        },
-        legalDisclaimer: baseDisclaimer
-      };
-    }
-
-    // LOW CONFIDENCE / HUMAN REVIEW REQUIRED (No manufactured dollar numbers)
     return {
       status: "ADDITIONAL_REVIEW_REQUIRED",
-      headline: "Additional Property Review Required (Human Specialist Assigned)",
-      displayTerms: {
-        isBinding: false,
-        asIsCondition: true,
-        commissionFree: true,
-        subjectToWalkthrough: true,
-        subjectToTitleReview: true
-      },
+      headline: "We Have Your Property — OCG Review Is Underway",
+      displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
       explanation: {
-        whatOcgReviewed: [
-          "Address submission received and logged in acquisition outbox",
-          "Preliminary risk screening and public records cross-reference"
-        ],
-        whatRemainsToBeVerified: [
-          ...confidenceGate.reasonsForTier,
-          "Direct consultation with Genaro Ocasio to structure responsible purchase terms"
-        ],
-        nextSteps: [
-          "Genaro Ocasio and the OCG acquisition team will review Sedgwick County records manually",
-          "You will receive a personal follow-up within 24 hours to discuss options",
-          "Zero pressure and zero obligation"
-        ]
+        whatOcgReviewed: ["Seller submission", "Available property/provider signals", "Initial acquisition-risk screen"],
+        whatRemainsToBeVerified: params.confidenceGate.reasonsForTier.length > 0 ? params.confidenceGate.reasonsForTier : ["Live property and comparable-sale evidence"],
+        nextSteps: ["OCG completes the missing property intelligence", "You receive a preliminary offer when the evidence supports one", "A walkthrough verifies condition before final terms"],
       },
-      legalDisclaimer: baseDisclaimer
+      legalDisclaimer: disclaimer,
     };
-  }
-
-  private static estimateSqftFromType(condition: string): number {
-    return 1500;
   }
 }
