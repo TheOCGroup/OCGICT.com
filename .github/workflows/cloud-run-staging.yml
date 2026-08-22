@@ -2,6 +2,9 @@ name: Deploy OCGICT to Cloud Run Staging
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -11,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ocgict-cloud-run-staging
+  group: ocgict-cloud-run-staging-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -51,6 +54,7 @@ jobs:
   deploy:
     name: Build and deploy
     needs: validate
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: staging
     steps:
