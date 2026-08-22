@@ -14,6 +14,8 @@ Workflow: `.github/workflows/cloud-run-staging.yml`
 
 The workflow validates TypeScript and the production build before any deployment. It then builds the repository Dockerfile, pushes the image to Artifact Registry, and deploys the exact commit SHA to Cloud Run.
 
+Deployment trigger status: cinematic Wichita gateway revision approved for staging deployment on 2026-08-22.
+
 ## Required Google Cloud resources
 
 1. Google Cloud project selected for OCGICT.
