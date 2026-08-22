@@ -1,1 +1,0 @@
-Gateway UI validation trigger.
