@@ -61,17 +61,19 @@ Do not copy secret values into this document.
 Before public DNS cutover, verify the complete staging journey:
 
 1. Homepage loads at desktop, tablet, and mobile widths.
-2. Address entered on the homepage transfers correctly into `/sell`.
-3. Seller intake validates required fields and consent.
-4. Submission persists.
-5. Property research uses production-safe providers only.
-6. If reliable property/comparable data is unavailable, the record routes to `MANUAL_REVIEW_REQUIRED` or equivalent and no fabricated ARV/repair estimate/offer appears.
-7. Admin authentication protects private property and seller intelligence.
-8. Manual underwriting works.
-9. Published preliminary offer creates an immutable offer version and secure seller result link.
-10. Accept and counter flows create correct seller actions and audit history.
-11. Pipeline outbox event is created and preserved even if downstream delivery is unavailable.
-12. Browser console contains no material errors.
+2. The homepage clearly positions The OC Group as real estate investment, acquisition, renovation strategy, and consulting—not only an investor education site or generic home buyer.
+3. Seller conversion CTA is prominent and communicates the real flow: address → a few questions → property intelligence → preliminary offer when confidence gates pass.
+4. Wichita-specific visual identity renders correctly, including local architectural/landmark references and motion with reduced-motion accessibility respected.
+5. Seller intake validates required fields and explicit consent.
+6. Submission persists.
+7. Property research uses production-safe providers only.
+8. If reliable property/comparable data is unavailable, the record routes to `MANUAL_REVIEW_REQUIRED` or equivalent and no fabricated ARV, repair estimate, comparable, or offer appears.
+9. Admin authentication protects private property and seller intelligence.
+10. Manual underwriting works.
+11. Published preliminary offer creates an immutable offer version and secure seller result link.
+12. Accept preliminary offer, counteroffer, request call, and request walkthrough create the correct seller actions. Preliminary acceptance must remain explicitly non-binding and subject to walkthrough, verification, title review, and a separate written purchase agreement.
+13. Pipeline outbox event is created and preserved even if downstream delivery is unavailable.
+14. Browser console contains no material errors.
 
 ## Public cutover
 
