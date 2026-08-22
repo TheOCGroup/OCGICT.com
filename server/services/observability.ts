@@ -16,12 +16,15 @@ export type OCGEventType =
   | "PROPERTY_SUBMITTED"
   | "RETRIEVAL_SOURCE_ACCESSED"
   | "RETRIEVAL_UNMATCHED_HONEST_FAILURE"
+  | "PROPERTY_PROVIDER_NOT_CONNECTED"
+  | "COMPARABLE_PROVIDER_NOT_CONNECTED"
   | "HUNTER_ADAPTER_INVOKED"
   | "VICTOR_ADAPTER_INVOKED"
   | "PIPER_ADAPTER_INVOKED"
   | "PIPER_LEAD_ENQUEUED"
   | "SELLER_INTAKE_PROCESSING_STARTED"
-  | "SELLER_INTAKE_PROCESSED_SUCCESSFULLY";
+  | "SELLER_INTAKE_PROCESSED_SUCCESSFULLY"
+  | "SELLER_OFFER_ACTION_RECORDED";
 
 export interface IOcgTelemetryEvent {
   eventId: string;
@@ -42,15 +45,12 @@ export class OcgObservability {
       timestamp: new Date().toISOString(),
       sessionId: sessionId || "anon_session",
       metadata: this.sanitizeMetadata(metadata),
-      durationMs
+      durationMs,
     };
 
     this.events.push(event);
-    if (this.events.length > 500) {
-      this.events.shift(); // keep bounded memory buffer
-    }
+    if (this.events.length > 500) this.events.shift();
 
-    // Structured stdout log (formatted for cloud logging / Datadog / CloudWatch)
     console.log(`[OCG-TELEMETRY] [${event.eventType}] duration=${durationMs ?? 0}ms meta=${JSON.stringify(event.metadata)}`);
   }
 
@@ -62,9 +62,7 @@ export class OcgObservability {
     const sanitized = { ...meta };
     const sensitiveKeys = ["ssn", "password", "apiKey", "creditCard", "exactBankBalance"];
     for (const k of Object.keys(sanitized)) {
-      if (sensitiveKeys.some(s => k.toLowerCase().includes(s.toLowerCase()))) {
-        sanitized[k] = "[REDACTED_CONFIDENTIAL]";
-      }
+      if (sensitiveKeys.some(s => k.toLowerCase().includes(s.toLowerCase()))) sanitized[k] = "[REDACTED_CONFIDENTIAL]";
     }
     return sanitized;
   }
