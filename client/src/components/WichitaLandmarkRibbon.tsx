@@ -1,94 +1,145 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { ExternalLink, MapPin, Sparkles } from 'lucide-react';
+
+const commons = (filename: string) =>
+  `https://commons.wikimedia.org/wiki/Special:Redirect/file/${encodeURIComponent(filename)}`;
 
 const landmarks = [
-  { name: 'Keeper of the Plains', detail: 'Arkansas River', icon: 'keeper' },
-  { name: 'Exploration Place', detail: 'River District', icon: 'exploration' },
-  { name: 'Historic Delano', detail: 'West Douglas', icon: 'delano' },
-  { name: 'Union Station', detail: 'Downtown Wichita', icon: 'station' },
-  { name: 'Century II', detail: 'Downtown Riverfront', icon: 'century' },
+  {
+    name: 'Keeper of the Plains',
+    detail: 'Arkansas River · Wichita',
+    image: commons('The-Keeper-of-the-Plains.jpg'),
+    source: 'https://commons.wikimedia.org/wiki/File:The-Keeper-of-the-Plains.jpg',
+    credit: '04stx · CC BY-SA 3.0',
+  },
+  {
+    name: 'Exploration Place',
+    detail: 'River District · Wichita',
+    image: commons('Exploration Place (Wichita, Kansas).jpg'),
+    source: 'https://commons.wikimedia.org/wiki/File:Exploration_Place_(Wichita,_Kansas).jpg',
+    credit: 'Wikimedia Commons · Creative Commons',
+  },
+  {
+    name: 'Downtown Wichita',
+    detail: 'Century II · Riverfront · Core',
+    image: commons('Downtown Wichita.jpg'),
+    source: 'https://commons.wikimedia.org/wiki/File:Downtown_Wichita.jpg',
+    credit: 'Popcorn700 · CC BY-SA 4.0',
+  },
+  {
+    name: 'Union Station',
+    detail: 'Historic Downtown Wichita',
+    image: commons('Wichita Kansas Former Train Station (3616104314).jpg'),
+    source: 'https://commons.wikimedia.org/wiki/File:Wichita_Kansas_Former_Train_Station_(3616104314).jpg',
+    credit: 'Ty Nigh · Wikimedia Commons',
+  },
+  {
+    name: 'Century II',
+    detail: 'Downtown Riverfront',
+    image: commons('Century II - Bob Brown Expo Hall.jpg'),
+    source: 'https://commons.wikimedia.org/wiki/File:Century_II_-_Bob_Brown_Expo_Hall.jpg',
+    credit: 'FUBAR007 · CC BY-SA 3.0',
+  },
 ];
-
-function LandmarkMark({ type }: { type: string }) {
-  if (type === 'keeper') {
-    return (
-      <svg viewBox="0 0 120 90" className="h-16 w-24" aria-hidden="true">
-        <path d="M60 78V35M47 34l13-20 13 20M51 25l9-12 9 12M43 39l17-8 17 8M36 80h48" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        <path d="M44 47c8-5 24-5 32 0" fill="none" stroke="currentColor" strokeWidth="1.2" opacity=".65" />
-      </svg>
-    );
-  }
-  if (type === 'exploration') {
-    return (
-      <svg viewBox="0 0 120 90" className="h-16 w-24" aria-hidden="true">
-        <path d="M12 72h96M24 70c8-31 27-45 57-47-5 9-8 18-8 28 13 1 22 7 28 19H24Z" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
-        <path d="M39 61c12-11 25-16 39-16" fill="none" stroke="currentColor" strokeWidth="1.2" opacity=".65" />
-      </svg>
-    );
-  }
-  if (type === 'delano') {
-    return (
-      <svg viewBox="0 0 120 90" className="h-16 w-24" aria-hidden="true">
-        <path d="M48 76h24V29H48V76ZM43 29h34M52 23h16M60 14v9" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        <circle cx="60" cy="43" r="8" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M60 43l4-3M35 76h50" fill="none" stroke="currentColor" strokeWidth="1.2" opacity=".65" />
-      </svg>
-    );
-  }
-  if (type === 'station') {
-    return (
-      <svg viewBox="0 0 120 90" className="h-16 w-24" aria-hidden="true">
-        <path d="M19 74h82M28 74V39h64v35M39 39V27h42v12M34 50h12v14H34V50Zm20 0h12v14H54V50Zm20 0h12v14H74V50Z" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M22 39h76" fill="none" stroke="currentColor" strokeWidth="1.2" opacity=".65" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 120 90" className="h-16 w-24" aria-hidden="true">
-      <path d="M20 73h80M28 73V42c7-14 18-21 32-21s25 7 32 21v31M39 73V46h42v27" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
-      <path d="M34 39h52M45 28c5-4 10-6 15-6s10 2 15 6" fill="none" stroke="currentColor" strokeWidth="1.2" opacity=".65" />
-    </svg>
-  );
-}
 
 export function WichitaLandmarkRibbon() {
   return (
-    <section className="relative overflow-hidden border-y border-slate-800 bg-[#08101c] py-10">
-      <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(circle_at_20%_50%,rgba(59,130,246,.16),transparent_26%),radial-gradient(circle_at_80%_50%,rgba(245,158,11,.08),transparent_24%)]" />
+    <section className="relative overflow-hidden border-y border-white/10 bg-[#060b13] py-20 sm:py-24">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_25%,rgba(245,158,11,.12),transparent_28%),radial-gradient(circle_at_82%_70%,rgba(37,99,235,.16),transparent_30%)]" />
       <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.3 }}
-        transition={{ duration: 0.7 }}
-        className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8"
-      >
-        <div className="mb-7 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        aria-hidden="true"
+        animate={{ x: ['-8%', '8%', '-8%'], opacity: [0.14, 0.24, 0.14] }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+        className="pointer-events-none absolute -top-24 left-0 h-64 w-2/3 rounded-full bg-amber-400/10 blur-3xl"
+      />
+
+      <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.7 }}
+          className="mb-10 grid gap-5 lg:grid-cols-[1fr_.8fr] lg:items-end"
+        >
           <div>
-            <div className="text-[11px] font-black uppercase tracking-[0.24em] text-blue-400">Built in Wichita. Built for Wichita.</div>
-            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Local intelligence should feel local.</h2>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/8 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">
+              <Sparkles size={12} /> Proudly investing in Wichita
+            </div>
+            <h2 className="mt-5 max-w-3xl text-3xl font-extrabold tracking-tight text-white sm:text-5xl">
+              Wichita is not our backdrop. It is part of the intelligence.
+            </h2>
           </div>
-          <p className="max-w-xl text-sm leading-relaxed text-slate-400">From the riverfront to Delano, downtown to established residential corridors, OCG evaluates property in the context of the city—not as a generic national data point.</p>
+          <p className="max-w-xl text-sm leading-7 text-slate-400 lg:justify-self-end">
+            OCG evaluates properties in the context of Wichita neighborhoods, housing stock, renovation patterns, local demand, and block-by-block market behavior. The city should feel present throughout the experience.
+          </p>
+        </motion.div>
+
+        <div className="grid auto-rows-[220px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:auto-rows-[250px]">
+          {landmarks.map((landmark, index) => {
+            const span = index === 0 ? 'lg:col-span-5 lg:row-span-2' : index === 1 ? 'lg:col-span-4' : index === 2 ? 'lg:col-span-3' : index === 3 ? 'lg:col-span-3' : 'lg:col-span-4';
+            return (
+              <motion.article
+                key={landmark.name}
+                initial={{ opacity: 0, y: 28, scale: 0.985 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, amount: 0.16 }}
+                transition={{ duration: 0.62, delay: index * 0.06 }}
+                whileHover={{ y: -6 }}
+                className={`group relative overflow-hidden rounded-[26px] border border-white/10 bg-slate-950 shadow-2xl shadow-black/30 ${span}`}
+              >
+                <motion.img
+                  src={landmark.image}
+                  alt={`${landmark.name} in Wichita, Kansas`}
+                  loading="lazy"
+                  className="absolute inset-0 h-full w-full object-cover"
+                  initial={{ scale: 1.04 }}
+                  whileInView={{ scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1.25, ease: 'easeOut' }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-950/15 via-transparent to-amber-950/15 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+
+                <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
+                  <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300/90">
+                    <MapPin size={11} /> {landmark.detail}
+                  </div>
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-extrabold text-white sm:text-2xl">{landmark.name}</h3>
+                      <p className="mt-1 text-[10px] text-slate-400">{landmark.credit}</p>
+                    </div>
+                    <a
+                      href={landmark.source}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`View ${landmark.name} photo source and license`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/30 text-slate-300 backdrop-blur-md transition-all hover:border-amber-300/40 hover:text-amber-300"
+                    >
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
+              </motion.article>
+            );
+          })}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          {landmarks.map((landmark, index) => (
-            <motion.div
-              key={landmark.name}
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.07, duration: 0.5 }}
-              whileHover={{ y: -6 }}
-              className="group relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-slate-500 transition-colors hover:border-blue-500/50 hover:text-blue-300"
-            >
-              <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-              <LandmarkMark type={landmark.icon} />
-              <div className="mt-2 text-xs font-extrabold uppercase tracking-wider text-white">{landmark.name}</div>
-              <div className="mt-1 text-[11px] text-slate-500">{landmark.detail}</div>
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4, duration: 0.8 }}
+          className="mt-10 flex flex-col items-center justify-center gap-3 text-center"
+        >
+          <div className="h-px w-20 bg-gradient-to-r from-transparent via-amber-400/70 to-transparent" />
+          <p className="max-w-3xl font-serif text-xl italic leading-relaxed text-slate-200 sm:text-2xl">
+            “We believe in Wichita. We invest in Wichita. We build lasting value in Wichita.”
+          </p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-600">Photography sources and licenses linked on each image.</p>
+        </motion.div>
+      </div>
     </section>
   );
 }
