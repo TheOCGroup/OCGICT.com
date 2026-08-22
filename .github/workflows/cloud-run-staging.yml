@@ -1,0 +1,117 @@
+name: Deploy OCGICT to Cloud Run Staging
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ocgict-cloud-run-staging-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGION: us-central1
+  SERVICE: ocg-website-staging
+  REPOSITORY: ocgict
+  IMAGE: ocgict-site
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm run check
+
+      - name: Build application
+        run: pnpm run build
+
+  deploy:
+    name: Build and deploy
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ vars.GCP_PROJECT_ID }}" || (echo "Missing repository/environment variable GCP_PROJECT_ID" && exit 1)
+          test -n "${{ secrets.GCP_WIF_PROVIDER }}" || (echo "Missing secret GCP_WIF_PROVIDER" && exit 1)
+          test -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" || (echo "Missing secret GCP_SERVICE_ACCOUNT" && exit 1)
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Artifact Registry authentication
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build container
+        run: |
+          docker build \
+            --tag "${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${REPOSITORY}/${IMAGE}:${GITHUB_SHA}" \
+            --tag "${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${REPOSITORY}/${IMAGE}:staging" \
+            .
+
+      - name: Push container
+        run: |
+          docker push "${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${REPOSITORY}/${IMAGE}:${GITHUB_SHA}"
+          docker push "${REGION}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${REPOSITORY}/${IMAGE}:staging"
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}:${{ github.sha }}
+          flags: >-
+            --min-instances=0
+            --max-instances=3
+            --concurrency=80
+            --memory=512Mi
+            --cpu=1
+            --port=8080
+            --no-allow-unauthenticated
+
+      - name: Deployment summary
+        run: |
+          echo "### OCGICT Cloud Run Staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${GITHUB_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Service: \`${SERVICE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Region: \`${REGION}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Access: owner-only / authenticated" >> "$GITHUB_STEP_SUMMARY"
