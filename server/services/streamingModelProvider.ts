@@ -24,7 +24,7 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
   private apiKey: string;
   private modelName: string;
 
-  constructor(apiKey: string, modelName = "gemini-1.5-flash") {
+  constructor(apiKey: string, modelName = "gemini-2.5-flash") {
     this.apiKey = apiKey;
     this.modelName = modelName;
   }
