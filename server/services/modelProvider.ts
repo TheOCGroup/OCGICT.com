@@ -40,7 +40,7 @@ export interface IModelProvider {
 export function getActiveModelProvider(): IModelProvider {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && geminiKey.trim() !== "") {
-    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-1.5-flash");
+    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-2.5-flash");
   }
 
   // Graceful fallback to OCG local engine
