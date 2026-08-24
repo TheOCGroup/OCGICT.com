@@ -1,4 +1,4 @@
-import { EnhancedGeminiProvider, EnhancedLocalProvider } from "./streamingModelProvider";
+import { EnhancedGeminiProvider, EnhancedLocalProvider } from "./streamingModelProvider.js";
 
 export interface ModelMessage {
   role: "system" | "user" | "assistant";
