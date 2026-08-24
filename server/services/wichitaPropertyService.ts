@@ -1,5 +1,5 @@
-import { IPropertyIntelligenceRecord, DataCertaintyLevel } from "../../shared/contracts";
-import { OcgObservability } from "./observability";
+import { IPropertyIntelligenceRecord, DataCertaintyLevel } from "../../shared/contracts.js";
+import { OcgObservability } from "./observability.js";
 
 export interface PropertyLookupQuery {
   address: string;
