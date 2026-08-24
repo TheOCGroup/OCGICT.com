@@ -6,7 +6,7 @@ import {
   IPiperAdapterRequest,
   IPiperAdapterResponse,
 } from "../../shared/contracts";
-import { OcgObservability } from "./observability";
+import { OcgObservability } from "./observability.js";
 
 /**
  * HUNTER Adapter — Acquisition Signal Discovery
