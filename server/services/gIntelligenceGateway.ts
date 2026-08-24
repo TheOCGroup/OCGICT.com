@@ -1,6 +1,6 @@
-import { getActiveModelProvider, ModelMessage, ModelToolDefinition } from "./modelProvider";
-import { OcgObservability } from "./observability";
-import { IOCGStrategyBrief, IGActionInvocation } from "../../shared/contracts";
+import { getActiveModelProvider, ModelMessage, ModelToolDefinition } from "./modelProvider.js";
+import { OcgObservability } from "./observability.js";
+import { IOCGStrategyBrief, IGActionInvocation } from "../../shared/contracts.js";
 
 export interface GChatRequest {
   sessionId: string;
