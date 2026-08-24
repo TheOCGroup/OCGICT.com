@@ -1,6 +1,6 @@
 import { Readable } from "stream";
-import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider";
-import { OcgObservability } from "./observability";
+import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
+import { OcgObservability } from "./observability.js";
 
 export interface StreamingChunk {
   type: "token" | "tool_call" | "done" | "error";
