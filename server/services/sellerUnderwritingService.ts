@@ -5,9 +5,9 @@ import {
   IComparableSale,
   DataCertaintyLevel,
 } from "../../shared/contracts";
-import { WichitaPropertyService, WichitaPublicPropertyRecord } from "./wichitaPropertyService";
-import { PiperOutboxService } from "./piperAdapter";
-import { OcgObservability } from "./observability";
+import { WichitaPropertyService, WichitaPublicPropertyRecord } from "./wichitaPropertyService.js";
+import { PiperOutboxService } from "./piperAdapter.js";
+import { OcgObservability } from "./observability.js";
 
 function getDataMode(): "production" | "development" | "demo" {
   const configured = (process.env.OCGICT_DATA_MODE || "").toLowerCase();
