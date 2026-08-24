@@ -20,9 +20,8 @@ const allowedSellerActions: SellerActionType[] = [
   "REQUEST_WALKTHROUGH",
 ];
 
-async function startServer() {
+export function createApp() {
   const app = express();
-  const server = createServer(app);
 
   app.use(express.json({ limit: "1mb" }));
 
@@ -174,11 +173,18 @@ async function startServer() {
   app.use(express.static(staticPath));
   app.get("*", (_req, res) => res.sendFile(path.join(staticPath, "index.html")));
 
+  return app;
+}
+
+const app = createApp();
+
+export default app;
+
+if (!process.env.VERCEL) {
   const port = process.env.PORT || 3000;
+  const server = createServer(app);
   server.listen(port, () => {
     console.log(`[OCG SERVER] Production Gateway running on http://localhost:${port}/`);
     OcgObservability.log("G_SESSION_STARTED", { serverPort: port, status: "online" });
   });
 }
-
-startServer().catch(console.error);
