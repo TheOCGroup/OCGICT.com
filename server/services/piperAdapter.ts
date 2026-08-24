@@ -1,5 +1,5 @@
-import { IOCGStrategyBrief, IPiperAdapterRequest, IPiperAdapterResponse } from "../../shared/contracts";
-import { OcgObservability } from "./observability";
+import { IOCGStrategyBrief, IPiperAdapterRequest, IPiperAdapterResponse } from "../../shared/contracts.js";
+import { OcgObservability } from "./observability.js";
 
 export interface PiperOutboxRecord {
   outboxId: string;
