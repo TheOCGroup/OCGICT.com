@@ -10,9 +10,9 @@ async function runTests() {
   let failed = 0;
 
   // --------------------------------------------------------------------------
-  // Scenario A — High Confidence
+  // Scenario A — Canonical demo record stays gated from production offers
   // --------------------------------------------------------------------------
-  console.log("Testing Scenario A — High Confidence (Canonical 248 S Rutan)...");
+  console.log("Testing Scenario A — Demo data safety gate (Canonical 248 S Rutan)...");
   const payloadA: ISellerIntakePayload = {
     address: "248 S Rutan Ave, Wichita, KS 67218",
     propertyCondition: "Needs Major Cosmetic & Mechanical Rehab",
@@ -28,13 +28,12 @@ async function runTests() {
 
   const resA = await SellerUnderwritingService.processSellerIntake(payloadA);
   if (
-    resA.sellerOfferPresentation.status === "PRELIMINARY_OFFER_AVAILABLE" &&
-    resA.sellerOfferPresentation.offerRangeMin! > 0 &&
-    resA.sellerOfferPresentation.offerRangeMax! > resA.sellerOfferPresentation.offerRangeMin! &&
-    resA.confidenceGate.overallConfidenceScore >= 0.78 &&
+    resA.sellerOfferPresentation.status === "ADDITIONAL_REVIEW_REQUIRED" &&
+    resA.sellerOfferPresentation.offerRangeMin === undefined &&
+    resA.confidenceGate.requiredHumanVerifications.length > 0 &&
     resA.piperHandoff.status === "READY_FOR_PIPER"
   ) {
-    console.log(`✓ Scenario A Passed: Offer Range $${resA.sellerOfferPresentation.offerRangeMin} - $${resA.sellerOfferPresentation.offerRangeMax} (Confidence: ${resA.confidenceGate.overallConfidenceScore})\n`);
+    console.log("✓ Scenario A Passed: demo-only evidence was blocked from producing a public offer\n");
     passed++;
   } else {
     console.error("✗ Scenario A Failed:", resA);

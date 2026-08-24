@@ -105,7 +105,7 @@ jobs:
             --memory=512Mi
             --cpu=1
             --port=8080
-            --no-allow-unauthenticated
+            --allow-unauthenticated
 
       - name: Deployment summary
         run: |
@@ -114,4 +114,4 @@ jobs:
           echo "- Service: \`${SERVICE}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Region: \`${REGION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- URL: ${{ steps.deploy.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Access: owner-only / authenticated" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Access: public HTTPS" >> "$GITHUB_STEP_SUMMARY"
