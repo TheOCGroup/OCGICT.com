@@ -52,7 +52,10 @@ jobs:
   deploy:
     name: Build and deploy
     needs: validate
-    if: github.event_name != 'pull_request'
+    # Main pushes/manual runs keep their existing behavior. The founder recovery
+    # PR is also allowed onto the existing staging service so it can receive
+    # real browser QA before merge. No new service or infrastructure is created.
+    if: github.event_name != 'pull_request' || github.head_ref == 'aiden/founder-design-recovery-2026-08-30'
     runs-on: ubuntu-latest
     environment: staging
     steps:
