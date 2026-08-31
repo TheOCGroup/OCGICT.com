@@ -9,15 +9,12 @@ async function runTests() {
   let passed = 0;
   let failed = 0;
 
-  // --------------------------------------------------------------------------
-  // Scenario A — Canonical demo record stays gated from production offers
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario A — Demo data safety gate (Canonical 248 S Rutan)...");
   const payloadA: ISellerIntakePayload = {
     address: "248 S Rutan Ave, Wichita, KS 67218",
     propertyCondition: "Needs Major Cosmetic & Mechanical Rehab",
     occupancyStatus: "Vacant",
-    sellerSituation: "Downsizing / Transitioning",
+    sellerSituation: "Downsizing / Estate Liquidation",
     desiredTimeline: "Within 30-45 Days",
     primaryPriority: "No Repairs / As-Is",
     knownRepairs: ["Roof / Shingles (Aging)"],
@@ -40,9 +37,6 @@ async function runTests() {
     failed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario B — Medium Confidence (Moderate comps / uncertain scope)
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario B — Medium Confidence (General Wichita Address)...");
   const payloadB: ISellerIntakePayload = {
     address: "1234 General Submarket Rd, Wichita, KS",
@@ -69,9 +63,6 @@ async function runTests() {
     failed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario C — Low Confidence / Unknown Address (No Manufactured Numbers)
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario C — Low Confidence (Unknown Unmatched Address)...");
   const payloadC: ISellerIntakePayload = {
     address: "9999 Unregistered Dirt Lane, Rural Outskirts",
@@ -89,6 +80,8 @@ async function runTests() {
   if (
     resC.sellerOfferPresentation.status === "ADDITIONAL_REVIEW_REQUIRED" &&
     resC.sellerOfferPresentation.offerRangeMin === undefined &&
+    resC.internalUnderwriting.estimatedArv === 0 &&
+    resC.internalUnderwriting.internalMaoCeiling === 0 &&
     resC.piperHandoff.status === "READY_FOR_PIPER"
   ) {
     console.log("✓ Scenario C Passed: Correctly blocked automated offer without manufacturing numbers\n");
@@ -98,9 +91,6 @@ async function runTests() {
     failed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario D — Estate / Probate Handling
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario D — Estate / Probate Flag...");
   const payloadD: ISellerIntakePayload = {
     address: "1421 N Glendale Ave, Wichita, KS 67208",
@@ -126,9 +116,6 @@ async function runTests() {
     failed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario E — Provider Failure Handling
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario E — Provider Failure Handling...");
   const payloadE: ISellerIntakePayload = {
     address: "",
@@ -156,9 +143,6 @@ async function runTests() {
     passed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario F — Extreme Repair Risk (Structural / Fire Damage)
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario F — Extreme Structural / Fire Damage...");
   const payloadF: ISellerIntakePayload = {
     address: "814 N Delano St, Wichita, KS 67203",
@@ -186,14 +170,15 @@ async function runTests() {
     failed++;
   }
 
-  // --------------------------------------------------------------------------
-  // Scenario G — Duplicate Submission Reconciliation
-  // --------------------------------------------------------------------------
   console.log("Testing Scenario G — Duplicate Submission Handling...");
   const resG1 = await SellerUnderwritingService.processSellerIntake(payloadA);
   const resG2 = await SellerUnderwritingService.processSellerIntake(payloadA);
 
-  if (resG1.piperHandoff.status === "READY_FOR_PIPER" && resG2.piperHandoff.status === "READY_FOR_PIPER") {
+  if (
+    resG1.piperHandoff.status === "READY_FOR_PIPER" &&
+    resG2.piperHandoff.status === "READY_FOR_PIPER" &&
+    resG1.id !== resG2.id
+  ) {
     console.log("✓ Scenario G Passed: Both submissions safely enqueued with unique tracking IDs\n");
     passed++;
   } else {
