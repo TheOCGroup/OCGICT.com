@@ -3,7 +3,6 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GIntelligenceGateway } from "./services/gIntelligenceGateway.js";
-import { getActiveStreamingModelProvider } from "./services/streamingModelProvider.js";
 import { HunterAdapter, VictorAdapter } from "./services/systemAdapters.js";
 import { PiperQueueAdapter, SellerActionType } from "./services/piperAdapter.js";
 import { WichitaPropertyService } from "./services/wichitaPropertyService.js";
@@ -43,25 +42,6 @@ export function createApp() {
       res.json(response);
     } catch (err: any) {
       res.status(400).json({ error: err.message || "G Intelligence Gateway processing error" });
-    }
-  });
-
-  app.post("/api/g/stream", async (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    try {
-      const provider = getActiveStreamingModelProvider();
-      const messages = [
-        { role: "system" as const, content: "You are G — OCG Investment Intelligence." },
-        { role: "user" as const, content: req.body.message || "" },
-      ];
-      const stream = await provider.generateStream({ messages });
-      for await (const chunk of stream) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      res.end();
-    } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`);
-      res.end();
     }
   });
 
