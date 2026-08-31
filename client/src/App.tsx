@@ -17,7 +17,6 @@ const Marketplace = lazy(() => import("./pages/Marketplace"));
 const LenderNetwork = lazy(() => import("./pages/LenderNetwork"));
 const CaseStudies = lazy(() => import("./pages/CaseStudies"));
 const Contact = lazy(() => import("./pages/Contact"));
-const SubmitDeal = lazy(() => import("./pages/SubmitDeal"));
 const Sell = lazy(() => import("./pages/Sell"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -44,7 +43,7 @@ function Router() {
         <Route path="/lender-network" component={LenderNetwork} />
         <Route path="/case-studies" component={CaseStudies} />
         <Route path="/contact" component={Contact} />
-        <Route path="/submit-deal" component={SubmitDeal} />
+        <Route path="/submit-deal" component={Sell} />
         <Route path="/sell" component={Sell} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
