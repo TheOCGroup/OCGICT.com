@@ -13,8 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -24,7 +22,9 @@ jobs:
       - run: pnpm test
       - run: pnpm run build
       - name: Install browser capture runtime
-        run: npx --yes playwright@1.55.0 install --with-deps chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
       - name: Start production build
         run: |
           NODE_ENV=production PORT=4173 node dist/index.js > /tmp/ocgict.log 2>&1 &
@@ -64,7 +64,7 @@ jobs:
           await page.screenshot({ path: 'founder-review/07-g-open.png', fullPage: false });
           await browser.close();
           EOF
-          npx --yes -p playwright@1.55.0 node /tmp/capture.mjs
+          node /tmp/capture.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: founder-visual-review
