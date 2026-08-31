@@ -1,16 +1,16 @@
-/* ============================================================
-   Admin Auth Context — simple password-based session
-   Password stored in localStorage as a hashed token
-   ============================================================ */
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, ReactNode } from "react";
 
-const ADMIN_PASSWORD = "OCGroup2024!";
-const SESSION_KEY = "oc_admin_session";
-const SESSION_TOKEN = btoa(ADMIN_PASSWORD + "_authenticated");
-
+/**
+ * Legacy admin authentication is intentionally disabled.
+ *
+ * A browser-bundled password is not an authentication boundary. The admin
+ * surface must be reintroduced only behind server-side identity and database
+ * authorization. Keeping this context temporarily avoids breaking any dormant
+ * admin page imports while ensuring no credential is shipped to the client.
+ */
 interface AdminAuthContextType {
   isAuthenticated: boolean;
-  login: (password: string) => boolean;
+  login: (_password: string) => boolean;
   logout: () => void;
 }
 
@@ -21,31 +21,14 @@ const AdminAuthContext = createContext<AdminAuthContextType>({
 });
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(SESSION_KEY);
-    if (stored === SESSION_TOKEN) {
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  const login = (password: string): boolean => {
-    if (password === ADMIN_PASSWORD) {
-      localStorage.setItem(SESSION_KEY, SESSION_TOKEN);
-      setIsAuthenticated(true);
-      return true;
-    }
-    return false;
-  };
-
-  const logout = () => {
-    localStorage.removeItem(SESSION_KEY);
-    setIsAuthenticated(false);
-  };
-
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AdminAuthContext.Provider
+      value={{
+        isAuthenticated: false,
+        login: () => false,
+        logout: () => {},
+      }}
+    >
       {children}
     </AdminAuthContext.Provider>
   );
