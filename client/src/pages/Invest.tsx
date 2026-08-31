@@ -1,25 +1,18 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Link } from 'wouter';
-import { 
-  DollarSign, 
-  TrendingUp, 
-  RefreshCw, 
-  ShieldCheck, 
-  Building2, 
-  Sparkles, 
-  CheckCircle2, 
-  ArrowRight, 
-  Bot, 
-  ChevronRight,
-  Layers,
-  Clock,
-  Briefcase
+import {
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  DollarSign,
+  ShieldCheck,
+  TrendingUp,
 } from 'lucide-react';
 import { GExperience } from '@/components/GExperience';
 
 interface StrategyDetail {
-  id: string;
+  id: 'flip' | 'brrrr' | 'buy_hold';
   name: string;
   subtitle: string;
   timeline: string;
@@ -28,13 +21,11 @@ interface StrategyDetail {
   idealInvestor: string[];
   capitalThinking: string;
   riskAndFinancing: string;
-  sampleProperty: {
-    address: string;
-    neighborhood: string;
-    arv: number;
-    rehab: number;
-    purchase: number;
-    exitTarget: string;
+  example: {
+    title: string;
+    assumptions: Array<{ label: string; value: string }>;
+    output: string;
+    note: string;
   };
 }
 
@@ -42,312 +33,256 @@ const STRATEGIES: StrategyDetail[] = [
   {
     id: 'flip',
     name: 'Fix & Flip',
-    subtitle: 'Renovation, Resale & Liquid Capital Creation',
-    timeline: '4 – 7 Months per cycle',
-    primaryGoal: 'Build liquid capital reserves and master physical execution.',
+    subtitle: 'Acquire, Renovate, Resell',
+    timeline: 'Illustrative cycle: roughly 4–7 months',
+    primaryGoal: 'Create equity through disciplined acquisition and renovation execution.',
     lifecycle: [
-      { stage: '1. Acquire', desc: 'Acquire at strict 70% MAO ceiling from off-market sources.' },
-      { stage: '2. Renovate', desc: 'Execute value-add architectural scope with licensed Wichita trades.' },
-      { stage: '3. Resale', desc: 'Stage and market to design-conscious owner-occupant buyers.' },
-      { stage: '4. Capital Created', desc: 'Realize liquid net gain to replenish reserves and fund next deal.' }
+      { stage: '1. Acquire', desc: 'Screen purchase price against defensible ARV, repair scope, and full project economics.' },
+      { stage: '2. Renovate', desc: 'Execute a scope designed for the specific house, neighborhood, buyer, budget, and schedule.' },
+      { stage: '3. Resell', desc: 'Price and market against current competition and verified comparable sales.' },
+      { stage: '4. Reconcile', desc: 'Measure actual net result after financing, carry, transaction, and selling costs.' },
     ],
     idealInvestor: [
-      'Active capital builders expanding their liquid investment reserves.',
-      'Investors seeking to learn construction management and market dynamics.',
-      'High-income earners wanting to accelerate equity accumulation.'
+      'Investors comfortable with construction, schedule, financing, and resale risk.',
+      'Operators who can maintain adequate reserves after closing.',
+      'Investors seeking shorter-horizon value creation rather than long-term rental income.',
     ],
-    capitalThinking: 'OCG explores senior lender bridge debt for acquisition and construction draws first. Your personal cash is better preserved as contingency reserves and financial flexibility against unexpected delays.',
-    riskAndFinancing: 'Senior debt facility typically funds 85–90% of purchase price and 100% of renovation budget. Investor equity contributes 10–15% down payment plus 6 months of interest carry cushion.',
-    sampleProperty: {
-      address: '248 S Rutan Ave',
-      neighborhood: 'College Hill',
-      arv: 240000,
-      rehab: 48500,
-      purchase: 119500,
-      exitTarget: '$42,000 Net Projected Margin'
-    }
+    capitalThinking: 'OCG evaluates whether lender capital can support acquisition and renovation while preserving enough investor liquidity for contingency, carry, and lender requirements. The correct structure depends on actual terms—not a fixed leverage percentage.',
+    riskAndFinancing: 'A real flip model should include loan amount, rate, points/fees, draw mechanics, interest carry, taxes, insurance, utilities, contingency, closing costs, selling costs, and expected holding period before any profit target is trusted.',
+    example: {
+      title: 'Illustrative Wichita flip screen',
+      assumptions: [
+        { label: 'Assumed ARV', value: '$240,000' },
+        { label: '70% of ARV', value: '$168,000' },
+        { label: 'Assumed rehab', value: '$48,500' },
+      ],
+      output: 'Heuristic MAO: $119,500',
+      note: 'That $119,500 is only (ARV × 70%) − rehab. It is not projected profit and does not replace a full financing/carry/sale-cost model.',
+    },
   },
   {
     id: 'brrrr',
-    name: 'BRRRR Strategy',
+    name: 'BRRRR',
     subtitle: 'Buy, Renovate, Rent, Refinance, Repeat',
-    timeline: '6 – 12 Months to full equity recycle',
-    primaryGoal: 'Build a long-term rental portfolio while recycling initial cash capital.',
+    timeline: 'Illustrative stabilization/refinance cycle: roughly 6–12+ months',
+    primaryGoal: 'Create durable rental equity while attempting to recycle part of the original cash investment.',
     lifecycle: [
-      { stage: '1. Buy', desc: 'Target properties with significant cosmetic and mechanical upside.' },
-      { stage: '2. Renovate', desc: 'Modernize kitchens, baths, and mechanicals for durable rental durability.' },
-      { stage: '3. Rent', desc: 'Place verified high-quality tenants at top-of-market Wichita rental rates.' },
-      { stage: '4. Refinance', desc: 'Obtain 30-year long-term DSCR mortgage to cash out initial capital.' },
-      { stage: '5. Repeat', desc: 'Deploy the recycled equity into the next acquisition.' }
+      { stage: '1. Buy', desc: 'Acquire only when the post-renovation rent and refinance case are supportable before closing.' },
+      { stage: '2. Renovate', desc: 'Prioritize durable rental scope, mechanical reliability, code compliance, and tenant demand.' },
+      { stage: '3. Stabilize', desc: 'Verify achievable rent, operating expenses, reserves, and occupancy assumptions.' },
+      { stage: '4. Refinance', desc: 'Test actual appraisal, lender LTV/LTC, seasoning, DSCR, rate, fees, and reserve requirements.' },
+      { stage: '5. Repeat', desc: 'Recycle capital only after the first asset is financially stable and sufficiently reserved.' },
     ],
     idealInvestor: [
-      'Investors focused on scaling rental doors without continually injecting fresh cash.',
-      'Wealth builders prioritizing generational cash flow and tax depreciation.',
-      'Disciplined operators comfortable with short-term refinancing execution.'
+      'Investors building a long-term rental portfolio.',
+      'Operators willing to manage both renovation risk and refinance risk.',
+      'Investors who can tolerate capital remaining in a deal if the appraisal or refinance terms are weaker than expected.',
     ],
-    capitalThinking: 'The refinance exit must be stress-tested BEFORE purchase. If the post-renovation appraisal does not support a 75% LTV cash-out covering all initial capital and debt service (DSCR > 1.25x), the deal is rejected.',
-    riskAndFinancing: 'Initial bridge loan transitions to a 30-year fixed DSCR rental mortgage. Rental income must cover PITI by at least 1.20x to 1.25x.',
-    sampleProperty: {
-      address: '1420 N Holyoke Ave',
-      neighborhood: 'Fairmount / WSU Tech Corridor',
-      arv: 185000,
-      rehab: 34000,
-      purchase: 95000,
-      exitTarget: '$1,550/mo Rent · $450/mo Net Cash Flow'
-    }
+    capitalThinking: 'The refinance exit should be modeled before acquisition, but no cash-out amount should be assumed until appraisal, qualifying rent, lender leverage, fees, seasoning, and debt-service requirements are known.',
+    riskAndFinancing: 'DSCR is lender-specific. OCG should calculate it only from stated or verified rent and actual debt-service inputs, then compare the result with the selected lender’s underwriting threshold.',
+    example: {
+      title: 'Illustrative BRRRR decision gate',
+      assumptions: [
+        { label: 'Verified/assumed rent', value: 'Required input' },
+        { label: 'Monthly debt service / PITI', value: 'Required input' },
+        { label: 'Refinance appraisal + lender leverage', value: 'Required inputs' },
+      ],
+      output: 'No DSCR or cash-out claim without the inputs',
+      note: 'BRRRR works only if the stabilized property supports the actual lender’s refinance terms. G should ask for the missing inputs rather than inventing them.',
+    },
   },
   {
     id: 'buy_hold',
-    name: 'Turnkey Buy & Hold',
-    subtitle: 'Immediate Cash Flow & Long-Term Wealth',
-    timeline: '5 – 10+ Year Long-Term Hold',
-    primaryGoal: 'Stable monthly passive cash flow, loan paydown, and inflation hedge.',
+    name: 'Buy & Hold',
+    subtitle: 'Long-Term Cash Flow & Equity',
+    timeline: 'Long-horizon ownership strategy',
+    primaryGoal: 'Own durable assets whose rent, expenses, reserves, debt service, and long-term demand justify the capital committed.',
     lifecycle: [
-      { stage: '1. Acquire', desc: 'Purchase stabilized or newly-renovated single-family asset.' },
-      { stage: '2. Stabilize', desc: 'Verify professional property management and maintenance reserves.' },
-      { stage: '3. Operate', desc: 'Collect predictable monthly rental distributions with minimal friction.' },
-      { stage: '4. Compound', desc: 'Benefit from principal amortization, appreciation, and tax write-offs.' }
+      { stage: '1. Acquire', desc: 'Underwrite purchase price against realistic rent, operating costs, reserves, and financing.' },
+      { stage: '2. Stabilize', desc: 'Complete deferred maintenance and establish reliable property-management systems.' },
+      { stage: '3. Operate', desc: 'Track actual rent collection, vacancy, repairs, capex, taxes, insurance, and debt service.' },
+      { stage: '4. Reassess', desc: 'Periodically compare hold, refinance, renovate, or sell decisions against current economics.' },
     ],
     idealInvestor: [
-      'Busy professionals seeking passive real estate exposure with zero day-to-day hassles.',
-      'Capital allocators diversifying out of volatile equity markets into hard assets.',
-      'Retirement investors seeking reliable monthly cash yields.'
+      'Investors focused on long-term ownership rather than immediate resale.',
+      'Operators who value durable cash flow and reserve discipline.',
+      'Investors prepared for vacancy, maintenance, capital expenditures, and changing financing or tax costs.',
     ],
-    capitalThinking: 'Prioritizes immediate stability and downside protection over high-intensity renovation margins. 20–25% equity down payment with low-leverage fixed debt.',
-    riskAndFinancing: 'Conventional or DSCR 30-year fixed debt. Conservative cash reserve allocation (minimum $5,000 per door) to weather tenant turns.',
-    sampleProperty: {
-      address: '834 S Green St',
-      neighborhood: 'South City / Linwood Park',
-      arv: 145000,
-      rehab: 0,
-      purchase: 142000,
-      exitTarget: '8.4% Net Cash-on-Cash Return'
-    }
-  }
+    capitalThinking: 'A buy-and-hold decision should preserve enough reserves for vacancy, maintenance, capex, insurance/tax changes, and lender requirements. A fixed “cash reserve per door” should not be treated as universally sufficient.',
+    riskAndFinancing: 'Conventional and DSCR structures can both be relevant. The correct choice depends on borrower/property profile, rate, leverage, reserves, fees, qualifying rent, and the lender’s actual program.',
+    example: {
+      title: 'Illustrative hold analysis',
+      assumptions: [
+        { label: 'Gross scheduled rent', value: 'Required input' },
+        { label: 'Vacancy + operating expenses', value: 'Required inputs' },
+        { label: 'Debt service + reserves', value: 'Required inputs' },
+      ],
+      output: 'No cash-on-cash return without a complete cash-flow model',
+      note: 'A real hold analysis should show every major income, expense, financing, and reserve assumption so the investor can audit the result.',
+    },
+  },
 ];
 
 export function Invest() {
-  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('flip');
-  const [expandedSection, setExpandedSection] = useState<string | null>('lifecycle');
-
-  const currentStrategy = STRATEGIES.find(s => s.id === selectedStrategyId) || STRATEGIES[0];
+  const [selectedStrategyId, setSelectedStrategyId] = useState<StrategyDetail['id']>('flip');
+  const currentStrategy = useMemo(
+    () => STRATEGIES.find((strategy) => strategy.id === selectedStrategyId) || STRATEGIES[0],
+    [selectedStrategyId],
+  );
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#070A0F] text-slate-100 selection:bg-blue-600 selection:text-white">
-      
-      {/* 1. INVESTOR HERO — STRATEGY BEFORE DEPLOYMENT */}
-      <section className="relative py-20 lg:py-28 bg-gradient-to-b from-[#0B1220] via-[#070A0F] to-[#070A0F] border-b border-slate-800">
+    <div className="flex min-h-screen flex-col bg-[#070A0F] text-slate-100 selection:bg-blue-600 selection:text-white">
+      <section className="relative border-b border-slate-800 bg-gradient-to-b from-[#0B1220] via-[#070A0F] to-[#070A0F] py-20 lg:py-28">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto text-center">
-            
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-400 mb-6 shadow-lg">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-3xl text-center">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-400 shadow-lg">
               <DollarSign size={14} />
               <span>Disciplined Capital Allocation</span>
             </div>
-
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-tight">
+            <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
               The strategy should fit the investor —<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-blue-200 to-slate-300">
-                not the other way around.
-              </span>
+              <span className="bg-gradient-to-r from-blue-400 via-blue-200 to-slate-300 bg-clip-text text-transparent">not the other way around.</span>
             </h1>
-
-            <p className="mt-6 text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto font-normal">
-              OCG helps you navigate the trade-offs between building liquid capital, expanding cash flow, preserving contingency reserves, financing renovation, and creating a disciplined multi-year investment plan.
+            <p className="mx-auto mt-6 max-w-2xl text-base font-normal leading-relaxed text-slate-300 sm:text-lg">
+              OCG helps investors compare renovation risk, liquidity, financing, cash flow, refinance exposure, and exit strategy before capital is committed.
             </p>
 
-            {/* Strategy Selectors */}
             <div className="mt-10 flex flex-wrap justify-center gap-3">
-              {STRATEGIES.map((strat) => (
+              {STRATEGIES.map((strategy) => (
                 <button
-                  key={strat.id}
-                  onClick={() => setSelectedStrategyId(strat.id)}
-                  className={`px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    selectedStrategyId === strat.id
-                      ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/50 border border-blue-400'
-                      : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
+                  key={strategy.id}
+                  onClick={() => setSelectedStrategyId(strategy.id)}
+                  className={`cursor-pointer rounded-xl border px-6 py-3.5 text-xs font-bold uppercase tracking-wider transition-all ${
+                    selectedStrategyId === strategy.id
+                      ? 'border-blue-400 bg-blue-600 text-white shadow-xl shadow-blue-900/50'
+                      : 'border-slate-800 bg-slate-900/90 text-slate-400 hover:text-white'
                   }`}
                 >
-                  {strat.name}
+                  {strategy.name}
                 </button>
               ))}
-              
-              <a
-                href="#g-diagnostic"
-                className="px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-950 text-blue-400 hover:text-blue-300 border border-blue-500/30 flex items-center gap-2 cursor-pointer"
-              >
+              <a href="#g-diagnostic" className="flex cursor-pointer items-center gap-2 rounded-xl border border-blue-500/30 bg-slate-950 px-6 py-3.5 text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300">
                 <Bot size={14} />
                 <span>Not Sure? Ask G</span>
               </a>
             </div>
-
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* 2. INTERACTIVE STRATEGY ENVIRONMENT */}
-      <section className="py-24 bg-[#070A0F] border-b border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          
-          <div className="p-8 sm:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl">
-            
-            {/* Header / Strategy Identity */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between pb-8 mb-8 border-b border-slate-800 gap-4">
+      <section className="border-b border-slate-800 bg-[#070A0F] py-24">
+        <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl sm:p-10">
+            <div className="mb-8 flex flex-col justify-between gap-4 border-b border-slate-800 pb-8 md:flex-row md:items-center">
               <div>
-                <div className="text-xs font-bold uppercase tracking-widest text-blue-400 font-mono mb-1">
-                  Active Framework Exploration
-                </div>
-                <h2 className="text-3xl font-extrabold text-white">{currentStrategy.name} Strategy</h2>
-                <p className="text-sm text-slate-400 mt-1">{currentStrategy.subtitle}</p>
+                <div className="mb-1 font-mono text-xs font-bold uppercase tracking-widest text-blue-400">Strategy exploration</div>
+                <h2 className="text-3xl font-extrabold text-white">{currentStrategy.name}</h2>
+                <p className="mt-1 text-sm text-slate-400">{currentStrategy.subtitle}</p>
               </div>
-
-              <div className="flex items-center gap-3">
-                <div className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300">
-                  ⏱ Cycle: <span className="font-bold text-white">{currentStrategy.timeline}</span>
-                </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-xs text-slate-300">
+                <span className="text-slate-500">Timing:</span> <span className="font-bold text-white">{currentStrategy.timeline}</span>
               </div>
             </div>
 
-            {/* Visual Lifecycle Flow (The 4-5 Step Visual Assembly) */}
+            <div className="mb-8 rounded-2xl border border-blue-900/40 bg-blue-950/20 p-5">
+              <div className="text-xs font-bold uppercase tracking-wider text-blue-300">Primary objective</div>
+              <p className="mt-2 text-sm leading-relaxed text-slate-300">{currentStrategy.primaryGoal}</p>
+            </div>
+
             <div className="mb-10">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-                Lifecycle Execution Sequence
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {currentStrategy.lifecycle.map((step, idx) => (
-                  <div key={idx} className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800">
-                    <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1 font-mono">
-                      {step.stage}
-                    </div>
-                    <div className="text-xs text-slate-300 leading-relaxed">{step.desc}</div>
+              <div className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-400">Execution sequence</div>
+              <div className="grid gap-3 md:grid-cols-4">
+                {currentStrategy.lifecycle.map((step) => (
+                  <div key={step.stage} className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+                    <div className="mb-1 font-mono text-xs font-bold uppercase tracking-wider text-blue-400">{step.stage}</div>
+                    <div className="text-xs leading-relaxed text-slate-300">{step.desc}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Deep Progressive Breakdown Grid */}
-            <div className="grid lg:grid-cols-2 gap-8 items-start">
-              
-              {/* Left Box: Ideal Profile & Capital Thinking */}
+            <div className="grid items-start gap-8 lg:grid-cols-2">
               <div className="space-y-6">
-                
-                {/* Level 1: When might this fit? */}
-                <div className="p-6 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-300">
                     <CheckCircle2 size={16} className="text-blue-400" />
-                    <span>When Does This Strategy Make Sense?</span>
+                    <span>When might this fit?</span>
                   </h3>
                   <ul className="space-y-2 text-xs text-slate-300">
-                    {currentStrategy.idealInvestor.map((pt, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-blue-400 font-bold">•</span>
-                        <span>{pt}</span>
-                      </li>
+                    {currentStrategy.idealInvestor.map((point) => (
+                      <li key={point} className="flex items-start gap-2"><span className="font-bold text-blue-400">•</span><span>{point}</span></li>
                     ))}
                   </ul>
                 </div>
 
-                {/* Level 2: OCG Capital Thinking */}
-                <div className="p-6 rounded-2xl bg-blue-950/20 border border-blue-900/40">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-blue-300 mb-2 flex items-center gap-2">
+                <div className="rounded-2xl border border-blue-900/40 bg-blue-950/20 p-6">
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-blue-300">
                     <ShieldCheck size={16} className="text-blue-400" />
-                    <span>OCG Capital & Reserve Doctrine</span>
+                    <span>Capital & reserve discipline</span>
                   </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {currentStrategy.capitalThinking}
-                  </p>
+                  <p className="text-xs leading-relaxed text-slate-300">{currentStrategy.capitalThinking}</p>
                 </div>
 
-                {/* Level 3: Debt & Risk Structure */}
-                <div className="p-6 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-2 flex items-center gap-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6">
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-300">
                     <TrendingUp size={16} className="text-emerald-400" />
-                    <span>Lending & Debt Structure</span>
+                    <span>Financing & risk</span>
                   </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    {currentStrategy.riskAndFinancing}
-                  </p>
+                  <p className="text-xs leading-relaxed text-slate-400">{currentStrategy.riskAndFinancing}</p>
                 </div>
-
               </div>
 
-              {/* Right Box: Representative Wichita Case Example */}
-              <div className="p-6 sm:p-8 rounded-3xl bg-slate-950 border border-slate-800 shadow-xl flex flex-col justify-between">
+              <div className="flex flex-col justify-between rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-xl sm:p-8">
                 <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Representative Case Model</span>
-                    <span className="text-xs font-mono text-slate-400">{currentStrategy.sampleProperty.neighborhood}</span>
-                  </div>
-                  <h4 className="text-xl font-bold text-white mb-6">{currentStrategy.sampleProperty.address}</h4>
+                  <div className="mb-2 text-xs font-bold uppercase tracking-wider text-blue-400">Auditable example</div>
+                  <h4 className="mb-2 text-xl font-bold text-white">{currentStrategy.example.title}</h4>
+                  <p className="mb-6 text-xs leading-relaxed text-slate-500">Illustrative only. These are not live property, lender, rent, appraisal, or MLS figures.</p>
 
                   <div className="space-y-3 font-mono text-xs">
-                    <div className="flex justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-slate-400">PURCHASE BASIS (MAO):</span>
-                      <span className="text-white font-bold">${currentStrategy.sampleProperty.purchase.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-slate-400">REHABILITATION BUDGET:</span>
-                      <span className="text-amber-400 font-bold">${currentStrategy.sampleProperty.rehab.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between p-3 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-slate-400">PROJECTED RESALE (ARV):</span>
-                      <span className="text-blue-400 font-bold">${currentStrategy.sampleProperty.arv.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between p-3.5 rounded-xl bg-blue-950/60 border border-blue-500/40 text-blue-200">
-                      <span className="font-bold">TARGET FINANCIAL OUTPUT:</span>
-                      <span className="font-bold text-emerald-400">{currentStrategy.sampleProperty.exitTarget}</span>
+                    {currentStrategy.example.assumptions.map((item) => (
+                      <div key={item.label} className="flex items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                        <span className="text-slate-400">{item.label.toUpperCase()}:</span>
+                        <span className="text-right font-bold text-white">{item.value}</span>
+                      </div>
+                    ))}
+                    <div className="rounded-xl border border-blue-500/40 bg-blue-950/60 p-3.5 text-blue-200">
+                      <div className="font-bold text-emerald-400">{currentStrategy.example.output}</div>
                     </div>
                   </div>
+
+                  <p className="mt-4 text-xs leading-relaxed text-slate-400">{currentStrategy.example.note}</p>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-slate-800/80 flex justify-between items-center">
-                  <span className="text-xs text-slate-400">Ready to discuss your capital allocation?</span>
-                  <Link
-                    href="/contact"
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-wider hover:bg-blue-500 transition-all cursor-pointer"
-                  >
-                    Schedule Strategy Review
+                <div className="mt-8 flex flex-col gap-3 border-t border-slate-800/80 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-xs text-slate-400">Bring a real deal and we can model the actual inputs.</span>
+                  <Link href="/contact" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-all hover:bg-blue-500">
+                    Strategy Review <ArrowRight size={13} />
                   </Link>
                 </div>
               </div>
-
             </div>
-
           </div>
-
         </div>
       </section>
 
-      {/* 3. G DIAGNOSTIC & STRATEGY BRIEF SYNTHESIS */}
-      <section id="g-diagnostic" className="py-24 bg-[#0B1220] border-b border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
-          
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400 mb-4">
+      <section id="g-diagnostic" className="border-b border-slate-800 bg-[#0B1220] py-24">
+        <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto mb-12 max-w-3xl text-center">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400">
               <Bot size={13} />
-              <span>G Diagnostic Intake</span>
+              <span>Ask G</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Unsure which strategy fits your capital and timeline?
-            </h2>
-            <p className="mt-3 text-base text-slate-300">
-              Tell G how much capital you are considering, your risk tolerance, and your multi-year goals. G will synthesize your personalized OCG Strategy Brief.
-            </p>
+            <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Bring the real inputs. G should show the reasoning.</h2>
+            <p className="mt-3 text-base text-slate-300">Tell G what you are trying to accomplish and any numbers you already know. G should identify missing inputs instead of filling them in for you.</p>
           </div>
 
-          <div className="rounded-3xl overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 p-6 sm:p-8">
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-2xl sm:p-8">
             <GExperience />
           </div>
-
         </div>
       </section>
-
     </div>
   );
 }
 
 export default Invest;
-
