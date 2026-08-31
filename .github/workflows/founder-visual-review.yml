@@ -1,0 +1,73 @@
+name: Founder Visual Review
+
+on:
+  push:
+    branches:
+      - aiden/founder-design-recovery-2026-08-30
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm test
+      - run: pnpm run build
+      - name: Install browser capture runtime
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+      - name: Start production build
+        run: |
+          NODE_ENV=production PORT=4173 node dist/index.js > /tmp/ocgict.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/api/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/ocgict.log
+          exit 1
+      - name: Capture founder review screens
+        run: |
+          cat > /tmp/capture.mjs <<'EOF'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          fs.mkdirSync('founder-review', { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
+          const base = 'http://127.0.0.1:4173';
+          async function shot(path, name, fullPage = true) {
+            await page.goto(base + path, { waitUntil: 'networkidle' });
+            await page.screenshot({ path: `founder-review/${name}`, fullPage });
+          }
+          await shot('/', '01-home-desktop.png');
+          await page.setViewportSize({ width: 390, height: 844 });
+          await shot('/', '02-home-mobile.png');
+          await page.setViewportSize({ width: 1440, height: 1000 });
+          await shot('/sell', '03-sell-desktop.png');
+          await shot('/invest', '04-invest-desktop.png');
+          await shot('/how-ocg-works', '05-how-ocg-works.png');
+          await shot('/about', '06-about.png');
+          await page.goto(base + '/', { waitUntil: 'networkidle' });
+          const gButton = page.getByRole('button', { name: /G|intelligence|chat/i }).last();
+          if (await gButton.count()) {
+            await gButton.click().catch(() => {});
+            await page.waitForTimeout(500);
+          }
+          await page.screenshot({ path: 'founder-review/07-g-open.png', fullPage: false });
+          await browser.close();
+          EOF
+          npx --yes -p playwright@1.55.0 node /tmp/capture.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: founder-visual-review
+          path: founder-review/*.png
+          if-no-files-found: error
+          retention-days: 7
