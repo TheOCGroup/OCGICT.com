@@ -23,7 +23,10 @@ jobs:
       - run: pnpm run build
       - name: Install browser capture runtime
         run: |
-          npm install --no-save playwright@1.55.0
+          mkdir -p /tmp/visual-capture
+          cd /tmp/visual-capture
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: Start production build
         run: |
@@ -36,16 +39,17 @@ jobs:
           exit 1
       - name: Capture founder review screens
         run: |
-          cat > /tmp/capture.mjs <<'EOF'
+          cat > /tmp/visual-capture/capture.mjs <<'EOF'
           import { chromium } from 'playwright';
           import fs from 'node:fs';
-          fs.mkdirSync('founder-review', { recursive: true });
+          fs.mkdirSync(process.env.GITHUB_WORKSPACE + '/founder-review', { recursive: true });
+          const out = process.env.GITHUB_WORKSPACE + '/founder-review';
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
           const base = 'http://127.0.0.1:4173';
           async function shot(path, name, fullPage = true) {
             await page.goto(base + path, { waitUntil: 'networkidle' });
-            await page.screenshot({ path: `founder-review/${name}`, fullPage });
+            await page.screenshot({ path: `${out}/${name}`, fullPage });
           }
           await shot('/', '01-home-desktop.png');
           await page.setViewportSize({ width: 390, height: 844 });
@@ -61,10 +65,11 @@ jobs:
             await gButton.click().catch(() => {});
             await page.waitForTimeout(500);
           }
-          await page.screenshot({ path: 'founder-review/07-g-open.png', fullPage: false });
+          await page.screenshot({ path: `${out}/07-g-open.png`, fullPage: false });
           await browser.close();
           EOF
-          node /tmp/capture.mjs
+          cd /tmp/visual-capture
+          node capture.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: founder-visual-review
