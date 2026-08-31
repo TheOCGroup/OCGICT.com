@@ -10,8 +10,6 @@ import {
   CheckCircle2,
   Home as HomeIcon,
   Search,
-  Gauge,
-  Footprints,
 } from 'lucide-react';
 import OCGWordmark from '@/components/OCGWordmark';
 import { InteractiveTransformSlider } from '@/components/InteractiveTransformSlider';
@@ -152,8 +150,8 @@ export function Home() {
                   {[
                     ['1', 'Enter your address', 'We begin property and public-record research.'],
                     ['2', 'Answer a few questions', 'Condition, timing, and contact—nothing unnecessary.'],
-                    ['3', 'OCG intelligence runs', 'Property facts, condition signals, comps, ARV, repairs, and acquisition math.'],
-                    ['4', 'Receive your preliminary offer', 'If confidence gates pass, review the range and accept or counter subject to walkthrough.'],
+                    ['3', 'OCG reviews the evidence', 'We use verified property facts and available market evidence for condition, repair, valuation, and acquisition analysis—never invented inputs.'],
+                    ['4', 'Receive your result', 'If confidence gates pass, review a preliminary range. If evidence is incomplete, OCG routes the property for human review.'],
                   ].map(([number, title, copy], index) => (
                     <motion.div
                       key={number}
