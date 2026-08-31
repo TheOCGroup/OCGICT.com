@@ -172,6 +172,10 @@ export function createApp() {
     });
   });
 
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
+  });
+
   const staticPath = process.env.NODE_ENV === "production"
     ? path.resolve(__dirname, "public")
     : path.resolve(__dirname, "..", "dist", "public");
