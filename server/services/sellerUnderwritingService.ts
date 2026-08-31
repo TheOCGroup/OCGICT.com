@@ -5,7 +5,7 @@ import {
   IComparableSale,
   DataCertaintyLevel,
 } from "../../shared/contracts";
-import { WichitaPropertyService, WichitaPublicPropertyRecord } from "./wichitaPropertyService.js";
+import { WichitaPropertyService } from "./wichitaPropertyService.js";
 import { PiperOutboxService } from "./piperAdapter.js";
 import { OcgObservability } from "./observability.js";
 
@@ -14,6 +14,16 @@ function getDataMode(): "production" | "development" | "demo" {
   if (configured === "demo") return "demo";
   if (configured === "development") return "development";
   return "production";
+}
+
+function hasReportedStructuralRisk(propertyCondition: string, knownRepairs: string[] = []): boolean {
+  const condition = propertyCondition.toLowerCase();
+  if (["structural", "fire", "foundation"].some((term) => condition.includes(term))) return true;
+
+  return knownRepairs.some((repair) => {
+    const normalized = repair.toLowerCase();
+    return ["structural", "fire", "foundation"].some((term) => normalized.includes(term));
+  });
 }
 
 export class SellerUnderwritingService {
@@ -28,6 +38,7 @@ export class SellerUnderwritingService {
     const fullName = payload.fullName || payload.sellerName || "Direct Property Owner";
     const email = payload.email || payload.sellerEmail || "";
     const phone = payload.phone || payload.sellerPhone || "";
+    const reportedStructuralRisk = hasReportedStructuralRisk(propertyCondition, payload.knownRepairs || []);
 
     OcgObservability.log("SELLER_INTAKE_PROCESSING_STARTED", {
       address: cleanAddress,
@@ -41,8 +52,8 @@ export class SellerUnderwritingService {
       this.fetchComparableSales(cleanAddress, dataMode),
     ]);
 
-    // Never invent missing property facts in production. Zero values are used only
-    // as neutral placeholders in the response contract when the record is unavailable.
+    // Never invent missing property facts in production. Zero values are neutral
+    // placeholders in the response contract when verified records are unavailable.
     const livingAreaSqft = publicRecord?.livingAreaSqft ?? 0;
     const yearBuilt = publicRecord?.yearBuilt ?? 0;
     const propertyType = publicRecord?.zoningDescription || "Property details pending verification";
@@ -50,11 +61,12 @@ export class SellerUnderwritingService {
     const parcelId = publicRecord?.parcelId;
 
     const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(comps, livingAreaSqft);
-
+    const normalizedPayload = { ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority };
     const rehab = livingAreaSqft > 0
-      ? this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt)
-      : this.emptyRehabResult();
+      ? this.calculateRehabScope(normalizedPayload, livingAreaSqft, yearBuilt)
+      : this.emptyRehabResult(reportedStructuralRisk);
 
+    const structuralRiskDetected = reportedStructuralRisk || rehab.structuralRiskDetected;
     const acquisitionMultiplier = 0.70;
     const grossArvCap = estimatedArv > 0 ? Math.round(estimatedArv * acquisitionMultiplier) : 0;
     const internalMaoCeiling = estimatedArv > 0
@@ -72,7 +84,7 @@ export class SellerUnderwritingService {
       repairEstimateConfidence: rehab.repairConfidence,
       dataFreshnessDays: dataMode === "production" && comps.length > 0 ? 45 : 9999,
       ownershipConsistency: !probateOrLegalFlag,
-      structuralRiskDetected: rehab.structuralRiskDetected,
+      structuralRiskDetected,
       probateOrLegalFlag,
       hasPublicRecord: !!publicRecord,
       liveCompsAvailable: dataMode === "production" && comps.length >= 3,
@@ -157,11 +169,14 @@ export class SellerUnderwritingService {
   }
 
   /**
-   * LIVE COMPARABLE PROVIDER PLACEHOLDER.
-   * Production returns no comps until the approved Wichita/Sedgwick provider is connected.
-   * Demo examples are allowed only outside production and are explicitly labeled DEMO.
+   * Production returns no comps until an approved Wichita/Sedgwick provider is
+   * connected. Demo examples are available only outside production and are
+   * explicitly labeled as demo evidence.
    */
-  private static async fetchComparableSales(address: string, dataMode: "production" | "development" | "demo"): Promise<IComparableSale[]> {
+  private static async fetchComparableSales(
+    address: string,
+    dataMode: "production" | "development" | "demo",
+  ): Promise<IComparableSale[]> {
     if (dataMode === "production") {
       OcgObservability.log("COMPARABLE_PROVIDER_NOT_CONNECTED", {
         address,
@@ -171,7 +186,16 @@ export class SellerUnderwritingService {
     }
 
     const upper = address.toUpperCase();
-    const demo = (id: string, compAddress: string, distanceMiles: number, salePrice: number, saleDate: string, sqft: number, yearBuilt: number, similarityScore: number): IComparableSale => ({
+    const demo = (
+      id: string,
+      compAddress: string,
+      distanceMiles: number,
+      salePrice: number,
+      saleDate: string,
+      sqft: number,
+      yearBuilt: number,
+      similarityScore: number,
+    ): IComparableSale => ({
       id: `DEMO-${id}`,
       address: compAddress,
       distanceMiles,
@@ -195,21 +219,25 @@ export class SellerUnderwritingService {
     return [];
   }
 
-  private static calculateEstimatedArv(comps: IComparableSale[], livingAreaSqft: number): { estimatedArv: number; arvConfidence: number } {
-    if (comps.length === 0 || livingAreaSqft <= 0) {
-      return { estimatedArv: 0, arvConfidence: 0 };
-    }
+  private static calculateEstimatedArv(
+    comps: IComparableSale[],
+    livingAreaSqft: number,
+  ): { estimatedArv: number; arvConfidence: number } {
+    if (comps.length === 0 || livingAreaSqft <= 0) return { estimatedArv: 0, arvConfidence: 0 };
 
-    const denominator = comps.reduce((acc, c) => acc + c.similarityScore, 0);
+    const denominator = comps.reduce((acc, comp) => acc + comp.similarityScore, 0);
     if (denominator <= 0) return { estimatedArv: 0, arvConfidence: 0 };
 
-    const weightedPpsqft = comps.reduce((acc, c) => acc + c.pricePerSqft * c.similarityScore, 0) / denominator;
+    const weightedPpsqft = comps.reduce(
+      (acc, comp) => acc + comp.pricePerSqft * comp.similarityScore,
+      0,
+    ) / denominator;
     const arv = Math.round((weightedPpsqft * livingAreaSqft) / 1000) * 1000;
     const arvConfidence = comps.length >= 3 ? 0.90 : comps.length === 2 ? 0.75 : 0.55;
     return { estimatedArv: arv, arvConfidence };
   }
 
-  private static emptyRehabResult() {
+  private static emptyRehabResult(structuralRiskDetected = false) {
     return {
       estimatedRehabBudget: 0,
       rehabBreakdown: {
@@ -219,31 +247,31 @@ export class SellerUnderwritingService {
         contingencyReserves: 0,
       },
       repairConfidence: 0,
-      structuralRiskDetected: false,
+      structuralRiskDetected,
     };
   }
 
   private static calculateRehabScope(payload: ISellerIntakePayload, sqft: number, yearBuilt: number) {
     let baseRatePerSqft = 22;
-    let structuralRiskDetected = false;
-    let repairConfidence = 0.65; // seller-reported condition only; vision/walkthrough still required
+    let structuralRiskDetected = hasReportedStructuralRisk(payload.propertyCondition || "", payload.knownRepairs || []);
+    let repairConfidence = 0.65;
 
     switch (payload.propertyCondition) {
       case "Move-In Ready": baseRatePerSqft = 10; break;
       case "Dated / Needs Updates": baseRatePerSqft = 25; break;
       case "Needs Major Cosmetic & Mechanical Rehab": baseRatePerSqft = 38; break;
       case "Full Gut / Major Deferred Maintenance": baseRatePerSqft = 55; repairConfidence = 0.55; break;
-      case "Severe Structural / Fire Damage": baseRatePerSqft = 80; structuralRiskDetected = true; repairConfidence = 0.30; break;
+      case "Severe Structural / Fire Damage": baseRatePerSqft = 80; repairConfidence = 0.30; break;
     }
 
     if (yearBuilt > 0 && yearBuilt < 1960) baseRatePerSqft += 4;
 
     let knownRepairsAddon = 0;
-    for (const rep of payload.knownRepairs || []) {
-      if (rep.includes("Roof")) knownRepairsAddon += 8500;
-      if (rep.includes("HVAC")) knownRepairsAddon += 6800;
-      if (rep.includes("Foundation")) { knownRepairsAddon += 12000; structuralRiskDetected = true; }
-      if (rep.includes("Plumbing")) knownRepairsAddon += 5500;
+    for (const repair of payload.knownRepairs || []) {
+      if (repair.includes("Roof")) knownRepairsAddon += 8500;
+      if (repair.includes("HVAC")) knownRepairsAddon += 6800;
+      if (repair.includes("Foundation")) knownRepairsAddon += 12000;
+      if (repair.includes("Plumbing")) knownRepairsAddon += 5500;
     }
 
     const baseRehab = sqft * baseRatePerSqft + knownRepairsAddon;
@@ -318,7 +346,6 @@ export class SellerUnderwritingService {
       tier = "HIGH_CONFIDENCE";
       requiredHumanVerifications.push("Standard walkthrough and title review");
     } else if (!params.productionMode && compositeScore >= 0.65 && params.hasPublicRecord) {
-      // Development/demo can exercise result screens, but this is never a production-live offer.
       tier = "MEDIUM_CONFIDENCE";
       reasons.push("Development/demo intelligence only; not eligible for a production automated offer.");
     }
@@ -358,7 +385,13 @@ export class SellerUnderwritingService {
         offerRangeMin: minOffer,
         offerRangeMax: maxOffer,
         singlePointEstimate: params.internalMaoCeiling,
-        displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
+        displayTerms: {
+          isBinding: false,
+          asIsCondition: true,
+          commissionFree: true,
+          subjectToWalkthrough: true,
+          subjectToTitleReview: true,
+        },
         explanation: {
           whatOcgReviewed: ["Verified property record", "Live comparable-sale evidence", "Reported/verified condition inputs", "OCG acquisition formula"],
           whatRemainsToBeVerified: ["Physical walkthrough", "Final condition verification", "Title review"],
@@ -371,10 +404,18 @@ export class SellerUnderwritingService {
     return {
       status: "ADDITIONAL_REVIEW_REQUIRED",
       headline: "We Have Your Property — OCG Review Is Underway",
-      displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
+      displayTerms: {
+        isBinding: false,
+        asIsCondition: true,
+        commissionFree: true,
+        subjectToWalkthrough: true,
+        subjectToTitleReview: true,
+      },
       explanation: {
         whatOcgReviewed: ["Seller submission", "Available property/provider signals", "Initial acquisition-risk screen"],
-        whatRemainsToBeVerified: params.confidenceGate.reasonsForTier.length > 0 ? params.confidenceGate.reasonsForTier : ["Live property and comparable-sale evidence"],
+        whatRemainsToBeVerified: params.confidenceGate.reasonsForTier.length > 0
+          ? params.confidenceGate.reasonsForTier
+          : ["Live property and comparable-sale evidence"],
         nextSteps: ["OCG completes the missing property intelligence", "You receive a preliminary offer when the evidence supports one", "A walkthrough verifies condition before final terms"],
       },
       legalDisclaimer: disclaimer,

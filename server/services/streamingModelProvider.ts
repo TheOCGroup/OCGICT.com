@@ -1,6 +1,4 @@
-import { Readable } from "stream";
-import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
-import { OcgObservability } from "./observability.js";
+import { ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
 
 export interface StreamingChunk {
   type: "token" | "tool_call" | "done" | "error";
@@ -16,32 +14,64 @@ export interface IStreamingModelProvider extends IModelProvider {
   generateStream(options: ModelCompletionOptions): Promise<AsyncIterable<StreamingChunk>>;
 }
 
+function parseCurrencyNumber(raw: string, suffix?: string): number | undefined {
+  let value = Number(raw.replace(/,/g, ""));
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  if (suffix?.toLowerCase() === "k") value *= 1_000;
+  if (suffix?.toLowerCase() === "m") value *= 1_000_000;
+  return value;
+}
+
+function parseMoneyAfterLabel(message: string, labels: string[]): number | undefined {
+  for (const label of labels) {
+    const expression = new RegExp(`\\b${label}\\b\\s*(?:budget|scope|cost|of|is|:|=)?\\s*\\$?\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(k|m)?\\b`, "i");
+    const match = message.match(expression);
+    if (!match) continue;
+
+    const value = parseCurrencyNumber(match[1], match[2]);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function parseExplicitLiquidity(message: string): number | undefined {
+  const patterns = [
+    /(?:have|capital|cash|liquidity|available|budget)\s*(?:of|is|:)?\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(k|m)?\b/i,
+    /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(k|m)?\s*(?:in\s+)?(?:cash|capital|liquidity|available)?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+    const value = parseCurrencyNumber(match[1], match[2]);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 /**
- * Enhanced Gemini Provider with Streaming and Uncertainty Handling
+ * Gemini provider used when an approved API key is present.
  */
 export class EnhancedGeminiProvider implements IStreamingModelProvider {
   name = "Google Gemini Gateway";
-  private apiKey: string;
-  private modelName: string;
 
-  constructor(apiKey: string, modelName = "gemini-2.5-flash") {
-    this.apiKey = apiKey;
-    this.modelName = modelName;
-  }
+  constructor(
+    private apiKey: string,
+    private modelName = "gemini-2.5-flash",
+  ) {}
 
   async generateCompletion(options: ModelCompletionOptions): Promise<ModelCompletionResponse> {
     const startTime = Date.now();
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent?key=${this.apiKey}`;
 
     const contents = options.messages
-      .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
+      .filter((message) => message.role !== "system")
+      .map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
       }));
 
-    const systemInstruction = options.messages.find((m) => m.role === "system");
-
+    const systemInstruction = options.messages.find((message) => message.role === "system");
     const payload: any = {
       contents,
       generationConfig: {
@@ -51,21 +81,17 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
     };
 
     if (systemInstruction) {
-      payload.systemInstruction = {
-        parts: [{ text: systemInstruction.content }],
-      };
+      payload.systemInstruction = { parts: [{ text: systemInstruction.content }] };
     }
 
-    if (options.tools && options.tools.length > 0) {
-      payload.tools = [
-        {
-          functionDeclarations: options.tools.map((t) => ({
-            name: t.name,
-            description: t.description,
-            parameters: t.parameters,
-          })),
-        },
-      ];
+    if (options.tools?.length) {
+      payload.tools = [{
+        functionDeclarations: options.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        })),
+      }];
     }
 
     const response = await fetch(endpoint, {
@@ -75,26 +101,19 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API error [${response.status}]: ${errText}`);
+      throw new Error(`Gemini provider unavailable [${response.status}]`);
     }
 
     const data = await response.json();
     const candidate = data.candidates?.[0];
-    const textPart = candidate?.content?.parts?.find((p: any) => p.text);
-    const funcPart = candidate?.content?.parts?.find((p: any) => p.functionCall);
-
-    const toolCalls = funcPart
-      ? [
-          {
-            name: funcPart.functionCall.name,
-            arguments: funcPart.functionCall.args || {},
-          },
-        ]
+    const textPart = candidate?.content?.parts?.find((part: any) => part.text);
+    const functionPart = candidate?.content?.parts?.find((part: any) => part.functionCall);
+    const toolCalls = functionPart
+      ? [{ name: functionPart.functionCall.name, arguments: functionPart.functionCall.args || {} }]
       : undefined;
 
     return {
-      content: textPart?.text || (funcPart ? "Executing requested action on the OCG platform..." : ""),
+      content: textPart?.text || (functionPart ? "I can open the matching OCG website tool for you." : ""),
       toolCalls,
       provider: "Gemini",
       model: this.modelName,
@@ -103,131 +122,105 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
   }
 
   async generateStream(options: ModelCompletionOptions): Promise<AsyncIterable<StreamingChunk>> {
-    const comp = await this.generateCompletion(options);
-    async function* streamGen(): AsyncIterable<StreamingChunk> {
-      const words = comp.content.split(" ");
-      for (const word of words) {
-        yield { type: "token", text: word + " " };
-        await new Promise((r) => setTimeout(r, 20));
+    const completion = await this.generateCompletion(options);
+    async function* stream(): AsyncIterable<StreamingChunk> {
+      for (const word of completion.content.split(" ")) {
+        yield { type: "token", text: `${word} ` };
       }
-      if (comp.toolCalls && comp.toolCalls.length > 0) {
-        yield { type: "tool_call", toolCall: comp.toolCalls[0] };
+      if (completion.toolCalls?.length) {
+        yield { type: "tool_call", toolCall: completion.toolCalls[0] };
       }
       yield { type: "done" };
     }
-    return streamGen();
+    return stream();
   }
 }
 
 /**
- * Local Deterministic Provider with full Streaming & Action Emulation
+ * Evidence-safe deterministic fallback. It provides useful routing and formulas
+ * without manufacturing property, market, financing, reserve, or valuation data.
  */
 export class EnhancedLocalProvider implements IStreamingModelProvider {
   name = "OCG Local Intelligence Core";
 
   async generateCompletion(options: ModelCompletionOptions): Promise<ModelCompletionResponse> {
     const startTime = Date.now();
-    const lastUserMsg = options.messages.filter((m) => m.role === "user").pop()?.content || "";
-    const lower = lastUserMsg.toLowerCase();
+    const lastUserMessage = options.messages.filter((message) => message.role === "user").pop()?.content || "";
+    const lower = lastUserMessage.toLowerCase();
 
-    let content = "";
+    let content: string;
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
-    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("repairs") || (lower.includes("arv") && lower.includes("property"))) {
-      let arv = 240000;
-      let rehab = 45000;
+    const arv = parseMoneyAfterLabel(lastUserMessage, ["arv"]);
+    const rehab = parseMoneyAfterLabel(lastUserMessage, ["rehab", "repairs", "renovation"]);
+    const isMaoQuestion = lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("arv");
 
-      if (lower.includes("300k") || lower.includes("300,000") || lower.includes("300000")) arv = 300000;
-      else if (lower.includes("250k") || lower.includes("250,000")) arv = 250000;
-      else if (lower.includes("200k") || lower.includes("200,000")) arv = 200000;
-
-      if (lower.includes("55k") || lower.includes("55,000") || lower.includes("55000")) rehab = 55000;
-      else if (lower.includes("50k") || lower.includes("50,000")) rehab = 50000;
-      else if (lower.includes("40k") || lower.includes("40,000")) rehab = 40000;
-
-      const mao = Math.round(arv * 0.70) - rehab;
-      content = `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab Scope. On a $${arv.toLocaleString()} ARV with $${rehab.toLocaleString()} in repairs: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. This preserves an equity buffer for holding interest and transaction fees.`;
-      toolCalls = [
-        {
-          name: "set_calculator_values",
-          arguments: { arv, rehab },
-        },
-      ];
-    } else if (lower.includes("all my cash") || lower.includes("why wouldn't i") || lower.includes("all cash into")) {
-      content = `OCG advises preserving liquid cash as strategic contingency armor. Deploying senior lender debt for purchase and construction draws protects you against unexpected material/permit delays and satisfies lender interest reserves.`;
-    } else if (lower.includes("dscr") || lower.includes("rental")) {
-      content = `DSCR loans evaluate property cash flow rather than personal W-2 income, typically requiring 1.20x-1.25x rent-to-debt coverage and a 20-25% equity down payment.`;
-    } else if (lower.includes("60,000") || lower.includes("60k") || lower.includes("not sure")) {
-      content = `Having $60,000 gives you strong Wichita leverage, but you should never deploy 100% of it into your first deal. We recommend reserving $20k+ as emergency defense while exploring BRRRR or leveraged flips.`;
-    } else if (lower.includes("passed away") || lower.includes("mother") || lower.includes("inherited") || lower.includes("probate")) {
-      content = `Navigating an inherited home requires transparent, compassionate support. OCG evaluates properties directly as-is with zero wholesaler commissions and flexible closing dates.`;
-      toolCalls = [
-        {
-          name: "activate_seller_intake",
-          arguments: { sellerStep: 1 },
-        },
-      ];
+    if (isMaoQuestion) {
+      if (arv !== undefined && rehab !== undefined) {
+        const mao = Math.max(0, Math.round(arv * 0.70 - rehab));
+        content = `Using only the assumptions you supplied: heuristic MAO = (ARV × 70%) − rehab = ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()}. This is a screening heuristic, not a verified property value or guaranteed purchase price; financing, carry, transaction, contingency, and exit costs still need a full deal model.`;
+        toolCalls = [{ name: "set_calculator_values", arguments: { arv, rehab } }];
+      } else {
+        const missing = [arv === undefined ? "ARV" : null, rehab === undefined ? "rehab budget" : null].filter(Boolean).join(" and ");
+        content = `I can calculate the 70% screening heuristic, but I will not invent the ${missing}. Give me the ${missing} you want to assume and I’ll show the math.`;
+      }
+    } else if (lower.includes("all my cash") || lower.includes("all cash into") || lower.includes("use all") && lower.includes("cash")) {
+      content = "Putting all available cash into an acquisition can leave too little liquidity for contingencies, carrying costs, lender reserves, or schedule overruns. OCG compares cash and financing structures using the actual deal and lender terms before deciding how much liquidity to commit.";
+    } else if (lower.includes("dscr")) {
+      content = "DSCR is a debt-service coverage test. I need the qualifying rent or net operating income basis and the actual debt-service inputs before I can calculate it, and the acceptable threshold depends on the specific lender program. I will not assume either.";
+    } else if (lower.includes("rental") || lower.includes("buy and hold") || lower.includes("buy & hold") || lower.includes("brrrr")) {
+      content = "For a hold or BRRRR decision, start with property-specific rent, operating expenses, renovation scope, reserves, acquisition terms, and refinance/debt-service assumptions. Give me the inputs you already have and I’ll identify what is still missing before we model the deal.";
+    } else if (lower.includes("capital") || lower.includes("cash") || lower.includes("liquidity")) {
+      const liquidity = parseExplicitLiquidity(lastUserMessage);
+      content = liquidity
+        ? `You stated approximately $${Math.round(liquidity).toLocaleString()} of available liquidity. I can use that as a user-provided input, but I will not assume how much should be invested or reserved until we know the property, strategy, financing, carry, and contingency requirements.`
+        : "Tell me the amount of liquidity you want to model and the strategy you are considering. I’ll treat your number as a user-provided input and keep reserves, leverage, and deal economics separate rather than inventing a recommendation.";
+    } else if (lower.includes("passed away") || lower.includes("inherited") || lower.includes("probate") || lower.includes("estate")) {
+      content = "For an inherited or estate property, OCG can begin with the address and your known situation. Any property value or offer remains preliminary until property data, condition, title, and authority to sell are verified.";
+      toolCalls = [{ name: "activate_seller_intake", arguments: { sellerStep: 1 } }];
+    } else if (lower.includes("sell") || lower.includes("seller") || lower.includes("my house") || lower.includes("my property")) {
+      content = "If you are considering selling a Wichita property, start with the address. OCG will use verified information where available and route the property to human review when the evidence is not strong enough for a responsible preliminary offer.";
+      toolCalls = [{ name: "activate_seller_intake", arguments: { sellerStep: 1 } }];
     } else if (lower.includes("college hill") || lower.includes("craftsman")) {
-      content = `College Hill features historic Craftsman bungalows and Tudors from 1910-1940. Preserving cedar woodwork while updating mechanicals commands top neighborhood pricing.`;
-      toolCalls = [
-        {
-          name: "load_property_case",
-          arguments: { propertyId: "bungalow" },
-        },
-      ];
+      content = "College Hill includes a substantial stock of older character homes, including Craftsman-era properties. For a specific property, I would still need verified property facts, condition, and current comparable-sale evidence before making any valuation or renovation-return claim.";
+      toolCalls = [{ name: "load_property_case", arguments: { propertyId: "bungalow" } }];
     } else if (lower.includes("crown heights") || lower.includes("ranch")) {
-      content = `Crown Heights features 1950s-1960s brick ranches with solid construction. Limewashed brick and open-concept living expansions perform exceptionally well.`;
-      toolCalls = [
-        {
-          name: "load_property_case",
-          arguments: { propertyId: "ranch" },
-        },
-      ];
-    } else if (lower.includes("delano") || lower.includes("cottage")) {
-      content = `Historic Delano features 1920s worker cottages along West Douglas, delivering strong rental yield and entry-level buyer demand.`;
-      toolCalls = [
-        {
-          name: "load_property_case",
-          arguments: { propertyId: "delano" },
-        },
-      ];
+      content = "Crown Heights includes many mid-century residential properties. For a specific investment decision, I would separate architectural context from verified property condition, current comps, renovation scope, and full deal economics.";
+      toolCalls = [{ name: "load_property_case", arguments: { propertyId: "ranch" } }];
+    } else if (lower.includes("delano")) {
+      content = "Delano has a mix of older residential housing and strong local identity. I can discuss strategy at a general level, but I will not claim current rent, resale demand, comps, or returns without verified property and market inputs.";
     } else {
-      content = `OCG combines disciplined underwriting, micro-market comps in Wichita, and strategic renovation design. Tell me your specific goals or property questions.`;
+      content = "I’m G, OCG’s real estate intelligence guide. Give me a Wichita property, a seller situation, or an investment strategy you are considering. I’ll separate what is known from what still needs verification and help you choose the next step.";
     }
 
     return {
       content,
       toolCalls,
       provider: "OCG_LOCAL_ENGINE",
-      model: "ocg-deterministic-v5",
+      model: "ocg-deterministic-v6-evidence-safe",
       latencyMs: Date.now() - startTime,
     };
   }
 
   async generateStream(options: ModelCompletionOptions): Promise<AsyncIterable<StreamingChunk>> {
-    const comp = await this.generateCompletion(options);
-    async function* streamGen(): AsyncIterable<StreamingChunk> {
-      const words = comp.content.split(" ");
-      for (const word of words) {
-        yield { type: "token", text: word + " " };
-        await new Promise((r) => setTimeout(r, 20));
+    const completion = await this.generateCompletion(options);
+    async function* stream(): AsyncIterable<StreamingChunk> {
+      for (const word of completion.content.split(" ")) {
+        yield { type: "token", text: `${word} ` };
       }
-      if (comp.toolCalls && comp.toolCalls.length > 0) {
-        yield { type: "tool_call", toolCall: comp.toolCalls[0] };
+      if (completion.toolCalls?.length) {
+        yield { type: "tool_call", toolCall: completion.toolCalls[0] };
       }
       yield { type: "done" };
     }
-    return streamGen();
+    return stream();
   }
 }
 
-/**
- * Model Provider Factory supporting Environment Config
- */
 export function getActiveStreamingModelProvider(): IStreamingModelProvider {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (geminiKey && geminiKey.trim() !== "") {
-    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-1.5-flash");
+  if (geminiKey?.trim()) {
+    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-2.5-flash");
   }
 
   return new EnhancedLocalProvider();

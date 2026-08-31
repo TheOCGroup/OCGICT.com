@@ -30,5 +30,8 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      - name: Regression tests
+        run: pnpm test
+
       - name: Production build
         run: pnpm run build

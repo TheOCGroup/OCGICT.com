@@ -3,7 +3,6 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GIntelligenceGateway } from "./services/gIntelligenceGateway.js";
-import { getActiveStreamingModelProvider } from "./services/streamingModelProvider.js";
 import { HunterAdapter, VictorAdapter } from "./services/systemAdapters.js";
 import { PiperQueueAdapter, SellerActionType } from "./services/piperAdapter.js";
 import { WichitaPropertyService } from "./services/wichitaPropertyService.js";
@@ -19,6 +18,10 @@ const allowedSellerActions: SellerActionType[] = [
   "REQUEST_CALL",
   "REQUEST_WALKTHROUGH",
 ];
+
+function internalEndpointsEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.OCGICT_ENABLE_INTERNAL_ENDPOINTS === "true";
+}
 
 export function createApp() {
   const app = express();
@@ -42,41 +45,12 @@ export function createApp() {
     }
   });
 
-  app.post("/api/g/stream", async (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    try {
-      const provider = getActiveStreamingModelProvider();
-      const messages = [
-        { role: "system" as const, content: "You are G — OCG Investment Intelligence." },
-        { role: "user" as const, content: req.body.message || "" },
-      ];
-      const stream = await provider.generateStream({ messages });
-      for await (const chunk of stream) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      res.end();
-    } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`);
-      res.end();
-    }
-  });
-
   app.get("/api/property/lookup", async (req, res) => {
     try {
       const address = (req.query.address as string) || "";
       if (!address) return res.status(400).json({ error: "Missing required query parameter: address" });
       const record = await WichitaPropertyService.lookupPublicRecord({ address });
       res.json({ record });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.post("/api/property/victor-payload", async (req, res) => {
-    try {
-      const { publicRecord } = req.body;
-      if (!publicRecord) return res.status(400).json({ error: "Missing required body: publicRecord" });
-      res.json({ victorRecord: WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord) });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -136,24 +110,36 @@ export function createApp() {
     }
   });
 
-  app.post("/api/adapters/hunter", async (req, res) => {
-    try { res.json(await HunterAdapter.querySignals(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+  if (internalEndpointsEnabled()) {
+    app.post("/api/property/victor-payload", async (req, res) => {
+      try {
+        const { publicRecord } = req.body;
+        if (!publicRecord) return res.status(400).json({ error: "Missing required body: publicRecord" });
+        res.json({ victorRecord: WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord) });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
-  app.post("/api/adapters/victor", async (req, res) => {
-    try { res.json(await VictorAdapter.underwriteDeal(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+    app.post("/api/adapters/hunter", async (req, res) => {
+      try { res.json(await HunterAdapter.querySignals(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
 
-  app.post("/api/adapters/piper", async (req, res) => {
-    try { res.json(await PiperQueueAdapter.enqueueStrategyBrief(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+    app.post("/api/adapters/victor", async (req, res) => {
+      try { res.json(await VictorAdapter.underwriteDeal(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
 
-  app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
-  app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
-  app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
+    app.post("/api/adapters/piper", async (req, res) => {
+      try { res.json(await PiperQueueAdapter.enqueueStrategyBrief(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
+    app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
+    app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
+  }
 
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -164,6 +150,10 @@ export function createApp() {
       canonicalRepo: "TheOCGroup/OCGICT.com",
       timestamp: new Date().toISOString(),
     });
+  });
+
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API route not found" });
   });
 
   const staticPath = process.env.NODE_ENV === "production"

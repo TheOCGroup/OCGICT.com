@@ -52,6 +52,9 @@ jobs:
   deploy:
     name: Build and deploy
     needs: validate
+    # PRs validate without attempting a deployment because the staging GitHub
+    # environment does not currently expose the existing Google Cloud identity.
+    # Main/manual deployments retain the established Cloud Run path.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: staging

@@ -9,6 +9,10 @@
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
+    "test:seller": "tsx server/__tests__/sellerOffer.test.ts",
+    "test:api-security": "tsx server/__tests__/apiSecurity.test.ts",
+    "test:g": "tsx server/__tests__/gFallback.test.ts",
+    "test": "pnpm run test:seller && pnpm run test:api-security && pnpm run test:g",
     "format": "prettier --write ."
   },
   "dependencies": {
