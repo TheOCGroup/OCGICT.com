@@ -14,35 +14,37 @@ export interface IStreamingModelProvider extends IModelProvider {
   generateStream(options: ModelCompletionOptions): Promise<AsyncIterable<StreamingChunk>>;
 }
 
+function parseCurrencyNumber(raw: string, suffix?: string): number | undefined {
+  let value = Number(raw.replace(/,/g, ""));
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  if (suffix?.toLowerCase() === "k") value *= 1_000;
+  if (suffix?.toLowerCase() === "m") value *= 1_000_000;
+  return value;
+}
+
 function parseMoneyAfterLabel(message: string, labels: string[]): number | undefined {
   for (const label of labels) {
-    const expression = new RegExp(`\\b${label}\\b\\s*(?:budget|scope|cost|of|is|:|=)?\\s*\\$?\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(k|m)?\\b`, "i");
+    const expression = new RegExp(`\\b${label}\\b\\s*(?:budget|scope|cost|of|is|:|=)?\\s*\\$?\\s*([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(k|m)?\\b`, "i");
     const match = message.match(expression);
     if (!match) continue;
 
-    let value = Number(match[1]);
-    if (!Number.isFinite(value) || value <= 0) continue;
-    if (match[2]?.toLowerCase() === "k") value *= 1_000;
-    if (match[2]?.toLowerCase() === "m") value *= 1_000_000;
-    return value;
+    const value = parseCurrencyNumber(match[1], match[2]);
+    if (value !== undefined) return value;
   }
   return undefined;
 }
 
 function parseExplicitLiquidity(message: string): number | undefined {
   const patterns = [
-    /(?:have|capital|cash|liquidity|available|budget)\s*(?:of|is|:)?\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\b/i,
-    /\$\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\s*(?:in\s+)?(?:cash|capital|liquidity|available)?/i,
+    /(?:have|capital|cash|liquidity|available|budget)\s*(?:of|is|:)?\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(k|m)?\b/i,
+    /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(k|m)?\s*(?:in\s+)?(?:cash|capital|liquidity|available)?/i,
   ];
 
   for (const pattern of patterns) {
     const match = message.match(pattern);
     if (!match) continue;
-    let value = Number(match[1]);
-    if (!Number.isFinite(value) || value <= 0) continue;
-    if (match[2]?.toLowerCase() === "k") value *= 1_000;
-    if (match[2]?.toLowerCase() === "m") value *= 1_000_000;
-    return value;
+    const value = parseCurrencyNumber(match[1], match[2]);
+    if (value !== undefined) return value;
   }
   return undefined;
 }
@@ -99,8 +101,6 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
     });
 
     if (!response.ok) {
-      // Do not echo provider response bodies: they can contain implementation
-      // details or other material that should not be surfaced to site visitors.
       throw new Error(`Gemini provider unavailable [${response.status}]`);
     }
 
