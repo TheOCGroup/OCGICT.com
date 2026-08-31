@@ -20,6 +20,10 @@ const allowedSellerActions: SellerActionType[] = [
   "REQUEST_WALKTHROUGH",
 ];
 
+function internalEndpointsEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.OCGICT_ENABLE_INTERNAL_ENDPOINTS === "true";
+}
+
 export function createApp() {
   const app = express();
 
@@ -67,16 +71,6 @@ export function createApp() {
       if (!address) return res.status(400).json({ error: "Missing required query parameter: address" });
       const record = await WichitaPropertyService.lookupPublicRecord({ address });
       res.json({ record });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  app.post("/api/property/victor-payload", async (req, res) => {
-    try {
-      const { publicRecord } = req.body;
-      if (!publicRecord) return res.status(400).json({ error: "Missing required body: publicRecord" });
-      res.json({ victorRecord: WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord) });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -136,24 +130,36 @@ export function createApp() {
     }
   });
 
-  app.post("/api/adapters/hunter", async (req, res) => {
-    try { res.json(await HunterAdapter.querySignals(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+  if (internalEndpointsEnabled()) {
+    app.post("/api/property/victor-payload", async (req, res) => {
+      try {
+        const { publicRecord } = req.body;
+        if (!publicRecord) return res.status(400).json({ error: "Missing required body: publicRecord" });
+        res.json({ victorRecord: WichitaPropertyService.toPropertyIntelligenceRecord(publicRecord) });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
 
-  app.post("/api/adapters/victor", async (req, res) => {
-    try { res.json(await VictorAdapter.underwriteDeal(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+    app.post("/api/adapters/hunter", async (req, res) => {
+      try { res.json(await HunterAdapter.querySignals(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
 
-  app.post("/api/adapters/piper", async (req, res) => {
-    try { res.json(await PiperQueueAdapter.enqueueStrategyBrief(req.body)); }
-    catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
+    app.post("/api/adapters/victor", async (req, res) => {
+      try { res.json(await VictorAdapter.underwriteDeal(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
 
-  app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
-  app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
-  app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
+    app.post("/api/adapters/piper", async (req, res) => {
+      try { res.json(await PiperQueueAdapter.enqueueStrategyBrief(req.body)); }
+      catch (err: any) { res.status(500).json({ error: err.message }); }
+    });
+
+    app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
+    app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
+    app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
+  }
 
   app.get("/api/health", (_req, res) => {
     res.json({
