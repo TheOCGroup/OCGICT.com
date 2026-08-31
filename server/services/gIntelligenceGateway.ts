@@ -19,16 +19,67 @@ export interface GChatResponse {
   latencyMs: number;
 }
 
-const G_SYSTEM_INSTRUCTION = `You are G — OCG's Investment Intelligence Core (Ocasio Capital Group, Wichita, Kansas).
-You assist real estate investors and property sellers with disciplined underwriting, micro-market comps, architectural renovation design, and financing structures.
+const G_SYSTEM_INSTRUCTION = `You are G — the public-facing real estate intelligence guide for OCG, the real estate investment, acquisition, renovation-strategy, and consulting brand of The OC Group in Wichita, Kansas.
 
-KEY OCG OPERATING PRINCIPLES:
-1. Underwriting Discipline: MAO = (ARV × 70%) − Rehab Scope.
-2. Capital Preservation: We structure senior lender debt for purchase and construction draws; liquid cash is preserved as contingency armor and lender reserves.
-3. Wichita Housing Stock: Deep knowledge of College Hill, Crown Heights, Riverside, Delano, and South City.
-4. Professional Boundary: You provide educational frameworks and property intelligence. You do not provide legal counsel, tax advice, or certified bank appraisals.
+Your job is to help property sellers and real estate investors think clearly and move to the correct next step. You are not a generic chatbot and you must never pretend to know facts or numbers that have not been supplied or verified.
 
-When users inquire about calculations, properties, selling, or booking, choose appropriate tool calls to control the website.`;
+OCG OPERATING PRINCIPLES:
+1. Underwriting discipline: the 70% rule may be used as a conservative screening heuristic: heuristic MAO = (ARV × 70%) − estimated rehab. It is not a universal valuation rule, a guaranteed purchase price, or a substitute for a full deal model.
+2. Full-deal economics matter: acquisition price, verified rehab scope, financing cost, holding period, taxes, insurance, utilities, transaction costs, selling costs, contingency, rent, refinance terms, and exit assumptions can materially change a decision.
+3. Capital preservation: for appropriate renovation projects, OCG evaluates senior lender capital for acquisition and construction while preserving sufficient liquid reserves for contingencies, carry, and lender requirements. Never imply this structure is available or optimal without actual lender terms.
+4. Hold strategy: DSCR must be calculated from actual or clearly labeled assumed rent and debt service. Do not state that a property qualifies for DSCR financing without real loan terms and the lender's underwriting standard.
+5. Wichita context: you may discuss general characteristics of Wichita neighborhoods, but never claim a current comp, current market statistic, ownership fact, permit fact, tax fact, property condition, or live listing fact unless that data is explicitly provided by a trusted tool or in the conversation.
+6. Seller experience: any website-generated seller number is preliminary and non-binding, subject to data verification, property walkthrough/condition verification, title review, and a separate written purchase agreement.
+7. Professional boundary: provide educational frameworks and property intelligence, not legal counsel, tax advice, licensed appraisal, or guaranteed financing.
+
+NUMBER INTEGRITY RULES:
+- Never invent ARV, rehab, rent, purchase price, liquidity, interest rate, holding period, DSCR, cash-on-cash return, profit, or offer amounts.
+- Clearly distinguish USER INPUT, ASSUMPTION, HEURISTIC, ESTIMATE, and VERIFIED DATA.
+- If a calculation lacks required inputs, state what is missing and ask for the minimum necessary inputs.
+- If you calculate from user-provided assumptions, show the formula briefly enough that the user can audit it.
+- Do not describe an estimate as verified.
+
+When users inquire about calculations, properties, selling, or website navigation, choose an appropriate website tool call only when the action matches what the user actually asked for.`;
+
+function parseExplicitLiquidity(message: string): number | undefined {
+  const lower = message.toLowerCase();
+  const patterns = [
+    /(?:have|capital|cash|liquidity|available|budget)\s*(?:of|is|:)?\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\b/i,
+    /\$\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\s*(?:in\s+)?(?:cash|capital|liquidity|available)?/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = lower.match(pattern);
+    if (!match) continue;
+    let value = Number(match[1]);
+    if (!Number.isFinite(value)) continue;
+    if (match[2]?.toLowerCase() === "k") value *= 1_000;
+    if (match[2]?.toLowerCase() === "m") value *= 1_000_000;
+    if (value > 0) return value;
+  }
+  return undefined;
+}
+
+function liquidityTier(amount: number): IOCGStrategyBrief["clientContext"]["availableLiquidityTier"]["value"] {
+  if (amount < 25_000) return "$10k-$25k";
+  if (amount < 50_000) return "$25k-$50k";
+  if (amount < 100_000) return "$50k-$100k";
+  if (amount < 250_000) return "$100k-$250k";
+  return "$250k+";
+}
+
+function parseLabeledMoney(message: string, label: "arv" | "rehab"): number | undefined {
+  const expression = label === "arv"
+    ? /\barv\b\s*(?:of|is|:|=)?\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\b/i
+    : /\b(?:rehab|repairs|renovation)\b\s*(?:budget|scope|cost|of|is|:|=)?\s*\$?\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m)?\b/i;
+  const match = message.match(expression);
+  if (!match) return undefined;
+  let value = Number(match[1]);
+  if (!Number.isFinite(value)) return undefined;
+  if (match[2]?.toLowerCase() === "k") value *= 1_000;
+  if (match[2]?.toLowerCase() === "m") value *= 1_000_000;
+  return value > 0 ? value : undefined;
+}
 
 export class GIntelligenceGateway {
   private static rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -37,11 +88,9 @@ export class GIntelligenceGateway {
     const startTime = Date.now();
     const sessionId = req.sessionId || `sess_${Date.now()}`;
 
-    // 1. Rate Limiting Check (30 requests/minute per session)
     this.checkRateLimit(sessionId);
     OcgObservability.log("G_SESSION_STARTED", { sessionId });
 
-    // 2. Prepare Context & Tool Schemas
     const messages: ModelMessage[] = [
       { role: "system", content: G_SYSTEM_INSTRUCTION },
       ...(req.history || []).map((h) => ({ role: h.role, content: h.content })),
@@ -51,7 +100,7 @@ export class GIntelligenceGateway {
     const tools: ModelToolDefinition[] = [
       {
         name: "set_calculator_values",
-        description: "Sets the After Repair Value and estimated rehab in the 70% MAO Explorer.",
+        description: "Sets user-provided or explicitly assumed After Repair Value and estimated rehab in the 70% MAO Explorer. Never invent either value.",
         parameters: {
           type: "object",
           properties: {
@@ -63,7 +112,7 @@ export class GIntelligenceGateway {
       },
       {
         name: "load_property_case",
-        description: "Loads a conceptual Wichita property transformation case study.",
+        description: "Loads a clearly labeled conceptual Wichita property transformation case study, not a live property or current comp.",
         parameters: {
           type: "object",
           properties: {
@@ -74,7 +123,7 @@ export class GIntelligenceGateway {
       },
       {
         name: "activate_seller_intake",
-        description: "Prepares seller mode for an owner or heir looking to sell a Wichita property.",
+        description: "Opens the seller property-review flow for an owner or heir looking to sell a Wichita property.",
         parameters: {
           type: "object",
           properties: {
@@ -84,28 +133,29 @@ export class GIntelligenceGateway {
       },
     ];
 
-    // 3. Invoke Model Provider Layer
     const provider = getActiveModelProvider();
     const completion = await provider.generateCompletion({
       messages,
       tools,
-      temperature: 0.35,
+      temperature: 0.25,
     });
 
-    // 4. Resolve Tool Action (if any)
     let action: IGActionInvocation | undefined;
     if (completion.toolCalls && completion.toolCalls.length > 0) {
       const call = completion.toolCalls[0];
       action = {
         actionId: call.name === "set_calculator_values" ? "SET_CALCULATOR_VALUES" : call.name === "load_property_case" ? "SELECT_PROPERTY_TRANSFORMATION" : "INITIATE_SELLER_MODE",
         payload: call.arguments,
-        uiToastMessage: `G triggered ${call.name.replace(/_/g, " ")}`,
+        uiToastMessage: call.name === "set_calculator_values"
+          ? "G loaded your stated assumptions into the MAO explorer."
+          : call.name === "load_property_case"
+            ? "G opened a conceptual property case."
+            : "G opened the seller property-review path.",
         timestamp: new Date().toISOString(),
       };
       OcgObservability.log("TOOL_CALLED", { tool: call.name, args: call.arguments }, undefined, sessionId);
     }
 
-    // 5. Synthesize Strategy Brief if context warrants
     const brief = this.synthesizeStrategyBrief(req.message, req.clientContext, sessionId);
     if (brief) {
       OcgObservability.log("STRATEGY_BRIEF_UPDATED", { briefId: brief.id }, undefined, sessionId);
@@ -128,12 +178,26 @@ export class GIntelligenceGateway {
     sessionId: string
   ): IOCGStrategyBrief | undefined {
     const lower = message.toLowerCase();
-    const isInvestor = lower.includes("invest") || lower.includes("flip") || lower.includes("brrrr") || lower.includes("capital") || lower.includes("50k");
-    const isSeller = lower.includes("sell") || lower.includes("inherited") || lower.includes("probate") || lower.includes("estate");
+    const isInvestor = /\b(invest|investor|flip|brrrr|rental|buy\s*(?:&|and)?\s*hold|capital)\b/.test(lower);
+    if (!isInvestor) return undefined;
 
-    if (!isInvestor && !isSeller) return undefined;
+    const explicitLiquidity = parseExplicitLiquidity(message);
+    if (!explicitLiquidity) return undefined;
 
     const now = new Date().toISOString();
+    const explicitArv = parseLabeledMoney(message, "arv");
+    const explicitRehab = parseLabeledMoney(message, "rehab");
+    const hasCompleteMaoInputs = explicitArv !== undefined && explicitRehab !== undefined;
+    const heuristicMao = hasCompleteMaoInputs ? Math.max(0, explicitArv * 0.7 - explicitRehab) : undefined;
+
+    const primaryFit: IOCGStrategyBrief["strategyExploration"]["primaryFit"]["value"] = lower.includes("brrrr")
+      ? "BRRRR"
+      : /buy\s*(?:&|and)?\s*hold|rental/.test(lower)
+        ? "Buy & Hold"
+        : lower.includes("flip")
+          ? "Fix & Flip"
+          : "Exploratory / Unsure";
+
     return {
       id: `brief_${Date.now()}`,
       version: "3.0.0",
@@ -148,61 +212,70 @@ export class GIntelligenceGateway {
         email: clientContext?.email,
         phone: clientContext?.phone,
         investorStage: {
-          value: isSeller ? "Seller / Disposing" : lower.includes("capital") ? "Capital Allocator" : "Active Operator",
+          value: "Active Operator",
           certainty: "PROVISIONAL",
-          source: "G Conversational Intake Inference",
+          source: "G conversational intake; stage not yet verified",
           retrievalTimestamp: now,
+          verificationNotes: "Displayed as provisional until the investor confirms experience and operating stage.",
         },
         availableLiquidityTier: {
-          value: lower.includes("100k") ? "$100k-$250k" : lower.includes("50k") ? "$50k-$100k" : "$25k-$50k",
-          certainty: "PROVISIONAL",
-          source: "G Conversational Intake Inference",
+          value: liquidityTier(explicitLiquidity),
+          certainty: "KNOWN",
+          source: "User-stated liquidity in current conversation",
           retrievalTimestamp: now,
+          verificationNotes: `Derived only from the user's stated amount of approximately $${Math.round(explicitLiquidity).toLocaleString()}.`,
         },
         involvementPreference: "Hybrid Advisory",
       },
       strategyExploration: {
         primaryFit: {
-          value: isSeller ? "Direct Sale / Liquidation" : lower.includes("brrrr") ? "BRRRR" : "Fix & Flip",
-          certainty: "ESTIMATED",
-          source: "OCG Strategy Matrix Matcher",
+          value: primaryFit,
+          certainty: primaryFit === "Exploratory / Unsure" ? "PROVISIONAL" : "KNOWN",
+          source: primaryFit === "Exploratory / Unsure" ? "No explicit strategy selected" : "Strategy explicitly referenced by user",
           retrievalTimestamp: now,
         },
         timeline: {
-          value: isSeller ? "Immediate (0-30 Days)" : "30-90 Days",
+          value: "Flexible",
           certainty: "PROVISIONAL",
-          source: "G Intake Inference",
+          source: "Timeline not yet supplied",
           retrievalTimestamp: now,
+          verificationNotes: "Flexible is a placeholder pending user confirmation, not an inferred deadline.",
         },
         riskTolerance: {
           value: "Conservative (Preserve Capital First)",
-          certainty: "ESTIMATED",
-          source: "OCG Financing Doctrine",
+          certainty: "PROVISIONAL",
+          source: "OCG default screening posture; user risk tolerance not yet supplied",
           retrievalTimestamp: now,
+          verificationNotes: "This is OCG's initial risk posture, not a claim about the user's personal risk tolerance.",
         },
-        modeledUnderwritingContext: {
-          targetArv: 240000,
-          estimatedRehabBudget: 45000,
-          targetMaoCeiling: 123000,
-          modeledGrossMargin: 72000,
-          contingencyBuffer: 9000,
-        },
+        modeledUnderwritingContext: hasCompleteMaoInputs
+          ? {
+              targetArv: explicitArv,
+              estimatedRehabBudget: explicitRehab,
+              targetMaoCeiling: heuristicMao,
+            }
+          : undefined,
       },
       executiveIntelligence: {
-        gConversationSummary: `User engaged G on: "${message}". Strategy synthesized based on OCG capital preservation heuristics.`,
+        gConversationSummary: `Investor engaged G with approximately $${Math.round(explicitLiquidity).toLocaleString()} of stated liquidity${primaryFit !== "Exploratory / Unsure" ? ` and referenced ${primaryFit}` : " without selecting a strategy yet"}.`,
         keyRiskConsiderations: [
-          "Preserve liquid capital reserves against contractor holding delays",
-          "Ensure refinance DSCR debt service coverage exceeds 1.20x before closing",
+          "Preserve adequate liquidity for contingency, carry, lender reserves, and unexpected project delays.",
+          hasCompleteMaoInputs
+            ? "The displayed 70% MAO is a screening heuristic only; a full deal model still needs financing, holding, transaction, and exit costs."
+            : "ARV and rehab have not both been supplied, so no deal-level MAO should be inferred from this brief.",
         ],
         unresolvedQuestions: [
-          "Detailed contractor scope walkthrough pending",
-          "Final title and municipal lien clearance pending",
+          "Confirm investment experience and desired level of involvement.",
+          "Confirm timeline and personal risk tolerance.",
+          ...(hasCompleteMaoInputs ? [] : ["Provide property-specific ARV and rehab assumptions before modeling a purchase ceiling."]),
         ],
-        nextRecommendedHumanAction: "Schedule Strategy Session with Genaro to review micro-neighborhood comps.",
-        disclaimerAcknowledged: true,
+        nextRecommendedHumanAction: primaryFit === "Exploratory / Unsure"
+          ? "Clarify investment objective before recommending a strategy."
+          : "Validate the strategy against a specific property and complete deal economics before making an acquisition decision.",
+        disclaimerAcknowledged: false,
       },
       lifecycle: {
-        status: "Persisted_Staging",
+        status: "Draft",
       },
     };
   }
