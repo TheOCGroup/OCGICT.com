@@ -17,6 +17,8 @@ import LenderNetwork from "./pages/LenderNetwork";
 import CaseStudies from "./pages/CaseStudies";
 import Contact from "./pages/Contact";
 import SubmitDeal from "./pages/SubmitDeal";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import { Sell } from "./pages/Sell";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminListings from "./pages/admin/AdminListings";
@@ -48,6 +50,8 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/submit-deal" component={SubmitDeal} />
       <Route path="/sell" component={Sell} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin">{() => <AdminGuard component={AdminListings} />}</Route>
       <Route path="/admin/listings/new">{() => <AdminGuard component={AdminListingForm} />}</Route>
