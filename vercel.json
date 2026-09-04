@@ -8,6 +8,7 @@
       "*": false
     }
   },
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude).github/**'",
   "routes": [
     {
       "src": "/api/(.*)",
