@@ -1,5 +1,5 @@
 name: Founder Visual Review
-# CI-only trigger: capture current recovery branch for founder QA.
+# CI-only capture for current recovery branch founder QA.
 
 on:
   push:
@@ -48,8 +48,22 @@ jobs:
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
           const base = 'http://127.0.0.1:4173';
+          async function revealPage() {
+            await page.evaluate(async () => {
+              const step = Math.max(500, Math.floor(window.innerHeight * 0.75));
+              for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
+                window.scrollTo(0, y);
+                await new Promise(resolve => setTimeout(resolve, 120));
+              }
+              window.scrollTo(0, document.documentElement.scrollHeight);
+              await new Promise(resolve => setTimeout(resolve, 300));
+              window.scrollTo(0, 0);
+              await new Promise(resolve => setTimeout(resolve, 250));
+            });
+          }
           async function shot(path, name, fullPage = true) {
             await page.goto(base + path, { waitUntil: 'networkidle' });
+            await revealPage();
             await page.screenshot({ path: `${out}/${name}`, fullPage });
           }
           await shot('/', '01-home-desktop.png');
@@ -61,6 +75,7 @@ jobs:
           await shot('/how-ocg-works', '05-how-ocg-works.png');
           await shot('/about', '06-about.png');
           await page.goto(base + '/', { waitUntil: 'networkidle' });
+          await revealPage();
           const gButton = page.getByRole('button', { name: /G|intelligence|chat/i }).last();
           if (await gButton.count()) {
             await gButton.click().catch(() => {});
