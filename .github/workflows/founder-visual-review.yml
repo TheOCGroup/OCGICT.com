@@ -1,4 +1,5 @@
 name: Founder Visual Review
+# CI-only trigger: capture current recovery branch for founder QA.
 
 on:
   push:
