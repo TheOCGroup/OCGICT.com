@@ -49,17 +49,16 @@ jobs:
           const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
           const base = 'http://127.0.0.1:4173';
           async function revealPage() {
-            await page.evaluate(async () => {
-              const step = Math.max(500, Math.floor(window.innerHeight * 0.75));
-              for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
-                window.scrollTo(0, y);
-                await new Promise(resolve => setTimeout(resolve, 120));
-              }
-              window.scrollTo(0, document.documentElement.scrollHeight);
-              await new Promise(resolve => setTimeout(resolve, 300));
-              window.scrollTo(0, 0);
-              await new Promise(resolve => setTimeout(resolve, 250));
-            });
+            const sections = page.locator('section');
+            const count = await sections.count();
+            for (let index = 0; index < count; index += 1) {
+              await sections.nth(index).scrollIntoViewIfNeeded().catch(() => {});
+              await page.waitForTimeout(350);
+            }
+            await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+            await page.waitForTimeout(500);
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await page.waitForTimeout(300);
           }
           async function shot(path, name, fullPage = true) {
             await page.goto(base + path, { waitUntil: 'networkidle' });
