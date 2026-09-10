@@ -1,9 +1,6 @@
 name: Deploy OCGICT to Cloud Run Staging
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
