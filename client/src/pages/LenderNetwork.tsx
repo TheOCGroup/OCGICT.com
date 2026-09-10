@@ -5,8 +5,8 @@
    ============================================================ */
 import { useState } from "react";
 import { Link } from "wouter";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import { ArrowRight, ExternalLink, CheckCircle, X, Send, Shield, DollarSign, Clock, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -133,7 +133,7 @@ export default function LenderNetwork() {
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <Navbar />
+      
 
       {/* ── PAGE HERO ── */}
       <section className="pt-32 pb-16 bg-[#111111]">
@@ -367,7 +367,7 @@ export default function LenderNetwork() {
         </div>
       )}
 
-      <Footer />
+      
     </div>
   );
 }

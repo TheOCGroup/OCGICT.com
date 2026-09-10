@@ -96,7 +96,7 @@ export function PersistentG() {
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.28 }}
             onClick={() => { setOpen(true); setShowNudge(false); }}
-            className="fixed bottom-24 right-4 z-[88] max-w-[330px] rounded-2xl border border-amber-300/25 bg-[#07101d]/96 p-4 text-left shadow-2xl shadow-black/50 backdrop-blur-xl sm:right-6"
+            className="hidden sm:block fixed bottom-24 right-4 z-[88] max-w-[330px] rounded-2xl border border-amber-300/25 bg-[#07101d]/96 p-4 text-left shadow-2xl shadow-black/50 backdrop-blur-xl sm:right-6"
           >
             <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><Sparkles size={12} /> G is available</div>
             <p className="text-xs leading-relaxed text-slate-200">{pageContext.nudge}</p>

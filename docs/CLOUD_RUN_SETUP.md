@@ -89,3 +89,33 @@ Only after the staging safety gate passes:
 6. Re-run the seller and admin smoke tests against the public domain.
 
 Do not describe OCGICT as publicly launched until those checks pass.
+
+## Recovered configuration — 2026-09-10
+
+The existing service was verified in project `ocg-pipeline` (438680341626).
+No project, service, registry, pool, provider, service account, or database was created.
+
+- Staging URL: https://ocg-website-staging-rsazfnmlja-uc.a.run.app
+- Registry: `us-central1-docker.pkg.dev/ocg-pipeline/cloud-run-source-deploy`
+- Image: `ocg-website-staging`
+- Provider: `projects/438680341626/locations/global/workloadIdentityPools/ocg-github-pool/providers/github-actions-provider`
+- Existing deployer: `sa-nova-deployer@ocg-pipeline.iam.gserviceaccount.com`
+- Existing runtime account: `438680341626-compute@developer.gserviceaccount.com`
+
+GitHub staging now has the project variable and provider/deployer secrets.
+The shared provider continues to trust NOVA and additionally trusts OCGICT only
+when `assertion.environment == 'staging'`. The deployer has `roles/run.developer`
+on this service; existing registry and runtime-account permissions were reused.
+The workflow preserves the existing public invoker policy and runtime configuration.
+Deployment is manual-only. Docker now uses Node 24 and the frozen pnpm lockfile.
+
+### Production blockers discovered during QA
+
+The configured Supabase project `lsaerludzkxjewqgbvkg` is inaccessible to the
+connected account; its API explicitly denies access. Founder access to this
+existing project is required. Do not create a replacement database.
+
+Existing admin authentication is client-side, and operational outbox/work items
+are held in process memory. They do not provide secure, durable seller/admin
+operation. These pre-existing backend issues block production promotion until
+existing database access and server authentication are restored and verified.

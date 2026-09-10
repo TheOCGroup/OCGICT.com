@@ -2,15 +2,15 @@
    404 NOT FOUND — Dark Luxury "Investment Grade" Design
    ============================================================ */
 import { Link } from "wouter";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import { ArrowRight, Home } from "lucide-react";
 
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-[#0d0d0d] flex flex-col">
-      <Navbar />
-      <main className="flex-1 flex items-center justify-center py-32">
+      
+      <div className="flex-1 flex items-center justify-center py-32">
         <div className="container text-center">
           <div
             className="font-bold leading-none mb-6 select-none"
@@ -43,8 +43,8 @@ export default function NotFound() {
             </div>
           </div>
         </div>
-      </main>
-      <Footer />
+      </div>
+      
     </div>
   );
 }

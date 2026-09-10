@@ -1,6 +1,6 @@
 import React from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import { Rule70Calculator, StrategyComparisonMatrix } from "@/components/Calculators";
 import { ArrowRight, ShieldCheck, CheckCircle2, TrendingUp, Layers, Landmark, Calendar, Bot } from "lucide-react";
 import { Link } from "wouter";
@@ -39,9 +39,9 @@ const paths = [
 export default function Services() {
   return (
     <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
-      <Navbar />
+      
 
-      <main className="pt-32 pb-24 space-y-24 md:space-y-36">
+      <div className="pt-12 pb-24 space-y-24 md:space-y-36">
         {/* Page Hero */}
         <section className="container">
           <div className="max-w-4xl space-y-6">
@@ -123,7 +123,7 @@ export default function Services() {
                 <Calendar size={14} /> Schedule Strategy Discussion
               </Link>
               <a
-                href="#g"
+                href="#g" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new Event("ocg:open-g")); }}
                 className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3.5 text-xs font-bold uppercase tracking-wider text-slate-200 hover:text-white transition-all"
               >
                 <Bot size={14} className="text-blue-400" /> Diagnose with G
@@ -131,9 +131,9 @@ export default function Services() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
 
-      <Footer />
+      
     </div>
   );
 }

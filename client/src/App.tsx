@@ -66,6 +66,7 @@ function Router() {
 
 function PublicChrome() {
   const [location] = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [location]);
   if (location.startsWith("/admin")) return <Router />;
   return (
     <div className="min-h-screen bg-[#070A0F] text-slate-100">

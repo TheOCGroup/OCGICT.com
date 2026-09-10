@@ -5,8 +5,8 @@
    ============================================================ */
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import { supabase, MarketplaceListing } from "@/lib/supabase";
 import { ArrowRight, SlidersHorizontal, X, ChevronRight, MapPin, Bed, Bath, Square, Tag, FileText, Send, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
@@ -76,7 +76,7 @@ export default function Marketplace() {
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <Navbar />
+      
 
       {/* ── PAGE HERO ── */}
       <section className="pt-32 pb-12 bg-[#111111]">
@@ -553,7 +553,7 @@ export default function Marketplace() {
         </div>
       )}
 
-      <Footer />
+      
     </div>
   );
 }

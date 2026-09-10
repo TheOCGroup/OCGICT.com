@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import {
   Home, DollarSign, User, Phone, Mail, MapPin,
   FileText, ChevronRight, CheckCircle2, Building2,
@@ -104,9 +104,9 @@ export default function SubmitDeal() {
 
   return (
     <div className="min-h-screen bg-[#070A0F] text-white selection:bg-blue-600 selection:text-white">
-      <Navbar />
+      
 
-      <main className="pt-32 pb-24 space-y-16">
+      <div className="pt-12 pb-24 space-y-16">
         {/* Header */}
         <section className="container max-w-4xl">
           <div className="space-y-4">
@@ -528,9 +528,9 @@ export default function SubmitDeal() {
             )}
           </div>
         </section>
-      </main>
+      </div>
 
-      <Footer />
+      
     </div>
   );
 }

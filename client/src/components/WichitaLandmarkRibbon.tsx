@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ExternalLink, MapPin, Sparkles } from 'lucide-react';
 
 const commons = (filename: string) =>
@@ -44,12 +44,13 @@ const landmarks = [
 ];
 
 export function WichitaLandmarkRibbon() {
+  const reduceMotion = useReducedMotion();
   return (
     <section className="relative overflow-hidden border-y border-white/10 bg-[#060b13] py-20 sm:py-24">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_25%,rgba(245,158,11,.12),transparent_28%),radial-gradient(circle_at_82%_70%,rgba(37,99,235,.16),transparent_30%)]" />
       <motion.div
         aria-hidden="true"
-        animate={{ x: ['-8%', '8%', '-8%'], opacity: [0.14, 0.24, 0.14] }}
+        animate={reduceMotion ? { opacity: 0.14 } : { x: ['-8%', '8%', '-8%'], opacity: [0.14, 0.24, 0.14] }}
         transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
         className="pointer-events-none absolute -top-24 left-0 h-64 w-2/3 rounded-full bg-amber-400/10 blur-3xl"
       />

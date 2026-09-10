@@ -3,8 +3,8 @@
    Detailed deal breakdowns with metrics, process, outcomes
    ============================================================ */
 import { Link } from "wouter";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+
+
 import { ArrowRight, TrendingUp, Building2, Handshake, CheckCircle, DollarSign, Clock, BarChart3 } from "lucide-react";
 
 const INTERIOR_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663555856344/hx6jrLuwt69Vu5ochy8VJ2/oc-renovation-interior-mEnqEZDnoKecPWiKPZD3sM.webp";
@@ -127,7 +127,7 @@ const schemaFields = [
 export default function CaseStudies() {
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <Navbar />
+      
 
       {/* ── PAGE HERO ── */}
       <section className="relative pt-32 pb-20 overflow-hidden">
@@ -280,7 +280,7 @@ export default function CaseStudies() {
         </div>
       </section>
 
-      <Footer />
+      
     </div>
   );
 }

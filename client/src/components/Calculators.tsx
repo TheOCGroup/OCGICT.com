@@ -74,7 +74,7 @@ export function Calculators() {
             <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
               <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Rehab Scope</div>
               <div className="text-xl sm:text-3xl font-extrabold text-amber-400 font-mono mt-1">− ${rehab.toLocaleString()}</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Verified Contractor Estimate</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Illustrative Rehab Budget</div>
             </div>
 
             {/* Term 4: MAO Result */}
@@ -195,7 +195,7 @@ export function Calculators() {
             {/* Prompt G Callout */}
             <div className="mt-6 pt-4 border-t border-slate-800 text-center">
               <a 
-                href="#g" 
+                href="#g" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new Event("ocg:open-g")); }} 
                 className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-400 hover:text-blue-300 transition-colors"
               >
                 <span>Ask G to underwrite a specific Wichita address</span>
