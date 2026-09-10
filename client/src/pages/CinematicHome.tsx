@@ -20,13 +20,15 @@ function CinematicOpening() {
   const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "-6%"]);
   const shade = useTransform(scrollYProgress, [0, 0.62, 1], [0.46, 0.72, 0.88]);
   const progress = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
+  const methodOpacity = useTransform(scrollYProgress, [0, 0.12], [1, 0]);
 
   return (
-    <section ref={sectionRef} className="relative h-[360vh] bg-[#05080d]">
-      <div className="sticky top-0 h-[calc(100vh-5rem)] overflow-hidden border-b border-white/10">
+    <section ref={sectionRef} className="cinematic-opening relative bg-[#05080d]">
+      <div className="cinematic-stage relative overflow-hidden border-b border-white/10">
         <motion.img
           src="/images/hero/wichita_hero_street.jpg"
-          alt="Wichita, Kansas residential neighborhood"
+          alt="Illustrative residential streetscape; not a verified OCG property"
+          fetchPriority="high"
           className="absolute inset-0 h-full w-full object-cover"
           style={reduceMotion ? undefined : { scale: imageScale, y: imageY }}
         />
@@ -38,14 +40,14 @@ function CinematicOpening() {
           <motion.div className="h-px bg-blue-400" style={{ width: progress }} />
         </div>
 
-        <div className="relative z-10 mx-auto flex h-full max-w-7xl items-center px-5 sm:px-8 lg:px-12">
-          <div className="grid w-full items-end gap-10 lg:grid-cols-[1.05fr_.95fr]">
-            <div className="pb-8 lg:pb-16">
+        <div className="cinematic-content relative z-10 mx-auto flex h-full max-w-7xl items-center px-5 sm:px-8 lg:px-12">
+          <div className="grid w-full items-center gap-8 lg:grid-cols-[1.65fr_1fr]">
+            <div className="py-10 lg:py-6">
               <div className="mb-5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-blue-300">
                 <span className="h-px w-8 bg-blue-400" /> Wichita, Kansas · Real Estate Investment + Acquisition
               </div>
-              <div className="mb-6"><OCGWordmark size="hero" /></div>
-              <h1 className="max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl xl:text-8xl">
+              <div className="mb-6"><OCGWordmark size="xl" /></div>
+              <h1 className="cinematic-title font-black leading-[1.06] tracking-[-0.04em] text-white">
                 STRATEGY FIRST.<br />
                 <span className="text-blue-300">NUMBERS ALWAYS.</span><br />
                 EXECUTION DELIVERED.
@@ -53,7 +55,7 @@ function CinematicOpening() {
               <p className="mt-7 max-w-2xl text-base leading-relaxed text-slate-300 sm:text-lg">
                 OCG combines acquisition strategy, underwriting, renovation intelligence, financing discipline, and local market judgment to make better real estate decisions.
               </p>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-wrap gap-3">
                 <Link href="/invest" className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-xs font-black uppercase tracking-wider text-slate-950 transition-transform hover:-translate-y-0.5">
                   Explore Investor Services <ArrowRight size={14} />
                 </Link>
@@ -61,9 +63,10 @@ function CinematicOpening() {
                   Start Property Review
                 </Link>
               </div>
+              <p className="mt-5 text-[10px] text-slate-400">Illustrative streetscape · Not a completed OCG project</p>
             </div>
 
-            <div className="hidden pb-12 lg:block">
+            <motion.div className="hidden pb-12 lg:block" style={reduceMotion ? undefined : { opacity: methodOpacity }}>
               <div className="ml-auto max-w-md rounded-[2rem] border border-white/10 bg-black/28 p-5 shadow-2xl shadow-black/40 backdrop-blur-xl">
                 <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">OCG Investment Method</div>
                 <div className="space-y-2">
@@ -81,24 +84,24 @@ function CinematicOpening() {
                   ))}
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
 
-        <div className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 text-center text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500">
-          <ArrowDown className="mx-auto mb-1 animate-bounce" size={14} /> Scroll to follow the investment thesis
+        <div className="cinematic-scroll-hint absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-center text-[9px] font-bold uppercase tracking-[0.22em] text-slate-400">
+          <ArrowDown className="mx-auto mb-1 motion-safe:animate-bounce" size={14} /> Scroll to follow the investment thesis
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+      <div className="cinematic-chapters relative z-20">
         {chapters.map(({ kicker, title, copy, Icon }, index) => (
-          <div key={kicker} className="flex h-[67.5vh] items-center px-5 sm:px-8 lg:px-12" style={{ marginTop: index === 0 ? "90vh" : 0 }}>
+          <div key={kicker} className="cinematic-chapter flex items-center px-5 sm:px-8 lg:px-12">
             <motion.div
-              initial={{ opacity: 0, y: 36 }}
+              initial={reduceMotion ? false : { opacity: 0, y: 36 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ amount: 0.58 }}
               transition={{ duration: 0.55 }}
-              className="ml-auto w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#07101d]/86 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-8"
+              className="cinematic-chapter-card ml-auto w-full rounded-[2rem] border border-white/10 bg-[#07101d] p-6 shadow-2xl shadow-black/40 sm:p-8"
             >
               <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl border border-blue-400/20 bg-blue-500/10 text-blue-300"><Icon size={20} /></div>
               <div className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-300">{kicker}</div>

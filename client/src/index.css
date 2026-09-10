@@ -386,3 +386,26 @@
 .footer-title { font-size:11px; text-transform:uppercase; letter-spacing:.16em; color:rgba(255,255,255,.36); font-weight:700; }
 .footer-link { display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.48); font-size:14px; transition:color .2s ease; }
 .footer-link:hover { color:white; }
+
+/* The opening remains readable without a tall or motion-enabled viewport. */
+.cinematic-title { font-family: Inter, Arial, sans-serif; font-size: clamp(1.75rem, 3.5vw, 3.15rem); }
+.cinematic-stage { min-height: calc(100svh - 5rem); }
+.cinematic-chapters { padding: 1rem 0 3rem; }
+.cinematic-chapter { padding-top: 1rem; padding-bottom: 1rem; }
+.cinematic-chapter-card { max-width: 48rem; margin-inline: auto; }
+.cinematic-scroll-hint { display: none; }
+@media (min-width: 1024px) and (min-height: 760px) and (prefers-reduced-motion: no-preference) {
+  .cinematic-stage { position: sticky; top: 5rem; height: calc(100svh - 5rem); }
+  .cinematic-chapters { pointer-events: none; padding-bottom: 12vh; }
+  .cinematic-chapter { min-height: 75vh; max-width: 80rem; margin-inline: auto; }
+  .cinematic-chapter-card { width: 36%; margin-left: auto; margin-right: 0; }
+  .cinematic-chapter-card h2 { font-size: 2rem; }
+  .cinematic-scroll-hint { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

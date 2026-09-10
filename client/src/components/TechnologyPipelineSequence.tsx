@@ -174,7 +174,7 @@ export function TechnologyPipelineSequence() {
             <div className="relative rounded-2xl overflow-hidden border border-slate-700 shadow-2xl bg-slate-950 aspect-[4/3]">
               <img 
                 src="/images/transformations/bungalow-concept-after.jpg" 
-                alt="Wichita Property Under Analysis"
+                alt="Illustrative property concept, not an OCG project"
                 className="w-full h-full object-cover opacity-85 transition-all duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
@@ -192,7 +192,7 @@ export function TechnologyPipelineSequence() {
 
               {/* Bottom Live Data Feed on Property */}
               <div className="absolute bottom-4 left-4 right-4 p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 backdrop-blur-md">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Assembly Matrix</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Illustrative workflow · hypothetical data</div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {activeStep.dataPoints.map((dp, i) => (
                     <div key={i} className="p-1.5 rounded bg-slate-900/80 border border-slate-800/60">
@@ -304,4 +304,3 @@ export function TechnologyPipelineSequence() {
 }
 
 export default TechnologyPipelineSequence;
-

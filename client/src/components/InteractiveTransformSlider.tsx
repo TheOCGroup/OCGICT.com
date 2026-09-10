@@ -234,7 +234,7 @@ export function InteractiveTransformSlider() {
         <div className="max-w-4xl mx-auto text-center mb-12">
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-400 mb-4">
             <Sparkles size={13} />
-            <span>Authentic Wichita Architectural World</span>
+            <span>Illustrative Renovation Concepts</span>
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
             Strategic Property Transformation.
@@ -291,7 +291,7 @@ export function InteractiveTransformSlider() {
             >
               <img 
                 src={activeCase.existingConditionImg}
-                alt="Representative Original Condition"
+                alt="Illustrative Before Concept"
                 className="absolute inset-0 w-full h-full object-cover max-w-none"
                 style={{ width: '100%', minWidth: '100%' }}
               />
@@ -335,7 +335,7 @@ export function InteractiveTransformSlider() {
             <div className="absolute top-4 left-4 z-20 pointer-events-none">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-slate-950/85 backdrop-blur-md border border-slate-700 text-[11px] font-bold uppercase tracking-wider text-amber-400 shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                Representative Original Condition
+                Illustrative Before Concept
               </span>
             </div>
 
@@ -352,7 +352,7 @@ export function InteractiveTransformSlider() {
                 <MapPin size={13} className="text-blue-400" />
                 <span>{activeCase.neighborhood}</span>
                 <span className="text-slate-500">·</span>
-                <span>Built {activeCase.yearBuilt}</span>
+                <span>Example vintage: {activeCase.yearBuilt}</span>
                 <span className="text-slate-500">·</span>
                 <span>{activeCase.squareFeet.toLocaleString()} sq ft</span>
               </div>
@@ -392,7 +392,7 @@ export function InteractiveTransformSlider() {
                   </span>
                 </div>
                 <div className="text-xs text-slate-400">
-                  Data Certainty: <span className="font-semibold text-emerald-400">{selectedHotspot.certainty}</span>
+                  Illustrative assumptions
                 </div>
               </div>
 
@@ -400,7 +400,7 @@ export function InteractiveTransformSlider() {
 
               <div className="mt-4 grid sm:grid-cols-2 gap-4 text-xs">
                 <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                  <div className="text-slate-400 font-bold uppercase tracking-wider mb-1">Observed Existing Issue</div>
+                  <div className="text-slate-400 font-bold uppercase tracking-wider mb-1">Example Condition</div>
                   <div className="text-slate-300 leading-relaxed">{selectedHotspot.currentIssue}</div>
                 </div>
                 <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
@@ -423,7 +423,7 @@ export function InteractiveTransformSlider() {
           {/* Transparent Integrity Notice */}
           <div className="mt-4 text-center">
             <p className="text-[11px] text-slate-500">
-              Data Integrity Notice: Renovation scopes and ARV projections represent modeled acquisition frameworks verified against Sedgwick County micro-neighborhood comps. Conceptual transformations are architectural illustrations.
+              Illustrative examples only. Images, property specifications, renovation budgets, and ARV figures are hypothetical, not completed OCG projects or verified property/comparable data.
             </p>
           </div>
 
@@ -435,4 +435,3 @@ export function InteractiveTransformSlider() {
 }
 
 export default InteractiveTransformSlider;
-
