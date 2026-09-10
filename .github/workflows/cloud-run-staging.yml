@@ -14,8 +14,8 @@ concurrency:
 env:
   REGION: us-central1
   SERVICE: ocg-website-staging
-  REPOSITORY: ocgict
-  IMAGE: ocgict-site
+  REPOSITORY: cloud-run-source-deploy
+  IMAGE: ocg-website-staging
 
 jobs:
   validate:
@@ -65,6 +65,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -98,7 +99,6 @@ jobs:
             --memory=512Mi
             --cpu=1
             --port=8080
-            --allow-unauthenticated
 
       - name: Deployment summary
         run: |
