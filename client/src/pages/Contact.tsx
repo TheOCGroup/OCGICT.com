@@ -99,13 +99,15 @@ export function Contact() {
                   <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle2 size={32} />
                   </div>
-                  <h3 className="text-2xl font-bold text-white">Strategy Session Request Received</h3>
+                  <h3 className="text-2xl font-bold text-white">Your request is ready to send</h3>
                   <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-                    Thank you, <strong className="text-white">{formData.name}</strong>. Genaro Ocasio and the OCG acquisition team will review your inquiry and contact you within 24 hours.
+                    <strong className="text-white">{formData.name}</strong>, your request has not been submitted. Open your email app below, review the details, and send it to OCG. You can also call (720) 620-9929.
                   </p>
+                  <a className="inline-flex rounded-xl bg-blue-600 px-5 py-3 font-bold text-white" href={`mailto:Contact@ocasiocollective.com?subject=${encodeURIComponent(`OCG ${role} strategy inquiry`)}&body=${encodeURIComponent(Object.entries(formData).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join("\n"))}`}>Open request in email</a>
+                  <button type="button" onClick={() => setSubmitted(false)} className="block mx-auto text-sm text-blue-300 underline">Edit request</button>
                   {briefAttached && (
                     <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-900/60 text-xs text-blue-300 inline-block font-mono">
-                      ✓ Attached Strategy Brief Dossier ({briefId})
+                      Strategy brief reference: {briefId}. Include your brief in the email if you want OCG to review it.
                     </div>
                   )}
                 </div>
@@ -333,7 +335,7 @@ export function Contact() {
                     <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-center justify-between text-xs text-blue-300">
                       <div className="flex items-center gap-2">
                         <Bot size={14} className="text-blue-400" />
-                        <span>Active Strategy Brief attached automatically</span>
+                        <span>Strategy Brief available to include in your email</span>
                       </div>
                       <span className="font-mono text-[10px] text-blue-400/80">{briefId}</span>
                     </div>
@@ -343,7 +345,7 @@ export function Contact() {
                     type="submit"
                     className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-blue-500 transition-all shadow-xl shadow-blue-950 cursor-pointer"
                   >
-                    Submit Strategy Request
+                    Prepare Strategy Request
                   </button>
 
                 </form>
