@@ -90,9 +90,9 @@ function CinematicOpening() {
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-20">
+      <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
         {chapters.map(({ kicker, title, copy, Icon }, index) => (
-          <div key={kicker} className="flex h-[90vh] items-center px-5 sm:px-8 lg:px-12" style={{ marginTop: index === 0 ? "105vh" : 0 }}>
+          <div key={kicker} className="flex h-[67.5vh] items-center px-5 sm:px-8 lg:px-12" style={{ marginTop: index === 0 ? "90vh" : 0 }}>
             <motion.div
               initial={{ opacity: 0, y: 36 }}
               whileInView={{ opacity: 1, y: 0 }}
