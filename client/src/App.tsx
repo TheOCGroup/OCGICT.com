@@ -8,7 +8,7 @@ import Navbar from "./components/Navbar";
 import { PersistentG } from "./components/PersistentG";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
-import Home from "./pages/Home";
+import CinematicHome from "./pages/CinematicHome";
 import About from "./pages/About";
 import Services from "./pages/Services";
 import HowItWorks from "./pages/HowItWorks";
@@ -37,7 +37,7 @@ function AdminGuard({ component: Component }: { component: React.ComponentType }
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/" component={CinematicHome} />
       <Route path="/about" component={About} />
       <Route path="/services" component={Services} />
       <Route path="/invest" component={Services} />
