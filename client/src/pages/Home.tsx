@@ -186,7 +186,7 @@ export function Home() {
 
       <WichitaLandmarkRibbon />
 
-      <section className="relative z-10 border-b border-slate-800 bg-[#0B1220] py-20">
+      <section className="relative z-10 overflow-hidden border-b border-slate-800 bg-[#0B1220] py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial="hidden"
