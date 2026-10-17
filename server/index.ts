@@ -25,6 +25,10 @@ export function createApp() {
 
   app.use(express.json({ limit: "1mb" }));
 
+  app.get("/.well-known/acme-challenge/qNG3HBTc7IYbX7hpUTP5HZ8XQ_lhnbIAswI3s6FNeoA", (_req, res) => {
+    res.type("text/plain").send("qNG3HBTc7IYbX7hpUTP5HZ8XQ_lhnbIAswI3s6FNeoA.hKj6JWhXit7fhBTTy4GqycqmAHfodMfjwFKSgGloVXo");
+  });
+
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
