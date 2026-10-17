@@ -18,7 +18,7 @@ export function GExperience() {
     {
       id: "1",
       sender: "g",
-      text: "I am G — OCG's Investment Intelligence. Whether you're exploring your first flip, building a Wichita rental portfolio with BRRRR, assessing a neighborhood like College Hill or Crown Heights, or deciding how to allocate capital safely, tell me what you're trying to accomplish.",
+      text: "Hi, I'm G, The OC Group's AI guide. I can help you explore selling a property, plan an investment, understand renovation and financing, or simply learn what we do. What can I help you with today?",
     },
   ]);
   const [inputVal, setInputVal] = useState<string>("");
@@ -45,16 +45,16 @@ export function GExperience() {
   }, [messages, isTyping]);
 
   const starterPrompts = [
-    "I have $50k but I'm not sure which strategy fits me.",
-    "Show me how the 70% rule works on a $300k Wichita flip.",
-    "Tell me about investing in College Hill vs Crown Heights.",
-    "My family has an inherited house in Wichita we need to sell.",
-    "How does OCG preserve investor liquidity on flips?"
+    "I want to sell my house. What are my options?",
+    "I inherited a property and don't know where to start.",
+    "I'm an investor. How can OCG help me find and evaluate deals?",
+    "What does The OC Group do, and who do you work with?",
+    "Can you walk me through renovation costs and an offer estimate?"
   ];
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputVal;
-    if (!query.trim()) return;
+    if (!query.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -159,7 +159,7 @@ export function GExperience() {
             </span>
           </h2>
           <p className="mt-4 text-sm md:text-base text-slate-400 leading-relaxed">
-            G is trained across OCG's financing philosophy, Wichita housing stock, 70% rule underwriting, and investor diagnostics. Ask a question, explore a scenario, or generate a canonical OCG Strategy Brief.
+            Ask G about selling, investing, renovations, financing coordination, or how The OC Group works. Get practical guidance, explore options, and find the right next step.
           </p>
         </div>
 

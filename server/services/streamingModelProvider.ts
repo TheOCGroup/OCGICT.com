@@ -133,18 +133,24 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
-    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || lower.includes("repairs") || (lower.includes("arv") && lower.includes("property"))) {
-      let arv = 240000;
-      let rehab = 45000;
-
-      if (lower.includes("300k") || lower.includes("300,000") || lower.includes("300000")) arv = 300000;
-      else if (lower.includes("250k") || lower.includes("250,000")) arv = 250000;
-      else if (lower.includes("200k") || lower.includes("200,000")) arv = 200000;
-
-      if (lower.includes("55k") || lower.includes("55,000") || lower.includes("55000")) rehab = 55000;
-      else if (lower.includes("50k") || lower.includes("50,000")) rehab = 50000;
-      else if (lower.includes("40k") || lower.includes("40,000")) rehab = 40000;
-
+    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || (lower.includes("arv") && lower.includes("property"))) {
+      // Never populate interactive underwriting with fabricated sample inputs.
+      const hasArv = /(?:arv|after.repair.value)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
+      const hasRehab = /(?:rehab|repairs?|renovation)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
+      if (!hasArv || !hasRehab) {
+        return { content: "I can calculate a preliminary maximum allowable offer using the 70% rule. What are your estimated after-repair value (ARV) and renovation budget? We should also account for closing, holding, selling, financing and contingency costs before treating the result as an offer.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      const parseAmount = (value: string): number => {
+        const match = value.match(/\$?\s*([\d,]+(?:\.\d+)?)\s*(k|m)?/i);
+        return match ? Number(match[1].replace(/,/g, "")) * (match[2]?.toLowerCase() === "k" ? 1000 : match[2]?.toLowerCase() === "m" ? 1000000 : 1) : NaN;
+      };
+      const arvText = lastUserMsg.match(/(?:arv|after.repair.value)\s*(?:of|is|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
+      const rehabText = lastUserMsg.match(/(?:rehab|repairs?|renovation)\s*(?:budget|cost|estimate|of|is|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
+      const arv = parseAmount(arvText || "");
+      const rehab = parseAmount(rehabText || "");
+      if (!Number.isFinite(arv) || !Number.isFinite(rehab) || arv <= 0 || rehab < 0) {
+        return { content: "Please provide the numbers like this: ARV $300,000, rehab $40,000. I won't assume values for your property.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
       const mao = Math.round(arv * 0.70) - rehab;
       content = `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab Scope. On a $${arv.toLocaleString()} ARV with $${rehab.toLocaleString()} in repairs: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. This preserves an equity buffer for holding interest and transaction fees.`;
       toolCalls = [
@@ -191,8 +197,14 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
           arguments: { propertyId: "delano" },
         },
       ];
+    } else if (/(sell|selling|cash offer|as.is|my house|my property|homeowner|tenants|vacant)/i.test(lower)) {
+      content = "I can help you compare selling as-is with making repairs first, discuss timing and likely next steps, and explain how The OC Group evaluates a property. We do not make a guaranteed offer from a chat. What is the property address, or would you prefer to begin with its condition and your timeline? You can also use the Sell page for a preliminary property review.";
+    } else if (/(investor|investing|first flip|flip|lender|finance|financing|buy and hold|capital)/i.test(lower)) {
+      content = "The OC Group helps investors screen acquisitions, review conservative comparable sales and renovation scope, coordinate financing with independent lenders, and plan resale or rental exits. I can walk you through the numbers and risks. Are you evaluating a specific property, or deciding on an investment strategy?";
+    } else if (/(what do you do|what is ocg|who are you|services|how does.*work|curious|learn more|about.*group)/i.test(lower)) {
+      content = "The OC Group is a Wichita-based real estate acquisition and renovation advisory business. We help property owners explore sale options and help investors evaluate deals, plan renovations, coordinate financing, and decide whether to renovate, resell, or hold. I am G, its AI guide. Are you here as a property owner, investor, or just exploring?";
     } else {
-      content = `OCG combines disciplined underwriting, micro-market comps in Wichita, and strategic renovation design. Tell me your specific goals or property questions.`;
+      content = "I am G, The OC Group's AI guide. I can help with selling a house, evaluating an investment, understanding repairs or financing, and learning about our services. What would you like to explore?";
     }
 
     return {
