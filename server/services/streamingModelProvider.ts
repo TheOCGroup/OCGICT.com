@@ -129,6 +129,9 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     const startTime = Date.now();
     const lastUserMsg = options.messages.filter((m) => m.role === "user").pop()?.content || "";
     const lower = lastUserMsg.toLowerCase();
+    const priorConversation = options.messages.slice(0, -1).filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
+    const sellerContext = /\b(sell|selling|homeowner|inherited|probate|my house|my property|estate)\b/i.test(priorConversation);
+    const investorContext = /\b(invest|flip|rental|financing|lender|capital|buy and hold)\b/i.test(priorConversation);
 
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
@@ -163,8 +166,8 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       content = `OCG advises preserving liquid cash as strategic contingency armor. Deploying senior lender debt for purchase and construction draws protects you against unexpected material/permit delays and satisfies lender interest reserves.`;
     } else if (lower.includes("dscr") || lower.includes("rental")) {
       content = `DSCR loans evaluate property cash flow rather than personal W-2 income, typically requiring 1.20x-1.25x rent-to-debt coverage and a 20-25% equity down payment.`;
-    } else if (lower.includes("60,000") || lower.includes("60k") || lower.includes("not sure")) {
-      content = `Having $60,000 gives you strong Wichita leverage, but you should never deploy 100% of it into your first deal. We recommend reserving $20k+ as emergency defense while exploring BRRRR or leveraged flips.`;
+    } else if (lower.includes("not sure") || /\b(60,000|60k)\b/.test(lower)) {
+      content = "Your appropriate cash reserve depends on the property, debt terms, holding period, and personal risk tolerance. I can compare investment strategies without assuming a fixed reserve or promising financing. Are you considering a flip or a rental?";
     } else if (lower.includes("passed away") || lower.includes("mother") || lower.includes("inherited") || lower.includes("probate")) {
       content = `Navigating an inherited home requires transparent, compassionate support. OCG evaluates properties directly as-is with zero wholesaler commissions and flexible closing dates.`;
       toolCalls = [
@@ -197,6 +200,10 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
           arguments: { propertyId: "delano" },
         },
       ];
+    } else if (sellerContext && /(address|located|street|wichita|\d{2,6}\s+\w+|needs work|repairs|quickly|as.is|timeline)/i.test(lower)) {
+      content = "Thanks for the property details. I can help outline the as-is sale process, renovation tradeoffs, and information needed for a preliminary evaluation. I cannot verify its condition, ownership or market value from this message alone. The next useful details are its general condition and when you hope to sell; you can also begin a property review on our Sell page.";
+    } else if (investorContext && /(address|located|street|\d{2,6}\s+\w+|budget|numbers|scope|offer|analyze|next)/i.test(lower)) {
+      content = "We can screen this opportunity using verified comparable sales, an itemized repair budget, and financing, closing, carrying and resale costs. I won't invent ARV or lender terms. What property address or financial figures do you already have?";
     } else if (/(sell|selling|cash offer|as.is|my house|my property|homeowner|tenants|vacant)/i.test(lower)) {
       content = "I can help you compare selling as-is with making repairs first, discuss timing and likely next steps, and explain how The OC Group evaluates a property. We do not make a guaranteed offer from a chat. What is the property address, or would you prefer to begin with its condition and your timeline? You can also use the Sell page for a preliminary property review.";
     } else if (/(investor|investing|first flip|flip|lender|finance|financing|buy and hold|capital)/i.test(lower)) {
