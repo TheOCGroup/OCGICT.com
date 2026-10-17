@@ -151,9 +151,9 @@ export function createApp() {
     catch (err: any) { res.status(500).json({ error: err.message }); }
   });
 
-  app.get("/api/adapters/piper/outbox", (_req, res) => res.json({ outbox: PiperQueueAdapter.getPendingOutbox() }));
-  app.get("/api/operations/work-items", (_req, res) => res.json({ workItems: PiperQueueAdapter.getWorkItems() }));
-  app.get("/api/telemetry/events", (_req, res) => res.json({ events: OcgObservability.getRecentEvents() }));
+  app.get("/api/adapters/piper/outbox", (_req, res) => res.status(403).json({ error: "Private operational data is not available through the public API." }));
+  app.get("/api/operations/work-items", (_req, res) => res.status(403).json({ error: "Private operational data is not available through the public API." }));
+  app.get("/api/telemetry/events", (_req, res) => res.status(403).json({ error: "Private operational data is not available through the public API." }));
 
   app.get("/api/health", (_req, res) => {
     res.json({
