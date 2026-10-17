@@ -214,9 +214,9 @@ export function GExperience() {
             <Bot size={15} /> G — OCG Investment Intelligence
           </div>
           <h2 className="mt-3 text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-[1.05]">
-            Not a chatbot.<br />
+            Meet G.<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-200">
-              An intelligent gateway into OCG.
+              Your guide to what comes next.
             </span>
           </h2>
           <p className="mt-4 text-sm md:text-base text-slate-400 leading-relaxed">
@@ -246,8 +246,17 @@ export function GExperience() {
         )}
 
         <div className="mt-6 grid gap-8 lg:grid-cols-[1.3fr_0.7fr] items-start">
-          {/* Conversational Terminal */}
-          <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5 md:p-7 shadow-2xl flex flex-col h-[580px]">
+          {/* G interactive agent console */}
+          <div className="rounded-[2rem] border border-blue-400/30 bg-gradient-to-b from-[#13284a] via-[#0b1e37] to-[#071426] p-5 md:p-7 shadow-2xl shadow-blue-950/50 flex flex-col min-h-[580px]">
+            <div className="mb-5 flex flex-col items-center gap-3 rounded-[1.7rem] border border-blue-300/20 bg-gradient-to-br from-blue-600/20 via-sky-400/10 to-transparent px-5 py-6 text-center">
+              <button type="button" onClick={listening ? stopVoice : startListening} aria-label="Activate G voice" className={`relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-sky-300/70 bg-gradient-to-br from-blue-400 via-blue-600 to-[#052355] shadow-[0_0_45px_rgba(59,130,246,0.45)] transition-transform hover:scale-105 ${listening ? "animate-pulse" : ""}`}>
+                <span className="absolute inset-2 rounded-full border border-white/30" />
+                <span className="relative text-5xl font-black tracking-tight text-white drop-shadow-lg">G</span>
+              </button>
+              <div className="text-lg font-bold text-white">Let's figure it out together.</div>
+              <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">Selling a home? Exploring your next investment? Just curious? I'm here to help.</p>
+              <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{listening ? "Listening to you" : isTyping ? "Thinking through your question" : "Tap G to speak"}</div>
+            </div>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
@@ -281,7 +290,7 @@ export function GExperience() {
             )}
 
             <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{voiceStatus}</div>
-            {/* Chat Thread */}
+            {/* Conversation activity */}
             <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (
                 <div
@@ -315,7 +324,7 @@ export function GExperience() {
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-950 text-blue-400">
                     <Bot size={14} />
                   </div>
-                  <span>G Gateway is reasoning across OCG underwriting models and Wichita intelligence...</span>
+                  <span>G is working on your answer...</span>
                 </div>
               )}
             </div>
@@ -332,7 +341,7 @@ export function GExperience() {
                 type="text"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
-                placeholder="Ask about 70% rule, Wichita neighborhoods, capital allocation, or selling..."
+                placeholder="Ask G anything about your property or next move..."
                 className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
               <button
@@ -351,7 +360,7 @@ export function GExperience() {
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-                    <FileText size={14} /> Your OCG Strategy Brief
+                    <FileText size={14} /> Your next steps
                   </span>
                   <span className="text-[9px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
                     POWERED BY OCG LAB
