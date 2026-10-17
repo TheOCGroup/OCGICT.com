@@ -24,6 +24,10 @@ export function GExperience() {
   const [inputVal, setInputVal] = useState<string>("");
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
+  const [listening, setListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('Voice is off');
+  const recognitionRef = useRef<any>(null);
+  const voiceEnabledRef = useRef(false);
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [briefing, setBriefing] = useState<IOCGStrategyBrief | null>(null);
@@ -31,6 +35,60 @@ export function GExperience() {
   const chatScrollContainerRef = useRef<HTMLDivElement>(null);
 
   const bookingProvider = getActiveBookingProvider();
+
+  useEffect(() => () => {
+    recognitionRef.current?.abort?.();
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  const stopVoice = () => {
+    voiceEnabledRef.current = false;
+    recognitionRef.current?.abort?.();
+    window.speechSynthesis?.cancel();
+    setListening(false);
+    setVoiceStatus("Voice stopped");
+  };
+
+  const speakReply = (text: string) => {
+    if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang = "en-US";
+    speech.rate = 1.05;
+    const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith("en") && /natural|neural/i.test(v.name));
+    if (voice) speech.voice = voice;
+    speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
+    speech.onend = () => setVoiceStatus("Ready to listen");
+    window.speechSynthesis.speak(speech);
+  };
+
+  const startListening = () => {
+    const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Recognition) {
+      setVoiceStatus("Voice recognition is not supported here. Try Chrome or Edge.");
+      return;
+    }
+    window.speechSynthesis?.cancel();
+    recognitionRef.current?.abort?.();
+    voiceEnabledRef.current = true;
+    const recognition = new Recognition();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => { setListening(true); setVoiceStatus("Listening — speak now"); };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = (error: any) => {
+      setListening(false);
+      setVoiceStatus(error.error === "not-allowed" ? "Please allow microphone access." : "Could not hear you. Try again.");
+    };
+    recognition.onresult = (event: any) => {
+      const spoken = event.results?.[0]?.[0]?.transcript?.trim();
+      setListening(false);
+      if (spoken) void handleSendMessage(spoken);
+    };
+    try { recognition.start(); } catch { setVoiceStatus("Microphone unavailable"); }
+  };
 
   const scrollToChatBottom = () => {
     if (chatScrollContainerRef.current) {
@@ -73,39 +131,41 @@ export function GExperience() {
       let generatedBrief: IOCGStrategyBrief | undefined;
 
       try {
-        const res = await fetch("/api/g/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId,
-            message: query,
-            history: messages.map((m) => ({
-              role: m.sender === "user" ? "user" : "assistant",
-              content: m.text,
-            })),
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          replyText = data.replyText;
-          actionInvocation = data.action;
-          generatedBrief = data.strategyBrief;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        let res: Response;
+        try {
+          res = await fetch("/api/g/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
+            body: JSON.stringify({
+              sessionId,
+              message: query,
+              history: messages.slice(-16).map((m) => ({
+                role: m.sender === "user" ? "user" : "assistant",
+                content: m.text,
+              })),
+            }),
+          });
+        } finally {
+          clearTimeout(timeout);
         }
-      } catch (networkErr) {
-        console.warn("Gateway endpoint unreachable, using local intelligence engine fallback:", networkErr);
-      }
-
-      // 2. Local Fallback if Gateway did not respond
-      if (!replyText) {
-        const localResponse = processGDialogue(query, messages);
-        replyText = localResponse.messageText;
-        if (localResponse.action) {
-          actionInvocation = localResponse.action;
+        if (!res.ok) {
+          throw new Error(res.status === 429 ? "Too many messages. Please try again shortly." : "G is temporarily unavailable. Please try again.");
         }
-        if (localResponse.generatedBrief) {
-          generatedBrief = localResponse.generatedBrief;
+        const data = await res.json();
+        if (typeof data.replyText !== "string" || !data.replyText.trim()) {
+          throw new Error("G did not return a usable response. Please try again.");
         }
+        replyText = data.replyText;
+        actionInvocation = data.action;
+        generatedBrief = data.strategyBrief;
+      } catch (gatewayError) {
+        // Do not silently generate a fabricated financial analysis or claim a request was submitted.
+        replyText = gatewayError instanceof Error && /Too many messages/.test(gatewayError.message)
+          ? gatewayError.message
+          : "I'm having trouble connecting right now. Please try again, or use the Sell or Contact page to reach The OC Group.";
       }
 
       // 3. Execute Tool Action via Registry
@@ -131,6 +191,7 @@ export function GExperience() {
           text: replyText,
         },
       ]);
+      speakReply(replyText);
     } finally {
       setIsTyping(false);
     }
@@ -202,14 +263,10 @@ export function GExperience() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setVoiceNotice(!voiceNotice)}
-                  title="Voice capability preview status"
-                  className="flex items-center gap-1.5 rounded-lg bg-slate-900 border border-slate-800 px-3 py-1.5 text-[11px] font-mono text-slate-400 hover:text-slate-200 transition-all"
-                >
-                  <Mic size={13} className="text-slate-500" />
-                  <span>Voice (Preview Staging)</span>
+                <button type="button" onClick={startListening} title="Talk to G and interrupt speech" className="flex items-center gap-2 rounded-lg bg-blue-600 border border-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+                  <Mic size={15} /><span>{listening ? "Listening…" : "Talk to G"}</span>
                 </button>
+                <button type="button" onClick={stopVoice} className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-700">Stop voice</button>
               </div>
             </div>
 
@@ -217,12 +274,13 @@ export function GExperience() {
             {voiceNotice && (
               <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200 flex items-center justify-between">
                 <span>
-                  <strong>Staging Notice:</strong> Provider-agnostic streaming voice architecture (STT/TTS) is specified in documentation. Full interactive text intelligence and website-action dispatching are operational below.
+                  <strong>Browser voice:</strong> Tap Talk to G and allow microphone access. G will speak replies using available browser voices. Tap Talk again to interrupt. Chrome or Edge recommended.
                 </span>
                 <button onClick={() => setVoiceNotice(false)} className="text-blue-400 font-bold ml-2">✕</button>
               </div>
             )}
 
+            <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{voiceStatus}</div>
             {/* Chat Thread */}
             <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (
