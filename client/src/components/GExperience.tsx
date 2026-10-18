@@ -22,6 +22,14 @@ export function GExperience() {
     },
   ]);
   const [inputVal, setInputVal] = useState<string>("");
+  const [includeConversation, setIncludeConversation] = useState(false);
+  const emailSubject = "OCG website conversation follow-up";
+  const conversationSummary = messages.slice(1).slice(-12)
+    .map(m => `${m.sender === "user" ? "Visitor" : "G"}: ${m.text}`).join("\n\n");
+  const emailBody = includeConversation && conversationSummary
+    ? `Hello OCG,\n\nI'd like someone to follow up with me. I've included part of my conversation with G below.\n\nName:\nPreferred contact method:\n\nConversation:\n${conversationSummary}\n\nPlease review and contact me.\n`
+    : "Hello OCG,\n\nI'd like someone to contact me.\n\nName:\nPreferred contact method:\nReason for inquiry:\n";
+  const emailHref = `mailto:theocgroupict@gmail.com?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
   const [listening, setListening] = useState(false);
@@ -354,11 +362,15 @@ export function GExperience() {
             </form>
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-blue-200/10 pt-4">
               <span className="mr-1 text-xs font-medium text-blue-100/70">Want a person to follow up?</span>
-              <a href="mailto:theocgroupict@gmail.com?subject=OCG%20Website%20Inquiry" className="rounded-full border border-sky-400/50 bg-sky-500/15 px-4 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Email The OC Group</a>
+              <a href={emailHref} className="rounded-full border border-sky-400/50 bg-sky-500/15 px-4 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Email The OC Group</a>
               <Link href="/sell" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Selling a property</Link>
               <Link href="/contact" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Investor or general inquiry</Link>
             </div>
-            <p className="mt-2 text-[11px] text-blue-100/60">Email opens your email app. Nothing is sent until you review and send it.</p>
+            <label className="mt-3 flex items-start gap-2 text-xs text-blue-100/80">
+              <input type="checkbox" checked={includeConversation} onChange={e => setIncludeConversation(e.target.checked)} className="mt-0.5 accent-blue-400" />
+              Include the last 12 conversation messages in my email (review before sending)
+            </label>
+            <p className="mt-2 text-[11px] text-blue-100/60">Nothing is automatically sent or saved to OCG. The email opens in your own email app for review.</p>
           </div>
 
           {/* Canonical OCG Strategy Brief with Certainty Badges */}
