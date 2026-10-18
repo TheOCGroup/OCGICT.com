@@ -84,11 +84,11 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const clean = text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*_#`]/g, '').trim();
     // Speak a concise first turn; leave full details visible in chat.
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
-    const spoken = sentences.slice(0, 2).join(' ').trim().slice(0, 320);
+    const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
     const speech = new SpeechSynthesisUtterance(spoken);
     speech.lang = "en-US";
-    speech.rate = 0.96;
-    speech.pitch = 0.98;
+    speech.rate = 1.0;
+    speech.pitch = 1.0;
     const available = window.speechSynthesis.getVoices().filter(v => /^en(-|$)/i.test(v.lang));
     const voice = available.find(v => /natural|neural|online/i.test(v.name)) || available.find(v => /en-US/i.test(v.lang)) || available[0];
     if (voice) speech.voice = voice;
@@ -294,7 +294,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         <div className="shrink-0 border-t border-white/10 bg-[#0c1423] px-3 pb-3 pt-3">
           <form onSubmit={e => { e.preventDefault(); void handleSendMessage(); }} className="flex items-center gap-2 rounded-2xl border border-white/15 bg-[#162136] p-2 focus-within:border-sky-400/60">
             <button type="button" onClick={listening ? stopVoice : startListening} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${listening ? "bg-sky-500 text-white animate-pulse" : "text-sky-200 hover:bg-white/10"}`} aria-label={listening ? "Stop listening" : "Talk to G"} title={listening ? "Stop listening" : "Talk to G"}><Mic size={18} /></button>
-            <input value={inputVal} onChange={e => setInputVal(e.target.value)} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
+            <input value={inputVal} onChange={e => { if (activeSpeechRef.current) { window.speechSynthesis.cancel(); activeSpeechRef.current = null; setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
             <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
           </form>
           <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">

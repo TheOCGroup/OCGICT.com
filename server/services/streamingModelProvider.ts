@@ -190,7 +190,7 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     } else if (lower.includes("not sure") || /\b(60,000|60k)\b/.test(lower)) {
       content = "Your appropriate cash reserve depends on the property, debt terms, holding period, and personal risk tolerance. I can compare investment strategies without assuming a fixed reserve or promising financing. Are you considering a flip or a rental?";
     } else if (lower.includes("passed away") || lower.includes("mother") || lower.includes("inherited") || lower.includes("probate")) {
-      content = `Navigating an inherited home requires transparent, compassionate support. OCG evaluates properties directly as-is with zero wholesaler commissions and flexible closing dates.`;
+      content = "I understand. An inherited property can bring a lot of decisions at once. We can help you explore an as-is sale and what happens next, without rushing you. Is your main priority selling soon, or understanding your options first?";
       toolCalls = [
         {
           name: "activate_seller_intake",
@@ -226,9 +226,9 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     } else if (investorContext && /(address|located|street|\d{2,6}\s+\w+|budget|numbers|scope|offer|analyze|next)/i.test(lower)) {
       content = "We can screen this opportunity using verified comparable sales, an itemized repair budget, and financing, closing, carrying and resale costs. I won't invent ARV or lender terms. What property address or financial figures do you already have?";
     } else if (/(sell|selling|cash offer|as.is|my house|my property|homeowner|tenants|vacant)/i.test(lower)) {
-      content = "I can help you compare selling as-is with making repairs first, discuss timing and likely next steps, and explain how The OC Group evaluates a property. We do not make a guaranteed offer from a chat. What is the property address, or would you prefer to begin with its condition and your timeline? You can also use the Sell page for a preliminary property review.";
+      content = "Absolutely. We can look at selling as-is or making repairs first, and figure out what fits your timeline. You don\u0027t need all the details right now. Are you hoping to sell soon, or just exploring your options?";
     } else if (/(investor|investing|first flip|flip|lender|finance|financing|buy and hold|capital)/i.test(lower)) {
-      content = "The OC Group helps investors screen acquisitions, review conservative comparable sales and renovation scope, coordinate financing with independent lenders, and plan resale or rental exits. I can walk you through the numbers and risks. Are you evaluating a specific property, or deciding on an investment strategy?";
+      content = "We can help you evaluate a deal, check renovation costs and risks, and plan the next move. Are you looking at a particular property or still deciding what to invest in?";
     } else if (/(what do you do|what does.*(?:ocg|group).*do|what is ocg|who are you|services|how does.*work|curious|learn more|about.*group)/i.test(lower)) {
       content = "The OC Group is a Wichita-based real estate acquisition and renovation advisory business. We help property owners explore sale options and help investors evaluate deals, plan renovations, coordinate financing, and decide whether to renovate, resell, or hold. I am G, its AI guide. Are you here as a property owner, investor, or just exploring?";
     } else {
