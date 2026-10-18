@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
@@ -35,6 +35,32 @@ const priorities: ISellerIntakePayload['primaryPriority'][] = ['Maximum Net Cash
 export function Sell() {
   const [step, setStep] = useState(1);
   const [address, setAddress] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState(false);
+  const [suggestionStatus, setSuggestionStatus] = useState('');
+  useEffect(() => {
+    if (selectedAddress || address.trim().length < 4) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggestionStatus('Looking for addresses…');
+      try {
+        const response = await fetch('/api/seller/address-suggestions?q=' + encodeURIComponent(address.trim()), { signal: controller.signal });
+        if (!response.ok) throw new Error('Suggestions unavailable');
+        const data = await response.json() as { suggestions?: string[] };
+        setSuggestions(data.suggestions || []);
+        setSuggestionStatus(data.suggestions?.length ? 'Choose your address below' : 'No match yet. Keep typing or enter the address manually.');
+      } catch {
+        if (!controller.signal.aborted) {
+          setSuggestions([]);
+          setSuggestionStatus('Suggestions temporarily unavailable. You can still type your address.');
+        }
+      }
+    }, 600);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [address, selectedAddress]);
   const [publicMatch, setPublicMatch] = useState<any | null>(null);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [condition, setCondition] = useState<ISellerIntakePayload['propertyCondition'] | ''>('');
@@ -147,6 +173,8 @@ export function Sell() {
   const reset = () => {
     setStep(1);
     setAddress('');
+    setSelectedAddress(false);
+    setSuggestions([]);
     setPublicMatch(null);
     setCondition('');
     setOccupancy('');
@@ -222,7 +250,11 @@ export function Sell() {
                   </div>
                   <div className="relative">
                     <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input autoFocus required value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter the full Wichita property address" className={`${fieldClass} py-4 pl-12 text-base`} />
+                    <input autoFocus autoComplete="street-address" required value={address} onChange={(e) => { setAddress(e.target.value); setSelectedAddress(false); }} placeholder="Start with house number and street…" role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-controls="seller-address-options" className={`${fieldClass} py-4 pl-12 text-base`} />
+                    {suggestions.length > 0 && <div id="seller-address-options" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-auto rounded-xl border border-sky-400/30 bg-[#101c30] p-1 shadow-2xl">
+                      {suggestions.map(value => <button type="button" role="option" aria-selected={false} key={value} onClick={() => { setAddress(value); setSelectedAddress(true); setSuggestions([]); setSuggestionStatus('Address selected'); }} className="flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-sky-500/15 focus:bg-sky-500/15"><MapPin size={16} className="mt-0.5 shrink-0 text-sky-300"/>{value}</button>)}
+                    </div>}
+                    <p role="status" className="mt-2 text-xs text-slate-400">{selectedAddress ? 'Address selected. Continue to the next step.' : address.trim().length >= 4 ? suggestionStatus : 'Type a few characters to see matching addresses. You can also enter one manually.'}</p>
                   </div>
                   <button disabled={!address.trim() || isSearchingAddress} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 px-6 py-4 text-xs font-black uppercase tracking-wider text-slate-950 transition hover:bg-amber-400 disabled:opacity-40 sm:w-auto sm:min-w-64">
                     {isSearchingAddress ? <><RefreshCw size={15} className="animate-spin" /> Starting property research…</> : <>Continue <ArrowRight size={15} /></>}

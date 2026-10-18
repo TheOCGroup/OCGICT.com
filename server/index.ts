@@ -117,6 +117,43 @@ export function createApp() {
     }
   });
 
+  // Low-volume, no-key address suggestions. Photon public service has availability limits.
+  const addressSuggestionCache = new Map<string, { expires: number; results: string[] }>();
+  let lastSuggestionRequest = 0;
+  app.get("/api/seller/address-suggestions", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=30");
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
+    if (q.length < 4 || !/^[a-zA-Z0-9 ,.#'-]+$/.test(q)) return res.json({ suggestions: [] });
+    const key = q.toLowerCase();
+    const cached = addressSuggestionCache.get(key);
+    if (cached && cached.expires > Date.now()) return res.json({ suggestions: cached.results });
+    if (Date.now() - lastSuggestionRequest < 1200) return res.status(429).json({ suggestions: [], retry: true });
+    lastSuggestionRequest = Date.now();
+    try {
+      const url = new URL("https://photon.komoot.io/api/");
+      url.searchParams.set("q", /wichita|kansas|\bks\b/i.test(q) ? q : `${q} Wichita Kansas`);
+      url.searchParams.set("lat", "37.6872");
+      url.searchParams.set("lon", "-97.3301");
+      url.searchParams.set("limit", "30");
+      const upstream = await fetch(url, { signal: AbortSignal.timeout(4500), headers: { "User-Agent": "OCGICT-SellerAddress/1.0 (theocgroup.netlify.app)" } });
+      if (!upstream.ok) throw new Error("upstream unavailable");
+      const body = await upstream.json() as { features?: Array<{ properties?: Record<string, unknown> }> };
+      const suggestions = Array.from(new Set((body.features || []).map(({ properties: p }) => {
+        const house = String(p?.housenumber || "").trim();
+        const street = String(p?.street || "").trim();
+        const city = String(p?.city || p?.locality || "").trim();
+        const state = String(p?.state || "").trim();
+        if (!house || !street || !city || (state && !["Kansas", "KS"].includes(state))) return "";
+        return `${house} ${street}, ${city}, KS`;
+      }).filter(Boolean))).slice(0, 6);
+      if (addressSuggestionCache.size > 150) addressSuggestionCache.clear();
+      addressSuggestionCache.set(key, { results: suggestions, expires: Date.now() + 120000 });
+      return res.json({ suggestions });
+    } catch {
+      return res.status(503).json({ suggestions: [], unavailable: true });
+    }
+  });
+
   app.post("/api/seller/property-lookup", async (req, res) => {
     try {
       const address = String(req.body?.address || "").trim();
