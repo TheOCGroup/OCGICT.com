@@ -23,12 +23,13 @@ export function GExperience() {
   ]);
   const [inputVal, setInputVal] = useState<string>("");
   const [includeConversation, setIncludeConversation] = useState(false);
+  const lastInquiry = [...messages].reverse().find(m => m.sender === "user")?.text?.trim() || "";
   const emailSubject = "OCG website conversation follow-up";
   const conversationSummary = messages.slice(1).slice(-12)
     .map(m => `${m.sender === "user" ? "Visitor" : "G"}: ${m.text}`).join("\n\n");
   const emailBody = includeConversation && conversationSummary
     ? `Hello OCG,\n\nI'd like someone to follow up with me. I've included part of my conversation with G below.\n\nName:\nPreferred contact method:\n\nConversation:\n${conversationSummary}\n\nPlease review and contact me.\n`
-    : "Hello OCG,\n\nI'd like someone to contact me.\n\nName:\nPreferred contact method:\nReason for inquiry:\n";
+    : `Hello OCG,\n\nI'd like someone to contact me.\n\nName:\nPreferred contact method:\nReason for inquiry: ${lastInquiry.slice(0, 600)}\n`;
   const emailHref = `mailto:theocgroupict@gmail.com?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
@@ -140,16 +141,14 @@ export function GExperience() {
   }, [messages, isTyping]);
 
   const starterPrompts = [
-    "I want to sell my house. What are my options?",
-    "I inherited a property and don't know where to start.",
-    "I'm an investor. How can OCG help me find and evaluate deals?",
-    "What does The OC Group do, and who do you work with?",
-    "Can you walk me through renovation costs and an offer estimate?"
+    "I want help selling a property.",
+    "I want to evaluate an investment property.",
+    "Tell me how The OC Group can help me."
   ];
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputVal;
-    if (!query.trim() || requestPendingRef.current) return;
+    if (!query.trim() || query.length > 4000 || requestPendingRef.current) return;
     requestPendingRef.current = true;
 
     const userMsg: Message = {
@@ -182,7 +181,7 @@ export function GExperience() {
               message: query,
               history: messages.slice(-16).map((m) => ({
                 role: m.sender === "user" ? "user" : "assistant",
-                content: m.text,
+                content: m.text.slice(0, 4000),
               })),
             }),
           });
@@ -380,7 +379,8 @@ export function GExperience() {
                 type="text"
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
-                placeholder="Ask G anything about your property or next move..."
+                placeholder="Tell G what you need, or tap the microphone..."
+                maxLength={4000}
                 className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
               <button
@@ -401,7 +401,7 @@ export function GExperience() {
               <input type="checkbox" checked={includeConversation} onChange={e => setIncludeConversation(e.target.checked)} className="mt-0.5 accent-blue-400" />
               Include the last 12 conversation messages in my email (review before sending)
             </label>
-            <p className="mt-2 text-[11px] text-blue-100/60">Nothing is automatically sent or saved to OCG. The email opens in your own email app for review.</p>
+            <p className="mt-2 text-[11px] text-blue-100/60">Your most recent question is included in the email draft, so you don't have to repeat it. Nothing is automatically sent to OCG; review before sending.</p>
           </div>
 
           {/* Canonical OCG Strategy Brief with Certainty Badges */}
