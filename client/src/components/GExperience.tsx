@@ -81,18 +81,23 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const session = voiceSessionRef.current;
-    const speech = new SpeechSynthesisUtterance(text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*_#`]/g, ''));
+    const clean = text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*_#`]/g, '').trim();
+    // Speak a concise first turn; leave full details visible in chat.
+    const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+    const spoken = sentences.slice(0, 2).join(' ').trim().slice(0, 320);
+    const speech = new SpeechSynthesisUtterance(spoken);
     speech.lang = "en-US";
-    speech.rate = 1.05;
-    const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith("en") && /natural|neural/i.test(v.name));
+    speech.rate = 0.96;
+    speech.pitch = 0.98;
+    const available = window.speechSynthesis.getVoices().filter(v => /^en(-|$)/i.test(v.lang));
+    const voice = available.find(v => /natural|neural|online/i.test(v.name)) || available.find(v => /en-US/i.test(v.lang)) || available[0];
     if (voice) speech.voice = voice;
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
     speech.onend = () => {
       if (activeSpeechRef.current !== speech || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
       activeSpeechRef.current = null;
-      setVoiceStatus("G finished. Listening for your next question...");
-      startListening();
+      setVoiceStatus("Tap the microphone to reply");
     };
     speech.onerror = () => {
       if (activeSpeechRef.current === speech) {
@@ -136,7 +141,12 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       if (recognitionRef.current !== recognition || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
       const spoken = event.results?.[0]?.[0]?.transcript?.trim();
       setListening(false);
-      if (spoken) void handleSendMessage(spoken);
+      if (spoken) {
+        recognition.stop();
+        recognitionRef.current = null;
+        setVoiceStatus("G is preparing a reply");
+        void handleSendMessage(spoken);
+      }
     };
     try { recognition.start(); } catch { voiceEnabledRef.current = false; setVoiceStatus("Microphone unavailable. Tap Talk to G to retry."); }
   };
