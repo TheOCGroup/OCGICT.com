@@ -36,6 +36,7 @@ export function GExperience() {
   const [voiceStatus, setVoiceStatus] = useState('Voice is off');
   const recognitionRef = useRef<any>(null);
   const voiceEnabledRef = useRef(false);
+  const requestPendingRef = useRef(false);
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [briefing, setBriefing] = useState<IOCGStrategyBrief | null>(null);
@@ -53,6 +54,7 @@ export function GExperience() {
     voiceEnabledRef.current = false;
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
+    recognitionRef.current = null;
     setListening(false);
     setVoiceStatus("Voice stopped");
   };
@@ -85,12 +87,13 @@ export function GExperience() {
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onstart = () => { setListening(true); setVoiceStatus("Listening — speak now"); };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => { if (recognitionRef.current === recognition) setListening(false); };
     recognition.onerror = (error: any) => {
       setListening(false);
       setVoiceStatus(error.error === "not-allowed" ? "Please allow microphone access." : "Could not hear you. Try again.");
     };
     recognition.onresult = (event: any) => {
+      if (recognitionRef.current !== recognition || !voiceEnabledRef.current) return;
       const spoken = event.results?.[0]?.[0]?.transcript?.trim();
       setListening(false);
       if (spoken) void handleSendMessage(spoken);
@@ -120,7 +123,8 @@ export function GExperience() {
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputVal;
-    if (!query.trim() || isTyping) return;
+    if (!query.trim() || requestPendingRef.current) return;
+    requestPendingRef.current = true;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -201,6 +205,7 @@ export function GExperience() {
       ]);
       speakReply(replyText);
     } finally {
+      requestPendingRef.current = false;
       setIsTyping(false);
     }
   };
