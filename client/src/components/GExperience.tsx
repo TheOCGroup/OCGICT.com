@@ -36,6 +36,7 @@ export function GExperience() {
   const [voiceStatus, setVoiceStatus] = useState('Voice is off');
   const recognitionRef = useRef<any>(null);
   const voiceEnabledRef = useRef(false);
+  const activeSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
   const requestPendingRef = useRef(false);
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
@@ -54,6 +55,7 @@ export function GExperience() {
     voiceEnabledRef.current = false;
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
+    activeSpeechRef.current = null;
     recognitionRef.current = null;
     setListening(false);
     setVoiceStatus("Voice stopped");
@@ -68,7 +70,19 @@ export function GExperience() {
     const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith("en") && /natural|neural/i.test(v.name));
     if (voice) speech.voice = voice;
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
-    speech.onend = () => setVoiceStatus("Ready to listen");
+    activeSpeechRef.current = speech;
+    speech.onend = () => {
+      if (activeSpeechRef.current !== speech || !voiceEnabledRef.current) return;
+      activeSpeechRef.current = null;
+      setVoiceStatus("G finished. Listening for your next question...");
+      startListening();
+    };
+    speech.onerror = () => {
+      if (activeSpeechRef.current === speech) {
+        activeSpeechRef.current = null;
+        setVoiceStatus("Speech playback unavailable. Tap Talk to G to continue.");
+      }
+    };
     window.speechSynthesis.speak(speech);
   };
 
@@ -78,6 +92,7 @@ export function GExperience() {
       setVoiceStatus("Voice recognition is not supported here. Try Chrome or Edge.");
       return;
     }
+    activeSpeechRef.current = null;
     window.speechSynthesis?.cancel();
     recognitionRef.current?.abort?.();
     voiceEnabledRef.current = true;
@@ -89,8 +104,14 @@ export function GExperience() {
     recognition.onstart = () => { setListening(true); setVoiceStatus("Listening — speak now"); };
     recognition.onend = () => { if (recognitionRef.current === recognition) setListening(false); };
     recognition.onerror = (error: any) => {
+      if (recognitionRef.current !== recognition) return;
       setListening(false);
-      setVoiceStatus(error.error === "not-allowed" ? "Please allow microphone access." : "Could not hear you. Try again.");
+      if (error.error === "not-allowed" || error.error === "service-not-allowed") {
+        voiceEnabledRef.current = false;
+        setVoiceStatus("Please allow microphone access. Tap Talk to G to retry.");
+      } else {
+        setVoiceStatus("Could not hear you. Tap Talk to G to try again.");
+      }
     };
     recognition.onresult = (event: any) => {
       if (recognitionRef.current !== recognition || !voiceEnabledRef.current) return;
