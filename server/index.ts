@@ -143,7 +143,7 @@ export function createApp() {
         const street = String(p?.street || "").trim();
         const city = String(p?.city || p?.locality || "").trim();
         const state = String(p?.state || "").trim();
-        if (!house || !street || !city || (state && !["Kansas", "KS"].includes(state))) return "";
+        if (!house || !street || city.toLowerCase() !== "wichita" || (state && !["Kansas", "KS"].includes(state))) return "";
         return `${house} ${street}, ${city}, KS`;
       }).filter(Boolean))).filter(candidate => {
         // Do not show unrelated house numbers or streets as address matches.
