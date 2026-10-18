@@ -34,11 +34,30 @@ export function createApp() {
   });
 
   app.post("/api/g/chat", async (req, res) => {
+    const input = req.body;
+    if (!input || typeof input !== "object" || Array.isArray(input)
+      || typeof input.message !== "string" || !input.message.trim() || input.message.length > 4000
+      || (input.sessionId !== undefined && (typeof input.sessionId !== "string" || input.sessionId.length > 128))
+      || (input.history !== undefined && (!Array.isArray(input.history) || input.history.length > 16
+        || input.history.some((entry: unknown) => !entry || typeof entry !== "object"
+          || !("role" in entry) || !("content" in entry)
+          || (entry.role !== "user" && entry.role !== "assistant")
+          || typeof entry.content !== "string" || entry.content.length > 4000)))) {
+      return res.status(400).json({ error: "Invalid chat request. Provide a message up to 4,000 characters and at most 16 valid history entries." });
+    }
     try {
-      const response = await GIntelligenceGateway.processMessage(req.body);
+      const response = await GIntelligenceGateway.processMessage({
+        sessionId: input.sessionId || "",
+        message: input.message.trim(),
+        history: input.history,
+      });
       res.json(response);
-    } catch (err: any) {
-      res.status(400).json({ error: err.message || "G Intelligence Gateway processing error" });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.startsWith("Rate limit exceeded")) {
+        return res.status(429).json({ error: "Too many messages. Please try again shortly." });
+      }
+      console.error("G chat request failed");
+      res.status(503).json({ error: "G is temporarily unavailable. Please try again." });
     }
   });
 
