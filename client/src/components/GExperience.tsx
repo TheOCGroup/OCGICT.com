@@ -13,7 +13,7 @@ interface Message {
   text: string;
 }
 
-export function GExperience() {
+export function GExperience({ embedded = false }: { embedded?: boolean } = {}) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -243,11 +243,11 @@ export function GExperience() {
   };
 
   return (
-    <section id="g" className="relative overflow-hidden bg-[#070A0F] py-24 md:py-32 border-y border-slate-800">
+    <section id={embedded ? undefined : "g"} className={embedded ? "relative overflow-hidden bg-[#070A0F] py-5" : "relative overflow-hidden bg-[#070A0F] py-24 md:py-32 border-y border-slate-800"}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(37,99,235,0.15),transparent_40%)] pointer-events-none" />
 
       <div className="container relative z-10">
-        <div className="max-w-3xl">
+        <div className={embedded ? "hidden" : "max-w-3xl"}>
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-widest text-blue-300">
             <Bot size={15} /> G — OCG Investment Intelligence
           </div>
@@ -283,7 +283,7 @@ export function GExperience() {
           </div>
         )}
 
-        <div className="mt-6 grid gap-8 lg:grid-cols-[1.3fr_0.7fr] items-start">
+        <div className={embedded ? "mt-4 grid gap-5 lg:grid-cols-[1.3fr_0.7fr] items-start" : "mt-6 grid gap-8 lg:grid-cols-[1.3fr_0.7fr] items-start"}>
           {/* G interactive agent console */}
           <div className="rounded-[2rem] border border-blue-400/30 bg-gradient-to-b from-[#13284a] via-[#0b1e37] to-[#071426] p-5 md:p-7 shadow-2xl shadow-blue-950/50 flex flex-col min-h-[580px]">
             <div className="mb-5 flex flex-col items-center gap-3 rounded-[1.7rem] border border-blue-300/20 bg-gradient-to-br from-blue-600/20 via-sky-400/10 to-transparent px-5 py-6 text-center">

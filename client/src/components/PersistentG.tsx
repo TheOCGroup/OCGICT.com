@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, Home, MessageCircle, Mic, Send, Sparkles, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { GExperience } from "./GExperience";
 
 interface GMessage {
   id: string;
@@ -111,7 +112,7 @@ export function PersistentG() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.97 }}
             transition={{ duration: 0.22 }}
-            className="fixed bottom-24 right-4 z-[90] w-[calc(100vw-2rem)] max-w-[450px] max-h-[calc(100dvh-7rem)] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6"
+            className="fixed inset-x-2 top-2 bottom-20 z-[90] flex flex-col sm:inset-x-auto sm:top-4 sm:bottom-20 sm:right-6 sm:w-[min(980px,calc(100vw-3rem))] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6"
           >
             <div className="border-b border-white/10 bg-gradient-to-r from-[#0d1a2c] to-[#09111d] p-4">
               <div className="flex items-center justify-between gap-3">
@@ -123,29 +124,8 @@ export function PersistentG() {
               </div>
             </div>
 
-            <div className="border-b border-white/10 bg-black/15 px-4 py-3">
-              <div className="grid grid-cols-3 gap-2 text-[9px] font-bold uppercase tracking-wider">
-                <div className="rounded-lg border border-emerald-400/15 bg-emerald-400/5 px-2 py-2 text-emerald-300">HUNTER<br /><span className="font-normal text-slate-500">Research</span></div>
-                <div className="rounded-lg border border-blue-400/15 bg-blue-400/5 px-2 py-2 text-blue-300">VICTOR<br /><span className="font-normal text-slate-500">Analysis</span></div>
-                <div className="rounded-lg border border-amber-400/15 bg-amber-400/5 px-2 py-2 text-amber-300">PIPER<br /><span className="font-normal text-slate-500">Follow-up</span></div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 max-h-[380px] space-y-3 overflow-y-auto p-4">
-              {messages.map((m) => <div key={m.id} className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.sender === "user" ? "bg-amber-500 text-slate-950" : "border border-white/10 bg-white/5 text-slate-200"}`}>{m.text}</div></div>)}
-              {isTyping && <div className="flex items-center gap-2 text-xs text-slate-500"><motion.span animate={reduceMotion ? undefined : { opacity: [0.35, 1, 0.35] }} transition={{ duration: 1.2, repeat: Infinity }}>●</motion.span>G is coordinating OCG intelligence…</div>}
-            </div>
-
-            <div className="shrink-0 border-t border-white/10 p-4">
-              <div className="mb-3 grid grid-cols-2 gap-2">
-                <Link href="/sell" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-400/15"><Home size={14} /> Get My Offer</Link>
-                <button onClick={() => send("Tell me what The OC Group can do for me.")} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-white/10"><Sparkles size={14} /> Ask G</button>
-              </div>
-              <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/80 p-2">
-                <button type="button" className="rounded-xl p-2 text-slate-500" title="Voice experience preview"><Mic size={17} /></button>
-                <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message G" placeholder="Ask G anything…" className="min-w-0 flex-1 bg-transparent px-1 text-sm text-white outline-none placeholder:text-slate-600" />
-                <button type="submit" aria-label="Send message to G" disabled={!input.trim() || isTyping} className="rounded-xl bg-amber-500 p-2.5 text-slate-950 disabled:opacity-40"><Send size={16} /></button>
-              </form>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#070A0F]">
+              <GExperience embedded />
             </div>
           </motion.aside>
         )}
