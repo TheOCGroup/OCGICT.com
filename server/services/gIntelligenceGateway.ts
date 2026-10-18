@@ -101,13 +101,25 @@ export class GIntelligenceGateway {
     let action: IGActionInvocation | undefined;
     if (completion.toolCalls && completion.toolCalls.length > 0) {
       const call = completion.toolCalls[0];
-      action = {
-        actionId: call.name === "set_calculator_values" ? "SET_CALCULATOR_VALUES" : call.name === "load_property_case" ? "SELECT_PROPERTY_TRANSFORMATION" : "INITIATE_SELLER_MODE",
-        payload: call.arguments,
-        uiToastMessage: `G triggered ${call.name.replace(/_/g, " ")}`,
-        timestamp: new Date().toISOString(),
-      };
-      OcgObservability.log("TOOL_CALLED", { tool: call.name, args: call.arguments }, undefined, sessionId);
+      const args = call.arguments || {};
+      const validCalculator = call.name === "set_calculator_values"
+        && typeof args.arv === "number" && Number.isFinite(args.arv) && args.arv > 0
+        && typeof args.rehab === "number" && Number.isFinite(args.rehab) && args.rehab >= 0;
+      const validCase = call.name === "load_property_case"
+        && (args.propertyId === "bungalow" || args.propertyId === "ranch");
+      const validSeller = call.name === "activate_seller_intake"
+        && (args.sellerStep === undefined || (Number.isInteger(args.sellerStep) && args.sellerStep >= 1 && args.sellerStep <= 5));
+      if (validCalculator || validCase || validSeller) {
+        action = {
+          actionId: validCalculator ? "SET_CALCULATOR_VALUES" : validCase ? "SELECT_PROPERTY_TRANSFORMATION" : "INITIATE_SELLER_MODE",
+          payload: args,
+          uiToastMessage: "G prepared a website action",
+          timestamp: new Date().toISOString(),
+        };
+        OcgObservability.log("TOOL_CALLED", { tool: call.name }, undefined, sessionId);
+      } else {
+        // Invalid or unknown action: fail closed rather than routing to seller mode.
+      }
     }
 
     // 5. Synthesize Strategy Brief if context warrants
