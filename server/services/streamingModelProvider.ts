@@ -68,10 +68,12 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
       ];
     }
 
+    // Limit provider latency so a stalled upstream service cannot tie up G indefinitely.
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -93,7 +95,7 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
       : undefined;
 
     return {
-      content: textPart?.text || (funcPart ? "Executing requested action on the OCG platform..." : ""),
+      content: textPart?.text || (funcPart ? "I can prepare that action for you. Please verify the information shown." : "I couldn't generate a useful response. Please try rephrasing your question."),
       toolCalls,
       provider: "Gemini",
       model: this.modelName,
