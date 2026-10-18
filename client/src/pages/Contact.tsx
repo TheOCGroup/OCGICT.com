@@ -103,7 +103,7 @@ export function Contact() {
                   <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
                     <strong className="text-white">{formData.name}</strong>, your request has not been submitted. Open your email app below, review the details, and send it to OCG. You can also call (720) 620-9929.
                   </p>
-                  <a className="inline-flex rounded-xl bg-blue-600 px-5 py-3 font-bold text-white" href={`mailto:Contact@ocasiocollective.com?subject=${encodeURIComponent(`OCG ${role} strategy inquiry`)}&body=${encodeURIComponent(Object.entries(formData).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join("\n"))}`}>Open request in email</a>
+                  <a className="inline-flex rounded-xl bg-blue-600 px-5 py-3 font-bold text-white" href={`mailto:theocgroupict@gmail.com?subject=${encodeURIComponent(`OCG ${role} strategy inquiry`)}&body=${encodeURIComponent(Object.entries(formData).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join("\n"))}`}>Open request in email</a>
                   <button type="button" onClick={() => setSubmitted(false)} className="block mx-auto text-sm text-blue-300 underline">Edit request</button>
                   {briefAttached && (
                     <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-900/60 text-xs text-blue-300 inline-block font-mono">
@@ -376,7 +376,7 @@ export function Contact() {
                     <Mail size={16} className="text-blue-400 shrink-0" />
                     <div>
                       <div className="text-[10px] text-slate-500 uppercase font-bold">Official Email</div>
-                      <div className="text-slate-200 font-semibold">Contact@ocasiocollective.com</div>
+                      <div className="text-slate-200 font-semibold">theocgroupict@gmail.com</div>
                     </div>
                   </div>
 
