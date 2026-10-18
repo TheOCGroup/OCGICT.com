@@ -31,7 +31,7 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
 
   async generateCompletion(options: ModelCompletionOptions): Promise<ModelCompletionResponse> {
     const startTime = Date.now();
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent?key=${this.apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.modelName)}:generateContent`;
 
     const contents = options.messages
       .filter((m) => m.role !== "system")
@@ -70,13 +70,12 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Gemini API error [${response.status}]: ${errText}`);
+      throw new Error(`Gemini model request failed (HTTP ${response.status})`);
     }
 
     const data = await response.json();
