@@ -38,6 +38,9 @@ export interface IModelProvider {
  * Model Provider Factory
  */
 export function getActiveModelProvider(): IModelProvider {
+  if (process.env.GEMINI_AUTH_MODE === "vertex") {
+    return new EnhancedGeminiProvider("", process.env.GEMINI_MODEL || "gemini-2.5-flash");
+  }
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && geminiKey.trim() !== "") {
     return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-2.5-flash");

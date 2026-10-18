@@ -31,7 +31,15 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
 
   async generateCompletion(options: ModelCompletionOptions): Promise<ModelCompletionResponse> {
     const startTime = Date.now();
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.modelName)}:generateContent`;
+    const vertex = process.env.GEMINI_AUTH_MODE === "vertex";
+    const project = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT_ID;
+    const region = process.env.GEMINI_VERTEX_REGION || "us-central1";
+    if (vertex && (!project || !/^[a-z][a-z0-9-]{4,62}$/.test(project) || !/^[a-z0-9-]+$/.test(region))) {
+      throw new Error("Vertex AI project or region is not configured");
+    }
+    const endpoint = vertex
+      ? `https://${region}-aiplatform.googleapis.com/v1/projects/${project}/locations/${region}/publishers/google/models/${encodeURIComponent(this.modelName)}:generateContent`
+      : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.modelName)}:generateContent`;
 
     const contents = options.messages
       .filter((m) => m.role !== "system")
@@ -68,10 +76,22 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
       ];
     }
 
+    // Vertex uses the Cloud Run workload identity; no API key is stored or transmitted.
+    let authHeaders: Record<string, string> = { "x-goog-api-key": this.apiKey };
+    if (vertex) {
+      const tokenResponse = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", {
+        headers: { "Metadata-Flavor": "Google" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!tokenResponse.ok) throw new Error("Cloud Run workload identity is unavailable");
+      const token = await tokenResponse.json() as { access_token?: string };
+      if (!token.access_token) throw new Error("Cloud Run workload identity token missing");
+      authHeaders = { Authorization: `Bearer ${token.access_token}` };
+    }
     // Limit provider latency so a stalled upstream service cannot tie up G indefinitely.
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),
     });
@@ -245,6 +265,9 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
  * Model Provider Factory supporting Environment Config
  */
 export function getActiveStreamingModelProvider(): IStreamingModelProvider {
+  if (process.env.GEMINI_AUTH_MODE === "vertex") {
+    return new EnhancedGeminiProvider("", process.env.GEMINI_MODEL || "gemini-2.5-flash");
+  }
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && geminiKey.trim() !== "") {
     return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-1.5-flash");
