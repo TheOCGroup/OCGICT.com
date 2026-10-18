@@ -255,6 +255,50 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     setTimeout(() => setCopied(false), 2500);
   };
 
+  if (embedded) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[#090e19] text-slate-100">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5" ref={chatScrollContainerRef} role="log" aria-label="Conversation with G" aria-live="polite">
+          {messages.length === 1 && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 pb-8 text-center">
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <div className="absolute inset-0 animate-pulse rounded-full bg-blue-500/15 blur-xl" />
+                <div className="relative h-12 w-12 rounded-full border border-sky-300/40 bg-[radial-gradient(circle_at_30%_25%,#bce9ff_0%,#5d9bf9_22%,#283eae_55%,#070d2b_100%)] shadow-[0_0_30px_rgba(70,145,255,.35)]" />
+              </div>
+              <p className="text-sm font-medium text-slate-300">What can I help you with?</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {["Sell a property", "Explore an investment", "About OCG"].map((label, i) => (
+                  <button key={label} onClick={() => handleSendMessage(starterPrompts[i])} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300 transition hover:border-sky-400/50 hover:bg-white/10">{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.length > 1 && messages.slice(1).map(m => (
+            <div key={m.id} className={m.sender === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div className={m.sender === "user" ? "max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-blue-600/90 px-4 py-3 text-sm leading-relaxed text-white" : "max-w-[95%] whitespace-pre-wrap px-1 py-2 text-sm leading-relaxed text-slate-200"}>{m.text}</div>
+            </div>
+          ))}
+          {isTyping && <div className="px-1 text-xs text-sky-300" role="status">G is responding…</div>}
+        </div>
+        {activeActionNotice && <div className="px-5 py-2 text-xs text-sky-200" role="status">{activeActionNotice}</div>}
+        <div className="shrink-0 border-t border-white/10 bg-[#0c1423] px-3 pb-3 pt-3">
+          <form onSubmit={e => { e.preventDefault(); void handleSendMessage(); }} className="flex items-center gap-2 rounded-2xl border border-white/15 bg-[#162136] p-2 focus-within:border-sky-400/60">
+            <button type="button" onClick={listening ? stopVoice : startListening} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${listening ? "bg-sky-500 text-white animate-pulse" : "text-sky-200 hover:bg-white/10"}`} aria-label={listening ? "Stop listening" : "Talk to G"} title={listening ? "Stop listening" : "Talk to G"}><Mic size={18} /></button>
+            <input value={inputVal} onChange={e => setInputVal(e.target.value)} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
+            <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
+          </form>
+          <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
+            <span role="status" className="truncate">{listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? "Voice available" : voiceStatus}</span>
+            <div className="flex shrink-0 items-center gap-3">
+              <button type="button" onClick={stopVoice} className="hover:text-white">Mute</button>
+              <a href={emailHref} className="text-sky-300 hover:text-sky-100">Contact OCG</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section id={embedded ? undefined : "g"} className={embedded ? "relative overflow-hidden bg-[#070A0F] py-5" : "relative overflow-hidden bg-[#070A0F] py-24 md:py-32 border-y border-slate-800"}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(37,99,235,0.15),transparent_40%)] pointer-events-none" />

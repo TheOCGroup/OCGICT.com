@@ -113,19 +113,19 @@ export function PersistentG() {
             aria-hidden={!open}
             inert={!open}
             transition={{ duration: 0.22 }}
-            className={`fixed inset-x-2 top-2 bottom-20 z-[90] flex flex-col sm:inset-x-auto sm:top-4 sm:bottom-20 sm:right-6 sm:w-[min(980px,calc(100vw-3rem))] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6 ${open ? "visible pointer-events-auto" : "invisible pointer-events-none"}`}
+            className={`fixed inset-x-2 top-[10vh] bottom-20 z-[90] flex flex-col sm:inset-x-auto sm:top-auto sm:bottom-20 sm:h-[min(630px,calc(100dvh-7rem))] sm:right-6 sm:w-[min(420px,calc(100vw-2rem))] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6 ${open ? "visible pointer-events-auto" : "invisible pointer-events-none"}`}
           >
-            <div className="border-b border-white/10 bg-gradient-to-r from-[#0d1a2c] to-[#09111d] p-4">
+            <div className="shrink-0 border-b border-white/10 bg-[#0d1523] px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <motion.div animate={reduceMotion ? undefined : { boxShadow: ["0 0 0 0 rgba(245,158,11,.18)", "0 0 0 10px rgba(245,158,11,0)", "0 0 0 0 rgba(245,158,11,0)"] }} transition={{ duration: 2.4, repeat: Infinity }} className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-400/40 bg-gradient-to-br from-slate-950 to-blue-950 text-2xl font-black text-amber-300">G</motion.div>
-                  <div><div className="flex items-center gap-2 text-sm font-black text-white">G <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">Online</span></div><div className="text-[11px] text-slate-400">OCG AI Real Estate Intelligence</div></div>
+                  <motion.div animate={reduceMotion ? undefined : { boxShadow: ["0 0 0 0 rgba(245,158,11,.18)", "0 0 0 10px rgba(245,158,11,0)", "0 0 0 0 rgba(245,158,11,0)"] }} transition={{ duration: 2.4, repeat: Infinity }} className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/30 bg-[radial-gradient(circle_at_30%_25%,#c4efff_0%,#528fec_30%,#283eaa_65%,#090c29_100%)] shadow-[0_0_20px_rgba(67,140,255,.25)] text-transparent">G</motion.div>
+                  <div><div className="flex items-center gap-2 text-sm font-black text-white">G <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">Online</span></div><div className="text-[11px] text-slate-400">Your OCG guide</div></div>
                 </div>
                 <button onClick={() => setOpen(false)} className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close G"><X size={18} /></button>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#070A0F]">
+            <div className="min-h-0 flex-1 overflow-hidden bg-[#090e19]">
               <GExperience embedded active={open} />
             </div>
           </motion.aside>
@@ -133,8 +133,8 @@ export function PersistentG() {
       </AnimatePresence>
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="fixed bottom-4 right-4 z-[89] sm:right-6">
-        <button onClick={() => { setOpen((v) => !v); setShowNudge(false); }} className="group flex items-center gap-3 rounded-full border border-amber-400/30 bg-[#08111d]/95 py-2 pl-2 pr-4 text-left shadow-2xl shadow-black/50 backdrop-blur-xl hover:border-amber-300/50">
-          <motion.div animate={reduceMotion ? undefined : { scale: [1, 1.04, 1] }} transition={{ duration: 3, repeat: Infinity }} className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/40 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 text-xl font-black text-amber-300">G</motion.div>
+        <button onClick={() => { setOpen((v) => !v); setShowNudge(false); }} className="group flex items-center gap-2 rounded-full border border-sky-400/25 bg-[#08111d]/95 py-1.5 pl-1.5 pr-3 text-left shadow-2xl shadow-black/50 backdrop-blur-xl hover:border-amber-300/50">
+          <motion.div animate={reduceMotion ? undefined : { scale: [1, 1.04, 1] }} transition={{ duration: 3, repeat: Infinity }} className="flex h-10 w-10 items-center justify-center rounded-full border border-sky-300/40 bg-[radial-gradient(circle_at_30%_25%,#bce9ff_0%,#5d9bf9_25%,#283eae_60%,#070d2b_100%)] shadow-[0_0_20px_rgba(70,145,255,.3)] text-transparent">G</motion.div>
           <div className="hidden sm:block"><div className="text-xs font-black text-white">Hi, I’m G.</div><div className="text-[10px] text-slate-400">Ask me about a property or OCG.</div></div>
           {open ? <ChevronDown size={15} className="text-slate-500" /> : <MessageCircle size={15} className="text-amber-300" />}
         </button>
