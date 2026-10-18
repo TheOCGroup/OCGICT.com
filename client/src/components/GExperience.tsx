@@ -352,6 +352,13 @@ export function GExperience() {
                 <Send size={16} />
               </button>
             </form>
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-blue-200/10 pt-4">
+              <span className="mr-1 text-xs font-medium text-blue-100/70">Want a person to follow up?</span>
+              <a href="mailto:theocgroupict@gmail.com?subject=OCG%20Website%20Inquiry" className="rounded-full border border-sky-400/50 bg-sky-500/15 px-4 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Email The OC Group</a>
+              <Link href="/sell" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Selling a property</Link>
+              <Link href="/contact" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Investor or general inquiry</Link>
+            </div>
+            <p className="mt-2 text-[11px] text-blue-100/60">Email opens your email app. Nothing is sent until you review and send it.</p>
           </div>
 
           {/* Canonical OCG Strategy Brief with Certainty Badges */}
