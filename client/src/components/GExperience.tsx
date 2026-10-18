@@ -13,7 +13,7 @@ interface Message {
   text: string;
 }
 
-export function GExperience({ embedded = false }: { embedded?: boolean } = {}) {
+export function GExperience({ embedded = false, active = true }: { embedded?: boolean; active?: boolean } = {}) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -52,6 +52,19 @@ export function GExperience({ embedded = false }: { embedded?: boolean } = {}) {
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
   }, []);
+
+  useEffect(() => {
+    if (!active) {
+      voiceSessionRef.current += 1;
+      voiceEnabledRef.current = false;
+      recognitionRef.current?.abort?.();
+      recognitionRef.current = null;
+      window.speechSynthesis?.cancel();
+      activeSpeechRef.current = null;
+      setListening(false);
+      setVoiceStatus("Voice paused");
+    }
+  }, [active]);
 
   const stopVoice = () => {
     voiceSessionRef.current += 1;

@@ -106,13 +106,14 @@ export function PersistentG() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {open && (
+        {(
           <motion.aside
             initial={{ opacity: 0, y: 28, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.97 }}
+            animate={open ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 18, scale: 0.97 }}
+            aria-hidden={!open}
+            inert={!open}
             transition={{ duration: 0.22 }}
-            className="fixed inset-x-2 top-2 bottom-20 z-[90] flex flex-col sm:inset-x-auto sm:top-4 sm:bottom-20 sm:right-6 sm:w-[min(980px,calc(100vw-3rem))] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6"
+            className={`fixed inset-x-2 top-2 bottom-20 z-[90] flex flex-col sm:inset-x-auto sm:top-4 sm:bottom-20 sm:right-6 sm:w-[min(980px,calc(100vw-3rem))] flex flex-col overflow-hidden rounded-[28px] border border-amber-400/25 bg-[#07101d]/97 shadow-2xl shadow-black/60 backdrop-blur-2xl sm:right-6 ${open ? "visible pointer-events-auto" : "invisible pointer-events-none"}`}
           >
             <div className="border-b border-white/10 bg-gradient-to-r from-[#0d1a2c] to-[#09111d] p-4">
               <div className="flex items-center justify-between gap-3">
@@ -125,7 +126,7 @@ export function PersistentG() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#070A0F]">
-              <GExperience embedded />
+              <GExperience embedded active={open} />
             </div>
           </motion.aside>
         )}
