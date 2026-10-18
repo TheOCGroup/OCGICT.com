@@ -37,6 +37,7 @@ export function GExperience() {
   const recognitionRef = useRef<any>(null);
   const voiceEnabledRef = useRef(false);
   const activeSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceSessionRef = useRef(0);
   const requestPendingRef = useRef(false);
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
@@ -52,6 +53,7 @@ export function GExperience() {
   }, []);
 
   const stopVoice = () => {
+    voiceSessionRef.current += 1;
     voiceEnabledRef.current = false;
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
@@ -64,7 +66,8 @@ export function GExperience() {
   const speakReply = (text: string) => {
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const speech = new SpeechSynthesisUtterance(text);
+    const session = voiceSessionRef.current;
+    const speech = new SpeechSynthesisUtterance(text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*_#`]/g, ''));
     speech.lang = "en-US";
     speech.rate = 1.05;
     const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith("en") && /natural|neural/i.test(v.name));
@@ -72,7 +75,7 @@ export function GExperience() {
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
     speech.onend = () => {
-      if (activeSpeechRef.current !== speech || !voiceEnabledRef.current) return;
+      if (activeSpeechRef.current !== speech || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
       activeSpeechRef.current = null;
       setVoiceStatus("G finished. Listening for your next question...");
       startListening();
@@ -92,6 +95,8 @@ export function GExperience() {
       setVoiceStatus("Voice recognition is not supported here. Try Chrome or Edge.");
       return;
     }
+    voiceSessionRef.current += 1;
+    const session = voiceSessionRef.current;
     activeSpeechRef.current = null;
     window.speechSynthesis?.cancel();
     recognitionRef.current?.abort?.();
@@ -101,10 +106,10 @@ export function GExperience() {
     recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.onstart = () => { setListening(true); setVoiceStatus("Listening — speak now"); };
-    recognition.onend = () => { if (recognitionRef.current === recognition) setListening(false); };
+    recognition.onstart = () => { if (voiceSessionRef.current !== session) return; setListening(true); setVoiceStatus("Listening — speak now"); };
+    recognition.onend = () => { if (recognitionRef.current === recognition && voiceSessionRef.current === session) setListening(false); };
     recognition.onerror = (error: any) => {
-      if (recognitionRef.current !== recognition) return;
+      if (recognitionRef.current !== recognition || voiceSessionRef.current !== session) return;
       setListening(false);
       if (error.error === "not-allowed" || error.error === "service-not-allowed") {
         voiceEnabledRef.current = false;
@@ -114,12 +119,12 @@ export function GExperience() {
       }
     };
     recognition.onresult = (event: any) => {
-      if (recognitionRef.current !== recognition || !voiceEnabledRef.current) return;
+      if (recognitionRef.current !== recognition || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
       const spoken = event.results?.[0]?.[0]?.transcript?.trim();
       setListening(false);
       if (spoken) void handleSendMessage(spoken);
     };
-    try { recognition.start(); } catch { setVoiceStatus("Microphone unavailable"); }
+    try { recognition.start(); } catch { voiceEnabledRef.current = false; setVoiceStatus("Microphone unavailable. Tap Talk to G to retry."); }
   };
 
   const scrollToChatBottom = () => {
