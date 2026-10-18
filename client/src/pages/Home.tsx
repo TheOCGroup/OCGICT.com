@@ -16,7 +16,6 @@ import {
 import OCGWordmark from '@/components/OCGWordmark';
 import { InteractiveTransformSlider } from '@/components/InteractiveTransformSlider';
 import { Calculators } from '@/components/Calculators';
-import { GExperience } from '@/components/GExperience';
 import { TechnologyPipelineSequence } from '@/components/TechnologyPipelineSequence';
 import { OriginStorySequence } from '@/components/OriginStorySequence';
 import { WichitaLandmarkRibbon } from '@/components/WichitaLandmarkRibbon';
@@ -278,7 +277,7 @@ export function Home() {
             <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl">Not a chatbot.<br /><span className="bg-gradient-to-r from-blue-400 via-blue-200 to-slate-400 bg-clip-text text-transparent">An intelligent gateway into OCG.</span></h2>
             <p className="mx-auto mt-4 max-w-2xl text-base text-slate-300 sm:text-lg">Use G to explore investment scenarios, Wichita housing context, financing strategy, property questions, and your next decision.</p>
           </motion.div>
-          <div className="mx-auto max-w-6xl"><GExperience /></div>
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 rounded-3xl border border-blue-400/20 bg-blue-950/20 px-6 py-9 text-center"><p className="max-w-xl text-sm leading-relaxed text-slate-300">G stays by your side while you explore the website. Open the full voice-enabled experience whenever you need help with a property or your next step.</p><button type="button" onClick={() => window.dispatchEvent(new Event("ocg:open-g"))} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-blue-600 px-7 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300">Open Advanced G <ArrowRight size={17}/></button></div>
         </div>
       </section>
 
