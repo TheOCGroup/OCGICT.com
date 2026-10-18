@@ -33,6 +33,21 @@ export function createApp() {
     next();
   });
 
+  // Operational status only: never expose credentials or claim an upstream connection was tested.
+  app.get("/api/g/provider-status", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const configured = Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
+    res.json({
+      provider: configured ? "gemini-configured" : "ocg-local-engine",
+      conversationalModelConfigured: configured,
+      liveModelVerified: false,
+      voiceMode: "browser-speech",
+      note: configured
+        ? "Credentials configured; check a successful chat response to verify upstream model access."
+        : "No conversational model credential configured. G is using the deterministic fallback.",
+    });
+  });
+
   app.post("/api/g/chat", async (req, res) => {
     const input = req.body;
     if (!input || typeof input !== "object" || Array.isArray(input)
