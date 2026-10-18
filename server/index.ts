@@ -145,7 +145,19 @@ export function createApp() {
         const state = String(p?.state || "").trim();
         if (!house || !street || !city || (state && !["Kansas", "KS"].includes(state))) return "";
         return `${house} ${street}, ${city}, KS`;
-      }).filter(Boolean))).slice(0, 6);
+      }).filter(Boolean))).filter(candidate => {
+        // Do not show unrelated house numbers or streets as address matches.
+        const normalized = (value: string) => value.toLowerCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+        const typed = normalized(q).replace(/\b(wichita|kansas|ks)\b/g, "").trim();
+        const match = typed.match(/^(\d+)\s+(.+)$/);
+        const proposed = normalized(candidate);
+        if (match) {
+          if (!proposed.startsWith(match[1] + " ")) return false;
+          const words = match[2].split(" ").filter(word => !["n", "s", "e", "w", "north", "south", "east", "west", "st", "street", "ave", "avenue", "rd", "road"].includes(word));
+          return words.every(word => proposed.includes(word));
+        }
+        return typed.split(" ").filter(Boolean).every(word => proposed.includes(word));
+      }).slice(0, 6);
       if (addressSuggestionCache.size > 150) addressSuggestionCache.clear();
       addressSuggestionCache.set(key, { results: suggestions, expires: Date.now() + 120000 });
       return res.json({ suggestions });

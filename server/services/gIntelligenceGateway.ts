@@ -46,6 +46,19 @@ export class GIntelligenceGateway {
     this.checkRateLimit(sessionId);
     OcgObservability.log("G_SESSION_STARTED", { sessionId });
 
+    // A brief greeting must work even when no paid conversational model is configured.
+    // Match greetings only, not longer inquiries such as "Hey G, I want to sell".
+    const greeting = req.message.trim().toLowerCase().replace(/[!?.,]+$/g, "").trim();
+    if (/^(?:(?:hey|hi|hello|good morning|good afternoon|good evening)(?: there)?(?:,? g)?|g|hey g|hi g|hello g)$/.test(greeting)) {
+      return {
+        sessionId,
+        replyText: "Hello! Welcome to The OC Group. What brings you to our site today?",
+        provider: "OCG_LOCAL_GREETING",
+        model: "g-concierge-greeting-v1",
+        latencyMs: Date.now() - startTime,
+      };
+    }
+
     // 2. Prepare Context & Tool Schemas
     const messages: ModelMessage[] = [
       { role: "system", content: G_SYSTEM_INSTRUCTION },
