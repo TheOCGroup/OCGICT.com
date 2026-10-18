@@ -99,6 +99,7 @@ jobs:
             --memory=512Mi
             --cpu=1
             --port=8080
+            ${{ vars.GEMINI_AUTH_MODE == 'vertex' && format('--update-env-vars=GEMINI_AUTH_MODE=vertex,GOOGLE_CLOUD_PROJECT={0},GEMINI_VERTEX_REGION={1}', vars.GCP_PROJECT_ID, 'us-central1') || '' }}
             ${{ vars.GEMINI_SECRET_NAME != '' && format('--update-secrets=GEMINI_API_KEY={0}:latest', vars.GEMINI_SECRET_NAME) || '' }}
 
       - name: Check G model configuration
