@@ -157,7 +157,17 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
-    if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || (lower.includes("arv") && lower.includes("property"))) {
+    // Use prior visitor intent for short follow-ups instead of restarting the pitch.
+    const briefFollowup = lower.trim().replace(/[.!?]+$/g, "");
+    if (sellerContext && /^(soon|as soon as possible|asap|right away|immediately|quickly|within a month|this month)$/.test(briefFollowup)) {
+      content = "Got it, timing matters. We can start with a preliminary as-is review. What is the property address? If you prefer, you can begin on our Sell page.";
+    } else if (sellerContext && /^(just looking|just exploring|exploring|not sure|no rush|later|not yet)$/.test(briefFollowup)) {
+      content = "Of course. There's no pressure to decide today. Would it help more to compare selling as-is with repairing the property first?";
+    } else if (sellerContext && /^(needs work|needs repairs|poor condition|as is|as-is|vacant|tenant occupied|owner occupied)$/.test(briefFollowup)) {
+      content = "Thanks, that helps. Properties needing work can still be evaluated as-is. Is your main concern getting a fair price or avoiding the repairs and hassle?";
+    } else if (investorContext && /^(flip|a flip|flipping|rental|a rental|buy and hold|hold)$/.test(briefFollowup)) {
+      content = "Understood. Do you already have a specific property in mind, or would you like help understanding how OCG evaluates opportunities?";
+    } else if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || (lower.includes("arv") && lower.includes("property"))) {
       // Never populate interactive underwriting with fabricated sample inputs.
       const hasArv = /(?:arv|after.repair.value)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
       const hasRehab = /(?:rehab|repairs?|renovation)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
