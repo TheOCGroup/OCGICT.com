@@ -3,7 +3,6 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GIntelligenceGateway } from "./services/gIntelligenceGateway.js";
-import { getActiveStreamingModelProvider } from "./services/streamingModelProvider.js";
 import { HunterAdapter, VictorAdapter } from "./services/systemAdapters.js";
 import { PiperQueueAdapter, SellerActionType } from "./services/piperAdapter.js";
 import { WichitaPropertyService } from "./services/wichitaPropertyService.js";
@@ -77,23 +76,11 @@ export function createApp() {
     }
   });
 
-  app.post("/api/g/stream", async (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    try {
-      const provider = getActiveStreamingModelProvider();
-      const messages = [
-        { role: "system" as const, content: "You are G — OCG Investment Intelligence." },
-        { role: "user" as const, content: req.body.message || "" },
-      ];
-      const stream = await provider.generateStream({ messages });
-      for await (const chunk of stream) res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      res.end();
-    } catch (err: any) {
-      res.write(`data: ${JSON.stringify({ type: "error", error: err.message })}\n\n`);
-      res.end();
-    }
+  // Fail closed until streaming has equivalent request validation, metering,
+  // per-client abuse controls and approved provider billing.
+  app.post("/api/g/stream", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(503).json({ error: "Streaming voice is not enabled. Use G chat." });
   });
 
   app.get("/api/property/lookup", async (req, res) => {
