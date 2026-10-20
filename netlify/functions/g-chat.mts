@@ -20,6 +20,13 @@ export default async function handler(request: Request): Promise<Response> {
   if (process.env.OCG_G_CHAT_ENABLED !== "true") {
     return new Response(JSON.stringify({ error: "G backend is not enabled in this environment." }), { status: 503, headers });
   }
+  // An explicit cost gate prevents accidental paid model calls after enabling chat.
+  // Local-only mode permits free acceptance testing while paid providers stay blocked.
+  const hasPaidCredentials = process.env.GEMINI_AUTH_MODE === "vertex"
+    || Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
+  if (hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
+    return new Response(JSON.stringify({ error: "Paid AI usage has not been approved for this environment." }), { status: 503, headers });
+  }
   try {
     const data = await GIntelligenceGateway.processMessage({
       sessionId: body.sessionId || "", message: body.message.trim(), history: body.history,
