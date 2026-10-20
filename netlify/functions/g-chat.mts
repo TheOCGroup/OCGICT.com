@@ -1,7 +1,7 @@
-import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
+﻿import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
 
 // A standalone Netlify function: it never starts the Express server.
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
   if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed." }), { status: 405, headers });
   if (Number(request.headers.get("content-length") || 0) > 20000) return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
@@ -17,7 +17,8 @@ export default async function handler(request: Request): Promise<Response> {
   }
   // No billing-capable model invocation in preview until provider credentials,
   // budget and abuse checks have been independently verified.
-  if (process.env.OCG_G_CHAT_ENABLED !== "true") {
+  const previewLocalOnly = context?.deploy?.context === "deploy-preview";
+  if (!previewLocalOnly && process.env.OCG_G_CHAT_ENABLED !== "true") {
     return new Response(JSON.stringify({ error: "G backend is not enabled in this environment." }), { status: 503, headers });
   }
   // An explicit cost gate prevents accidental paid model calls after enabling chat.
@@ -54,3 +55,4 @@ export const config = {
   method: "POST",
   rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 30 },
 };
+

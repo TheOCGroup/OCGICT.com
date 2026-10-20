@@ -1,6 +1,25 @@
 ﻿import { describe, it, expect } from 'vitest';
 import handler from '../../netlify/functions/g-chat';
 describe('G local-only handler smoke', () => {
+  it('allows local greeting only for a preview and never production with chat off', async () => {
+    const previous = process.env.OCG_G_CHAT_ENABLED;
+    const previousMode = process.env.GEMINI_AUTH_MODE;
+    const previousKey = process.env.GEMINI_API_KEY;
+    const previousGoogle = process.env.GOOGLE_API_KEY;
+    try {
+      delete process.env.OCG_G_CHAT_ENABLED;
+      delete process.env.GEMINI_AUTH_MODE;
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
+      const req = () => new Request('https://example.invalid/api/g/chat', {method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({sessionId:'preview-qa',message:'Hello G'})});
+      expect((await handler(req(), {deploy:{context:'production'}})).status).toBe(503);
+      const response = await handler(req(), {deploy:{context:'deploy-preview'}});
+      expect(response.status).toBe(200);
+      expect((await response.json()).provider).toBe('OCG_LOCAL_GREETING');
+    } finally {
+      for(const [k,v] of Object.entries({OCG_G_CHAT_ENABLED:previous,GEMINI_AUTH_MODE:previousMode,GEMINI_API_KEY:previousKey,GOOGLE_API_KEY:previousGoogle})) if(v===undefined) delete process.env[k]; else process.env[k]=v;
+    }
+  });
   it('returns the greeting without model billing', async () => {
     const prior = {enabled:process.env.OCG_G_CHAT_ENABLED, mode:process.env.GEMINI_AUTH_MODE,key:process.env.GEMINI_API_KEY,google:process.env.GOOGLE_API_KEY};
     try {
@@ -18,3 +37,4 @@ describe('G local-only handler smoke', () => {
     }
   });
 });
+
