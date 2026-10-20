@@ -95,7 +95,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     // Do not select an arbitrary browser voice: natural/neural does not indicate gender.
     // Browser TTS offers no reliable gender property. Permit only explicitly identified
     // male voice names; otherwise do not synthesize a potentially female voice.
-    const matching = window.speechSynthesis.getVoices()
+    const availableVoices = window.speechSynthesis.getVoices();
+    const matching = availableVoices
       .filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
     const maleEnglish = /\b(?:guy|davis|andrew|brian|tony|ryan|david|james)\b/i;
     const maleSpanish = /\b(?:jorge|alvaro|\u00e1lvaro|diego|pablo|raul|ra\u00fal|carlos|enrique)\b/i;
@@ -103,6 +104,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const voice = matching.find(v => maleName.test(v.name)
       && v.lang.toLowerCase() === locale.toLowerCase())
       || matching.find(v => maleName.test(v.name));
+    // Browser voice inventories may arrive asynchronously. The user can retry Talk
+    // after voiceschanged; never substitute an unidentified voice.
     if (!voice) {
       setVoiceStatus("A verified male voice is unavailable in this browser. Text chat is ready.");
       return;
