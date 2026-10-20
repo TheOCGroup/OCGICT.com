@@ -90,7 +90,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speech.rate = 1.0;
     speech.pitch = 1.0;
     const available = window.speechSynthesis.getVoices().filter(v => /^en(-|$)/i.test(v.lang));
-    const voice = available.find(v => /natural|neural|online/i.test(v.name)) || available.find(v => /en-US/i.test(v.lang)) || available[0];
+    const voice = available.find(v => /en-US/i.test(v.lang) && /(?:guy|davis|andrew|tony|brian|natural|neural)/i.test(v.name)) || available.find(v => /en-US/i.test(v.lang)) || available[0];
     if (voice) speech.voice = voice;
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
