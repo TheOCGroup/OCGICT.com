@@ -87,8 +87,10 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
     const speech = new SpeechSynthesisUtterance(spoken);
-    const spanish = /[¿¡ñáéíóú]|\b(?:hola|gracias|claro|usted|propiedad|inversión|podemos|necesita|ayudarle|quieres)\b/i.test(spoken);
-    const locale = spanish ? "es-US" : voiceLocaleRef.current;
+    // Pick the output language from G's actual reply, not the user's last language.
+    // Otherwise an English reply can accidentally inherit a Spanish synthesizer.
+    const spanish = /[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]|\b(?:hola|gracias|usted|propiedad|inversi\u00f3n|necesita|ayudarle|quieres|puedo|podemos|buenos|buenas|vender|comprar)\b/i.test(spoken);
+    const locale = spanish ? "es-US" : "en-US";
     speech.lang = locale;
     speech.rate = 1.0;
     speech.pitch = 1.0;
