@@ -34,6 +34,10 @@ export default async function handler(request: Request): Promise<Response> {
       error: "Paid model access is paused until a persistent usage budget is verified."
     }), { status: 503, headers });
   }
+  // Guard against oversized history even when the body has no Content-Length.
+  if (JSON.stringify(body).length > 20000) {
+    return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
+  }
   try {
     const data = await GIntelligenceGateway.processMessage({
       sessionId: body.sessionId || "", message: body.message.trim(), history: body.history,
