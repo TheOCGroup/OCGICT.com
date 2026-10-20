@@ -1,11 +1,13 @@
 import { getActiveModelProvider, ModelMessage, ModelToolDefinition } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
+import { EnhancedLocalProvider } from "./streamingModelProvider.js";
 import { GAbuseGuard } from "./gAbuseGuard.js";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../shared/contracts.js";
 
 export interface GChatRequest {
   sessionId: string;
   message: string;
+  localOnly?: boolean;
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   clientContext?: Record<string, any>;
 }
@@ -130,7 +132,7 @@ export class GIntelligenceGateway {
     ];
 
     // 3. Invoke Model Provider Layer
-    const provider = getActiveModelProvider();
+    const provider = req.localOnly ? new EnhancedLocalProvider() : getActiveModelProvider();
     const completion = await provider.generateCompletion({
       messages,
       tools,

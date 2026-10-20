@@ -25,12 +25,12 @@ export default async function handler(request: Request, context?: { deploy?: { c
   // Local-only mode permits free acceptance testing while paid providers stay blocked.
   const hasPaidCredentials = process.env.GEMINI_AUTH_MODE === "vertex"
     || Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
-  if (hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
+  if (!previewLocalOnly && hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
     return new Response(JSON.stringify({ error: "Paid AI usage has not been approved for this environment." }), { status: 503, headers });
   }
   // Approval is not metering. Never enable a paid provider without a separately
   // verified persistent usage meter that enforces the spending ceiling.
-  if (hasPaidCredentials) {
+  if (!previewLocalOnly && hasPaidCredentials) {
     return new Response(JSON.stringify({
       error: "Paid model access is paused until a persistent usage budget is verified."
     }), { status: 503, headers });
@@ -41,7 +41,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
   }
   try {
     const data = await GIntelligenceGateway.processMessage({
-      sessionId: body.sessionId || "", message: body.message.trim(), history: body.history,
+      sessionId: body.sessionId || "", message: body.message.trim(), history: body.history, localOnly: previewLocalOnly,
     });
     return new Response(JSON.stringify(data), { status: 200, headers });
   } catch (error) {
