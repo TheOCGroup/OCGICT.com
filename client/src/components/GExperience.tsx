@@ -249,7 +249,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         // No network submission or CRM record is created here.
         if (actionInvocation.actionId === "NAVIGATE" && actionInvocation.payload?.path === "/contact") {
           try {
-            const summary = [...messages.slice(-10), userMsg]
+            const summary = [...messages.slice(-10), userMsg, { id: "handoff-reply", sender: "g" as const, text: replyText }]
               .map(m => (m.sender === "user" ? "Visitor: " : "G: ") + m.text.slice(0, 500))
               .join("\n").slice(0, 2400);
             sessionStorage.setItem("ocg:g-contact-handoff", JSON.stringify({
