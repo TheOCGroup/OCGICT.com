@@ -1,5 +1,6 @@
 import { getActiveModelProvider, ModelMessage, ModelToolDefinition } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
+import { GAbuseGuard } from "./gAbuseGuard.js";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../shared/contracts.js";
 
 export interface GChatRequest {
@@ -48,6 +49,19 @@ export class GIntelligenceGateway {
 
     // 1. Rate Limiting Check (30 requests/minute per session)
     this.checkRateLimit(sessionId);
+    // Repeated long identical payloads may be automated testing or spam.
+    // Do not label intent, block ordinary exploration, or send raw conversations to telemetry.
+    if (GAbuseGuard.assess(sessionId, req.message) === "slow_down") {
+      OcgObservability.log("G_REPEATED_PAYLOAD_THROTTLED", { reason: "repeated_long_payload" });
+      return {
+        sessionId,
+        replyText: "I've received that message already. What would you like help with regarding The OC Group?",
+        provider: "OCG_LOCAL_GUARD",
+        model: "g-abuse-guard-v1",
+        latencyMs: Date.now() - startTime,
+      };
+    }
+
     OcgObservability.log("G_SESSION_STARTED", { sessionId });
 
     // A brief greeting must work even when no paid conversational model is configured.
