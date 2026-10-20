@@ -27,6 +27,13 @@ export default async function handler(request: Request): Promise<Response> {
   if (hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
     return new Response(JSON.stringify({ error: "Paid AI usage has not been approved for this environment." }), { status: 503, headers });
   }
+  // Approval is not metering. Never enable a paid provider without a separately
+  // verified persistent usage meter that enforces the spending ceiling.
+  if (hasPaidCredentials) {
+    return new Response(JSON.stringify({
+      error: "Paid model access is paused until a persistent usage budget is verified."
+    }), { status: 503, headers });
+  }
   try {
     const data = await GIntelligenceGateway.processMessage({
       sessionId: body.sessionId || "", message: body.message.trim(), history: body.history,
