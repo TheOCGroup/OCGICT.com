@@ -40,6 +40,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const activeSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voiceSessionRef = useRef(0);
   const requestPendingRef = useRef(false);
+  const voiceLocaleRef = useRef("en-US");
   const [activeActionNotice, setActiveActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [briefing, setBriefing] = useState<IOCGStrategyBrief | null>(null);
@@ -86,11 +87,17 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
     const speech = new SpeechSynthesisUtterance(spoken);
-    speech.lang = "en-US";
+    const spanish = /[¿¡ñáéíóú]|\b(?:hola|gracias|claro|usted|propiedad|inversión|podemos|necesita|ayudarle|quieres)\b/i.test(spoken);
+    const locale = spanish ? "es-US" : voiceLocaleRef.current;
+    speech.lang = locale;
     speech.rate = 1.0;
     speech.pitch = 1.0;
-    const available = window.speechSynthesis.getVoices().filter(v => /^en(-|$)/i.test(v.lang));
-    const voice = available.find(v => /en-US/i.test(v.lang) && /(?:guy|davis|andrew|tony|brian|natural|neural)/i.test(v.name)) || available.find(v => /en-US/i.test(v.lang)) || available[0];
+    const matching = window.speechSynthesis.getVoices().filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
+    const voice = matching.find(v => v.lang.toLowerCase() === locale.toLowerCase() && /(?:guy|davis|andrew|tony|brian|natural|neural)/i.test(v.name))
+      || matching.find(v => /natural|neural/i.test(v.name))
+      || matching.find(v => v.lang.toLowerCase() === locale.toLowerCase())
+      || matching[0];
+    if (voice) voiceLocaleRef.current = voice.lang;
     if (voice) speech.voice = voice;
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
@@ -124,7 +131,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     voiceEnabledRef.current = true;
     const recognition = new Recognition();
     recognitionRef.current = recognition;
-    recognition.lang = "en-US";
+    recognition.lang = voiceLocaleRef.current;
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onstart = () => { if (voiceSessionRef.current !== session) return; setListening(true); setVoiceStatus("Listening — speak now"); };
@@ -149,6 +156,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       const spoken = event.results?.[0]?.[0]?.transcript?.trim();
       setListening(false);
       if (spoken) {
+        if (/[¿¡ñáéíóú]|\b(?:hola|gracias|buenas|quiero|necesito|casa|propiedad|vender|comprar)\b/i.test(spoken)) voiceLocaleRef.current = "es-US";
         recognition.stop();
         recognitionRef.current = null;
         setVoiceStatus("G is preparing a reply");
