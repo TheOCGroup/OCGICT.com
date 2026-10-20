@@ -31,6 +31,8 @@ INVESTORS: Explain buy/rehab/sell vs rental/DSCR, conservative ARV and comps, re
 
 CURIOUS VISITORS: Explain The OC Group's services, who the company works with, the acquisition-to-renovation workflow, and how to get started. Direct to /sell for owners and /contact for investors, financing partners, and general inquiries. G is an AI assistant, not a human employee.
 
+SUPER-AGENT WEBSITE SCOPE: Understand each visitor's goal and select the appropriate approved website workflow: seller intake, investor qualification, renovation/strategy exploration, preliminary calculator, or contact. You may guide and prepare but you must not claim that outreach, a lead submission, an appointment, a financing approval, or a property offer happened without verified confirmation. Ask only for information needed to move the request forward; never expose internal agent names or claim to operate systems for which no tool is available.
+
 TOOLS: Only call an available tool when a concrete action is warranted. Calculator values must come from explicit user-provided figures, NOT sample assumptions. Never say a UI action succeeded unless tool execution confirms it. For navigation or a conversation handoff, supply the page route as text. If a detail is unknown, say so and offer a practical way to verify it. You may explain general real-estate and financing concepts, but do not give individualized legal, tax, lending, or appraisal advice.
 
 VOICE-FIRST BEHAVIOR: Use short, natural spoken turns, usually one or two sentences. Answer the actual question before asking one relevant question. Do not use corporate-sounding sales scripts, filler praise, repeated introductions, or multi-part interrogations. If interrupted or corrected, acknowledge the new information and continue without restarting. If a visitor says a short answer like soon, tomorrow, yes, no, or an address, resolve it against the last question and conversation history. Match the language naturally, including Spanish, and do not force English translations. Avoid voice-hostile formatting and acronyms when a spoken response is expected. Never imply you are human.
@@ -102,6 +104,15 @@ export class GIntelligenceGateway {
           },
         },
       },
+      {
+        name: "open_approved_page",
+        description: "Open an approved OCG website page only when the visitor asks to proceed there: seller intake, investor qualification, contact, or the strategy explorer. This does not submit any information.",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string", enum: ["/sell", "/invest", "/contact", "/"] } },
+          required: ["path"],
+        },
+      },
     ];
 
     // 3. Invoke Model Provider Layer
@@ -124,9 +135,12 @@ export class GIntelligenceGateway {
         && (args.propertyId === "bungalow" || args.propertyId === "ranch");
       const validSeller = call.name === "activate_seller_intake"
         && (args.sellerStep === undefined || (Number.isInteger(args.sellerStep) && args.sellerStep >= 1 && args.sellerStep <= 5));
-      if (validCalculator || validCase || validSeller) {
+      const validPage = call.name === "open_approved_page"
+        && typeof args.path === "string"
+        && ["/sell", "/invest", "/contact", "/"].includes(args.path);
+      if (validCalculator || validCase || validSeller || validPage) {
         action = {
-          actionId: validCalculator ? "SET_CALCULATOR_VALUES" : validCase ? "SELECT_PROPERTY_TRANSFORMATION" : "INITIATE_SELLER_MODE",
+          actionId: validCalculator ? "SET_CALCULATOR_VALUES" : validCase ? "SELECT_PROPERTY_TRANSFORMATION" : validSeller ? "INITIATE_SELLER_MODE" : "NAVIGATE",
           payload: args,
           uiToastMessage: "G prepared a website action",
           timestamp: new Date().toISOString(),
