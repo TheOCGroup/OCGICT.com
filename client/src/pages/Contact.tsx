@@ -42,6 +42,23 @@ export function Contact() {
 
   const [submitted, setSubmitted] = useState(false);
 
+  // Read only a recent, visitor-initiated handoff. This never sends or saves a lead.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("ocg:g-contact-handoff");
+      if (!raw) return;
+      sessionStorage.removeItem("ocg:g-contact-handoff");
+      const handoff = JSON.parse(raw);
+      if (typeof handoff?.timestamp !== "number" || Date.now() - handoff.timestamp > 30 * 60 * 1000) return;
+      if (typeof handoff.summary === "string" && handoff.summary.trim()) {
+        setFormData(previous => ({
+          ...previous,
+          message: handoff.summary.slice(0, 2400),
+        }));
+      }
+    } catch { /* contact form remains editable and usable */ }
+  }, []);
+
   // Load existing Strategy Brief context if created with G
   useEffect(() => {
     const brief = loadStrategyBrief();

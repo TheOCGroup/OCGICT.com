@@ -245,6 +245,18 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
 
       // 3. Execute Tool Action via Registry
       if (actionInvocation) {
+        // An explicit Contact handoff keeps a short, local summary for form review.
+        // No network submission or CRM record is created here.
+        if (actionInvocation.actionId === "NAVIGATE" && actionInvocation.payload?.path === "/contact") {
+          try {
+            const summary = [...messages.slice(-10), userMsg]
+              .map(m => (m.sender === "user" ? "Visitor: " : "G: ") + m.text.slice(0, 500))
+              .join("\n").slice(0, 2400);
+            sessionStorage.setItem("ocg:g-contact-handoff", JSON.stringify({
+              timestamp: Date.now(), summary
+            }));
+          } catch { /* session storage may be unavailable */ }
+        }
         const execResult = GActionRegistry.execute(actionInvocation);
         if (execResult.message) {
           setActiveActionNotice(execResult.message);

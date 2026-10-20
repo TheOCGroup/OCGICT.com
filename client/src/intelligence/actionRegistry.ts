@@ -38,6 +38,8 @@ export class GActionRegistry {
 
         // 3. Handle primary navigation and interaction routing
         if (action.actionId === "NAVIGATE" && action.payload?.path) {
+          const approvedPaths = ["/", "/sell", "/invest", "/contact"];
+          if (!approvedPaths.includes(action.payload.path)) throw new Error("Unapproved navigation");
           window.location.href = action.payload.path;
         } else if (action.actionId === "INITIATE_SELLER_MODE") {
           if (!window.location.pathname.includes("/sell")) {
