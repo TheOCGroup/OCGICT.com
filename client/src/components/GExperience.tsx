@@ -92,13 +92,23 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speech.lang = locale;
     speech.rate = 1.0;
     speech.pitch = 1.0;
-    const matching = window.speechSynthesis.getVoices().filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
-    const voice = matching.find(v => v.lang.toLowerCase() === locale.toLowerCase() && /(?:guy|davis|andrew|tony|brian|natural|neural)/i.test(v.name))
-      || matching.find(v => /natural|neural/i.test(v.name))
-      || matching.find(v => v.lang.toLowerCase() === locale.toLowerCase())
-      || matching[0];
-    if (voice) voiceLocaleRef.current = voice.lang;
-    if (voice) speech.voice = voice;
+    // Do not select an arbitrary browser voice: natural/neural does not indicate gender.
+    // Browser TTS offers no reliable gender property. Permit only explicitly identified
+    // male voice names; otherwise do not synthesize a potentially female voice.
+    const matching = window.speechSynthesis.getVoices()
+      .filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
+    const maleEnglish = /\b(?:guy|davis|andrew|brian|tony|ryan|david|james)\b/i;
+    const maleSpanish = /\b(?:jorge|alvaro|\u00e1lvaro|diego|pablo|raul|ra\u00fal|carlos|enrique)\b/i;
+    const maleName = locale.startsWith("es") ? maleSpanish : maleEnglish;
+    const voice = matching.find(v => maleName.test(v.name)
+      && v.lang.toLowerCase() === locale.toLowerCase())
+      || matching.find(v => maleName.test(v.name));
+    if (!voice) {
+      setVoiceStatus("A verified male voice is unavailable in this browser. Text chat is ready.");
+      return;
+    }
+    voiceLocaleRef.current = voice.lang;
+    speech.voice = voice;
     speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
     speech.onend = () => {
