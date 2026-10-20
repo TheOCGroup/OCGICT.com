@@ -10,6 +10,9 @@ describe("G voice fail-closed contract", () => {
   it("does not speak when no recognized male voice exists", () => {
     expect(code).toMatch(/if \(!voice\) \{[\s\S]*?return;[\s\S]*?\}\s*voiceLocaleRef/);
   });
+  it("rearms microphone when no TTS voice is available", () => {
+    expect(code).toMatch(/if \(!voice\) \{[\s\S]*?startListening\(\);[\s\S]*?return;/);
+  });
   it("retains click to interrupt and microphone rearm behavior", () => {
     expect(code).toContain("window.speechSynthesis.speak(speech)");
     expect(code).toContain("startListening();");

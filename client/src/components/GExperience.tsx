@@ -109,7 +109,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     // Browser voice inventories may arrive asynchronously. The user can retry Talk
     // after voiceschanged; never substitute an unidentified voice.
     if (!voice) {
-      setVoiceStatus("A verified male voice is unavailable in this browser. Text chat is ready.");
+      setVoiceStatus("No identified male voice is available. Listening remains available; text chat is ready.");
+      // A missing TTS voice must not terminate the hands-free listening session.
+      startListening();
       return;
     }
     voiceLocaleRef.current = voice.lang;
@@ -126,7 +128,10 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speech.onerror = () => {
       if (activeSpeechRef.current === speech) {
         activeSpeechRef.current = null;
-        setVoiceStatus("Speech playback unavailable. Tap Talk to G to continue.");
+        if (voiceEnabledRef.current && voiceSessionRef.current === session) {
+          setVoiceStatus("Speech playback unavailable. Listening for your reply.");
+          startListening();
+        }
       }
     };
     window.speechSynthesis.speak(speech);
