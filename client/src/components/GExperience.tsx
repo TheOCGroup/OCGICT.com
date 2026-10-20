@@ -97,7 +97,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speech.onend = () => {
       if (activeSpeechRef.current !== speech || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
       activeSpeechRef.current = null;
-      setVoiceStatus("Tap the microphone to reply");
+      // Re-arm the microphone after a completed spoken reply.
+      setVoiceStatus("Listening for your reply");
+      startListening();
     };
     speech.onerror = () => {
       if (activeSpeechRef.current === speech) {
@@ -126,7 +128,12 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onstart = () => { if (voiceSessionRef.current !== session) return; setListening(true); setVoiceStatus("Listening — speak now"); };
-    recognition.onend = () => { if (recognitionRef.current === recognition && voiceSessionRef.current === session) setListening(false); };
+    recognition.onend = () => {
+      if (recognitionRef.current !== recognition || voiceSessionRef.current !== session) return;
+      setListening(false);
+      recognitionRef.current = null;
+      if (voiceEnabledRef.current && !requestPendingRef.current) setVoiceStatus("Tap Talk to G to continue");
+    };
     recognition.onerror = (error: any) => {
       if (recognitionRef.current !== recognition || voiceSessionRef.current !== session) return;
       setListening(false);
