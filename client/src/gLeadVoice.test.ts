@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import leadHandler from "../../netlify/functions/g-lead";
 import voiceHandler from "../../netlify/functions/g-voice-session";
+import { siteOriginCandidates, submitNetlifyForm } from "../../netlify/functions/_forms";
 
 const validLead = {
   name: "QA Visitor",
@@ -73,6 +74,51 @@ describe("g-lead intake validation and delivery", () => {
     expect(res.status).toBe(502);
     const data = await res.json();
     expect(data.error).toContain("Nothing was recorded");
+  });
+});
+
+describe("forms submission origin selection", () => {
+  const ENV_KEYS = ["DEPLOY_PRIME_URL", "DEPLOY_URL", "URL"] as const;
+  let saved: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("prefers the request origin over env URLs", () => {
+    process.env.URL = "https://www.ocgict.com";
+    process.env.DEPLOY_PRIME_URL = "https://deploy-preview.example";
+    const req = new Request("https://unique-deploy--site.netlify.app/.netlify/functions/g-lead", { method: "POST" });
+    expect(siteOriginCandidates(req)).toEqual([
+      "https://unique-deploy--site.netlify.app",
+      "https://deploy-preview.example",
+      "https://www.ocgict.com",
+    ]);
+  });
+
+  it("retries the next origin when the first refuses the submission", async () => {
+    process.env.URL = "https://dead.example";
+    const attempted: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      attempted.push(url);
+      return new Response("no", { status: url.includes("netlify.app") ? 200 : 402 });
+    });
+    const req = new Request("https://dead.example/.netlify/functions/g-lead", { method: "POST" });
+    process.env.DEPLOY_PRIME_URL = "https://live--site.netlify.app";
+    await submitNetlifyForm(req, "ocg-g-lead", { reference: "G-test" });
+    expect(attempted).toEqual(["https://dead.example/", "https://live--site.netlify.app/"]);
   });
 });
 
