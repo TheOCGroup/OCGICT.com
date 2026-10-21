@@ -74,7 +74,7 @@ export function PersistentG() {
           sessionId,
           message: text,
           context: { page: location, topic: pageContext.topic },
-          history: messages.map((m) => ({ role: m.sender === "g" ? "assistant" : "user", content: m.text })),
+          history: messages.slice(-16).map((m) => ({ role: m.sender === "g" ? "assistant" : "user", content: m.text.slice(0, 4000) })),
         }),
       });
       const data = res.ok ? await res.json() : null;

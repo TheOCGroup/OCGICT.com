@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Bot, Send, Sparkles, Mic, ArrowRight, ShieldCheck, FileText, CheckCircle2, User, Copy, Check, Info } from "lucide-react";
+import { Bot, Send, Sparkles, Mic, MicOff, PhoneOff, ArrowRight, ShieldCheck, FileText, CheckCircle2, User, Copy, Check, Info } from "lucide-react";
 import { Link } from "wouter";
 import { GActionRegistry } from "@/intelligence/actionRegistry";
 import { processGDialogue } from "@/intelligence/gActionDispatcher";
 import { persistStrategyBrief } from "@/lib/persistence";
 import { getActiveBookingProvider } from "@/lib/booking";
+import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig } from "@/voice/gRealtimeVoice";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -49,9 +50,129 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
 
   const bookingProvider = getActiveBookingProvider();
 
+  // ── Realtime voice (Vapi Web) ──────────────────────────────────────────
+  // Realtime is the primary voice when the server enables it; the browser
+  // speech path below remains as a clearly labeled basic fallback.
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
+  const [rtState, setRtState] = useState<GRealtimeState>("idle");
+  const [rtDetail, setRtDetail] = useState<string>("");
+  const [rtMuted, setRtMuted] = useState(false);
+  const [useFallbackVoice, setUseFallbackVoice] = useState(false);
+  const rtRef = useRef<GRealtimeVoice | null>(null);
+  const realtimeAvailable = !!voiceConfig?.enabled && !useFallbackVoice;
+  const rtActive = rtState === "connecting" || rtState === "listening" || rtState === "thinking" || rtState === "speaking";
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchVoiceConfig(controller.signal)
+      .then(setVoiceConfig)
+      .catch(() => setVoiceConfig({ enabled: false, mode: "browser-fallback", reason: "Voice status unavailable." }));
+    return () => controller.abort();
+  }, []);
+
+  const startRealtimeVoice = async () => {
+    stopVoice();
+    if (!rtRef.current) rtRef.current = new GRealtimeVoice();
+    try {
+      await rtRef.current.start({
+        onState: (state, detail) => {
+          setRtState(state);
+          if (detail) setRtDetail(detail);
+          if (state === "ended") setRtDetail("Voice conversation ended. Text chat is ready.");
+        },
+        onTranscript: (role, text) => {
+          setMessages((prev) => [
+            ...prev,
+            { id: `rt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, sender: role === "user" ? "user" : "g", text },
+          ]);
+        },
+        onPartialTranscript: (text) => setRtDetail(text),
+      });
+    } catch {
+      // onState("error") already surfaced the reason; offer the fallback.
+    }
+  };
+
+  const stopRealtimeVoice = () => {
+    rtRef.current?.stop();
+    setRtState("ended");
+    setRtDetail("Voice conversation ended. Text chat is ready.");
+  };
+
+  const toggleRtMute = () => {
+    const next = !rtMuted;
+    setRtMuted(next);
+    rtRef.current?.setMuted(next);
+  };
+
+  const rtStatusText = (): string | null => {
+    if (!realtimeAvailable && !rtActive) return null;
+    switch (rtState) {
+      case "connecting": return "Connecting to G…";
+      case "listening": return rtMuted ? "Muted — G can't hear you" : "Listening — speak now. You can interrupt G by talking.";
+      case "thinking": return "G is thinking…";
+      case "speaking": return "G is speaking — just start talking to interrupt";
+      case "ended": return rtDetail || "Voice conversation ended. Text chat is ready.";
+      case "error": return rtDetail || "Voice ran into a problem. Text chat is ready.";
+      default: return null;
+    }
+  };
+
+  // ── Lead follow-up card ────────────────────────────────────────────────
+  const [leadOpen, setLeadOpen] = useState(false);
+  const [leadName, setLeadName] = useState("");
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadRole, setLeadRole] = useState("general");
+  const [leadAddress, setLeadAddress] = useState("");
+  const [leadConsent, setLeadConsent] = useState(false);
+  const [leadStatus, setLeadStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [leadReference, setLeadReference] = useState("");
+  const leadReferenceRef = useRef("");
+
+  const openLeadCard = () => {
+    if (!leadReferenceRef.current) {
+      leadReferenceRef.current = `G-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    setLeadStatus("idle");
+    setLeadOpen(true);
+  };
+
+  const submitLead = async () => {
+    if (leadStatus === "sending") return;
+    setLeadStatus("sending");
+    const summary = messages.slice(-12)
+      .map(m => `${m.sender === "user" ? "Visitor" : "G"}: ${m.text.slice(0, 500)}`)
+      .join("\n")
+      .slice(0, 4000);
+    try {
+      const res = await fetch("/api/g/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: leadName.trim(),
+          email: leadEmail.trim(),
+          phone: leadPhone.trim(),
+          role: leadRole,
+          address: leadAddress.trim(),
+          summary,
+          consent: leadConsent,
+          reference: leadReferenceRef.current,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || "We could not save your request.");
+      setLeadReference(data.reference || leadReferenceRef.current);
+      setLeadStatus("sent");
+    } catch {
+      setLeadStatus("error");
+    }
+  };
+
   useEffect(() => () => {
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
+    rtRef.current?.stop();
   }, []);
 
   useEffect(() => {
@@ -62,9 +183,12 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       recognitionRef.current = null;
       window.speechSynthesis?.cancel();
       activeSpeechRef.current = null;
+      rtRef.current?.stop();
+      if (rtState !== "idle") setRtState("idle");
       setListening(false);
       setVoiceStatus("Voice paused");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   const stopVoice = () => {
@@ -79,6 +203,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   };
 
   const speakReply = (text: string) => {
+    // Realtime voice speaks through its own session; never double-speak.
+    if (rtRef.current?.isActive) return;
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const session = voiceSessionRef.current;
@@ -305,6 +431,70 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     }
   };
 
+  const renderLeadCard = () => {
+    if (!leadOpen) return null;
+    if (leadStatus === "sent") {
+      return (
+        <div className="mx-3 mb-3 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-4 text-sm text-emerald-100" role="status">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+            <div>
+              <p className="font-semibold text-white">The OC Group received your request.</p>
+              <p className="mt-1 text-xs leading-relaxed text-emerald-100/80">
+                Your reference is <span className="font-mono">{leadReference}</span>. OCG reviews website requests
+                directly — this is not an appointment confirmation. You can also call (720) 620-9929.
+              </p>
+              <button type="button" onClick={() => setLeadOpen(false)} className="mt-2 text-xs font-semibold text-emerald-200 underline">Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const inputCls = "w-full rounded-lg border border-white/15 bg-[#162136] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/60";
+    return (
+      <div className="mx-3 mb-3 rounded-2xl border border-sky-400/30 bg-[#0c1423] p-4" role="dialog" aria-label="Request a follow-up from The OC Group">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-white">Have The OC Group contact you</p>
+          <button type="button" onClick={() => setLeadOpen(false)} aria-label="Close follow-up form" className="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-slate-400">
+          G will include a short summary of this conversation. Nothing is sent until you submit — and you'll get a reference once OCG's inbox has it.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <input value={leadName} onChange={e => setLeadName(e.target.value)} placeholder="Full name *" aria-label="Full name" className={inputCls} maxLength={120} />
+          <input value={leadPhone} onChange={e => setLeadPhone(e.target.value)} placeholder="Phone" aria-label="Phone" type="tel" className={inputCls} maxLength={40} />
+          <input value={leadEmail} onChange={e => setLeadEmail(e.target.value)} placeholder="Email" aria-label="Email" type="email" className={inputCls} maxLength={200} />
+          <select value={leadRole} onChange={e => setLeadRole(e.target.value)} aria-label="I am a" className={inputCls}>
+            <option value="general">General inquiry</option>
+            <option value="seller">Selling a property</option>
+            <option value="investor">Investor</option>
+            <option value="buyer">Buyer</option>
+            <option value="financing">Financing partner</option>
+          </select>
+          <input value={leadAddress} onChange={e => setLeadAddress(e.target.value)} placeholder="Property address (optional)" aria-label="Property address" className={`${inputCls} sm:col-span-2`} maxLength={300} />
+        </div>
+        <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-300">
+          <input type="checkbox" checked={leadConsent} onChange={e => setLeadConsent(e.target.checked)} className="mt-0.5 accent-sky-400" />
+          <span>I authorize The OC Group to receive my information and the conversation summary, and to contact me about my inquiry. *</span>
+        </label>
+        {leadStatus === "error" && (
+          <p role="alert" className="mt-2 text-xs text-amber-300">
+            We couldn't save your request — nothing was recorded. Your details are still here; please try again, or{" "}
+            <a href={emailHref} className="underline">email The OC Group</a> instead.
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={submitLead}
+          disabled={leadStatus === "sending" || !leadName.trim() || (!leadEmail.trim() && !leadPhone.trim()) || !leadConsent}
+          className="mt-3 w-full rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-40"
+        >
+          {leadStatus === "sending" ? "Sending to OCG…" : "Send my request to OCG"}
+        </button>
+      </div>
+    );
+  };
+
   const copyBriefJson = () => {
     if (!briefing) return;
     navigator.clipboard.writeText(JSON.stringify(briefing, null, 2));
@@ -339,18 +529,28 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         </div>
         {activeActionNotice && <div className="px-5 py-2 text-xs text-sky-200" role="status">{activeActionNotice}</div>}
         <div className="shrink-0 border-t border-white/10 bg-[#0c1423] px-3 pb-3 pt-3">
+          {renderLeadCard()}
           <form onSubmit={e => { e.preventDefault(); void handleSendMessage(); }} className="flex items-center gap-2 rounded-2xl border border-white/15 bg-[#162136] p-2 focus-within:border-sky-400/60">
-            <button type="button" onClick={listening ? stopVoice : startListening} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${listening ? "bg-sky-500 text-white animate-pulse" : "text-sky-200 hover:bg-white/10"}`} aria-label={listening ? "Stop listening" : "Talk to G"} title={listening ? "Stop listening" : "Talk to G"}><Mic size={18} /></button>
+            {realtimeAvailable ? (
+              <button type="button" onClick={rtActive ? stopRealtimeVoice : () => void startRealtimeVoice()} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${rtActive ? "bg-red-500 text-white" : "text-sky-200 hover:bg-white/10"}`} aria-label={rtActive ? "End voice conversation" : "Talk to G"} title={rtActive ? "End voice conversation" : "Talk to G"}>{rtActive ? <PhoneOff size={17} /> : <Mic size={18} />}</button>
+            ) : (
+              <button type="button" onClick={listening ? stopVoice : startListening} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${listening ? "bg-sky-500 text-white animate-pulse" : "text-sky-200 hover:bg-white/10"}`} aria-label={listening ? "Stop listening" : "Talk to G"} title={listening ? "Stop listening" : "Talk to G"}><Mic size={18} /></button>
+            )}
             <input value={inputVal} onChange={e => { if (activeSpeechRef.current) { window.speechSynthesis.cancel(); activeSpeechRef.current = null; setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
             <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
           </form>
           <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
-            <span role="status" className="truncate">{listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? "Voice available" : voiceStatus}</span>
+            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : "Basic browser voice ready") : voiceStatus)}</span>
             <div className="flex shrink-0 items-center gap-3">
-              <button type="button" onClick={stopVoice} className="hover:text-white">Mute</button>
-              <a href={emailHref} className="text-sky-300 hover:text-sky-100">Contact OCG</a>
+              {rtActive ? (
+                <button type="button" onClick={toggleRtMute} className="hover:text-white" aria-label={rtMuted ? "Unmute microphone" : "Mute microphone"}>{rtMuted ? "Unmute" : "Mute"}</button>
+              ) : (
+                <button type="button" onClick={stopVoice} className="hover:text-white">Mute</button>
+              )}
+              <button type="button" onClick={openLeadCard} className="text-sky-300 hover:text-sky-100">Have OCG contact me</button>
             </div>
           </div>
+          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : "Basic browser voice — text chat is fully available."}</p>
         </div>
       </div>
     );
@@ -401,13 +601,14 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
           {/* G interactive agent console */}
           <div className="rounded-[2rem] border border-blue-400/30 bg-gradient-to-b from-[#13284a] via-[#0b1e37] to-[#071426] p-5 md:p-7 shadow-2xl shadow-blue-950/50 flex flex-col min-h-[580px]">
             <div className="mb-5 flex flex-col items-center gap-3 rounded-[1.7rem] border border-blue-300/20 bg-gradient-to-br from-blue-600/20 via-sky-400/10 to-transparent px-5 py-6 text-center">
-              <button type="button" onClick={listening ? stopVoice : startListening} aria-label="Activate G voice" className={`relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-sky-300/70 bg-gradient-to-br from-blue-400 via-blue-600 to-[#052355] shadow-[0_0_45px_rgba(59,130,246,0.45)] transition-transform hover:scale-105 ${listening ? "animate-pulse" : ""}`}>
+              <button type="button" onClick={realtimeAvailable ? (rtActive ? stopRealtimeVoice : () => void startRealtimeVoice()) : (listening ? stopVoice : startListening)} aria-label={rtActive ? "End voice conversation" : "Activate G voice"} className={`relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-sky-300/70 bg-gradient-to-br from-blue-400 via-blue-600 to-[#052355] shadow-[0_0_45px_rgba(59,130,246,0.45)] transition-transform hover:scale-105 ${listening || rtState === "listening" || rtState === "speaking" ? "animate-pulse" : ""}`}>
                 <span className="absolute inset-2 rounded-full border border-white/30" />
                 <span className="relative text-5xl font-black tracking-tight text-white drop-shadow-lg">G</span>
               </button>
               <div className="text-lg font-bold text-white">Let's figure it out together.</div>
               <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">Selling a home? Exploring your next investment? Just curious? I'm here to help.</p>
-              <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{listening ? "Listening to you" : isTyping ? "Thinking through your question" : "Tap G to speak"}</div>
+              <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{rtStatusText() ?? (listening ? "Listening to you" : isTyping ? "Thinking through your question" : rtActive ? "Voice on" : "Tap G to speak")}</div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : "Basic browser voice"}</div>
             </div>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -424,24 +625,46 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               </div>
 
               <div className="flex items-center gap-2">
-                <button type="button" onClick={startListening} title="Talk to G and interrupt speech" className="flex items-center gap-2 rounded-lg bg-blue-600 border border-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500">
-                  <Mic size={15} /><span>{listening ? "Listening…" : "Talk to G"}</span>
-                </button>
-                <button type="button" onClick={stopVoice} className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-700">Stop voice</button>
+                {realtimeAvailable ? (
+                  <>
+                    <button type="button" onClick={rtActive ? stopRealtimeVoice : () => void startRealtimeVoice()} title={rtActive ? "End voice conversation" : "Talk to G — you can interrupt by speaking"} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold text-white ${rtActive ? "bg-red-600 border-red-500 hover:bg-red-500" : "bg-blue-600 border-blue-500 hover:bg-blue-500"}`}>
+                      {rtActive ? <PhoneOff size={15} /> : <Mic size={15} />}<span>{rtActive ? "End voice" : "Talk to G"}</span>
+                    </button>
+                    {rtActive && (
+                      <button type="button" onClick={toggleRtMute} aria-label={rtMuted ? "Unmute microphone" : "Mute microphone"} className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-700">
+                        {rtMuted ? <Mic size={15} /> : <MicOff size={15} />}<span>{rtMuted ? "Unmute" : "Mute"}</span>
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={startListening} title="Talk to G and interrupt speech" className="flex items-center gap-2 rounded-lg bg-blue-600 border border-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500">
+                      <Mic size={15} /><span>{listening ? "Listening…" : "Talk to G"}</span>
+                    </button>
+                    <button type="button" onClick={stopVoice} className="rounded-lg bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-700">Stop voice</button>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Voice Notice Banner (when clicked) */}
-            {voiceNotice && (
-              <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200 flex items-center justify-between">
-                <span>
-                  <strong>Browser voice:</strong> Tap Talk to G and allow microphone access. G will speak replies using available browser voices. Tap Talk again to interrupt. Chrome or Edge recommended.
-                </span>
-                <button onClick={() => setVoiceNotice(false)} className="text-blue-400 font-bold ml-2">✕</button>
+            {/* Voice mode notice — always honest about which voice is live */}
+            {voiceConfig && (
+              <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200">
+                {realtimeAvailable ? (
+                  <span><strong>Realtime voice:</strong> Tap Talk to G and allow microphone access. Talk naturally — you can interrupt G mid-sentence, and G follows English or Spanish. English and Spanish are both supported.</span>
+                ) : (
+                  <span><strong>Basic browser voice:</strong> Realtime voice isn't enabled on this site yet, so G uses your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. Chrome or Edge recommended. Text chat works fully either way.</span>
+                )}
+              </div>
+            )}
+            {rtState === "error" && (
+              <div className="my-2 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-950/40 p-3 text-[11px] text-amber-200" role="alert">
+                <span>{rtDetail || "Realtime voice ran into a problem."} You can retry, or use the basic browser voice instead.</span>
+                <button type="button" onClick={() => { setUseFallbackVoice(true); setRtState("idle"); }} className="ml-2 shrink-0 font-bold text-amber-100 underline">Use basic voice</button>
               </div>
             )}
 
-            <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{voiceStatus}</div>
+            <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{rtStatusText() ?? voiceStatus}</div>
             {/* Conversation activity */}
             <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (
@@ -492,9 +715,10 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <input
                 type="text"
                 value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
+                onChange={(e) => { if (activeSpeechRef.current) { window.speechSynthesis.cancel(); activeSpeechRef.current = null; setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }}
                 placeholder="Tell G what you need, or tap the microphone..."
                 maxLength={4000}
+                aria-label="Message G"
                 className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-xs md:text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
               <button
@@ -505,8 +729,10 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
                 <Send size={16} />
               </button>
             </form>
+            <div className="mt-4">{renderLeadCard()}</div>
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-blue-200/10 pt-4">
               <span className="mr-1 text-xs font-medium text-blue-100/70">Want a person to follow up?</span>
+              <button type="button" onClick={openLeadCard} className="rounded-full border border-sky-400/50 bg-sky-500/15 px-4 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Have OCG contact me</button>
               <a href={emailHref} className="rounded-full border border-sky-400/50 bg-sky-500/15 px-4 py-2 text-xs font-semibold text-sky-100 hover:bg-sky-500/30">Email The OC Group</a>
               <Link href="/sell" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Selling a property</Link>
               <Link href="/contact" className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Investor or general inquiry</Link>

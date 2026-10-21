@@ -1,4 +1,5 @@
 import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
+import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 
 // A standalone Netlify function: it never starts the Express server.
 export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
@@ -15,36 +16,47 @@ export default async function handler(request: Request, context?: { deploy?: { c
         || typeof x.content !== "string" || x.content.length > 4000)))) {
     return new Response(JSON.stringify({ error: "Invalid chat request." }), { status: 400, headers });
   }
-  // No billing-capable model invocation in preview until provider credentials,
-  // budget and abuse checks have been independently verified.
-  const previewLocalOnly = context?.deploy?.context === "deploy-preview";
-  const localOnly = previewLocalOnly || context?.deploy?.context === "production";
-  if (!localOnly && process.env.OCG_G_CHAT_ENABLED !== "true") {
+  // Hosted Netlify contexts (deploy previews and production) serve G chat in
+  // local mode by default. Any other context must be explicitly enabled.
+  const hostedContext = context?.deploy?.context === "deploy-preview" || context?.deploy?.context === "production";
+  if (!hostedContext && process.env.OCG_G_CHAT_ENABLED !== "true") {
     return new Response(JSON.stringify({ error: "G backend is not enabled in this environment." }), { status: 503, headers });
-  }
-  // An explicit cost gate prevents accidental paid model calls after enabling chat.
-  // Local-only mode permits free acceptance testing while paid providers stay blocked.
-  const hasPaidCredentials = process.env.GEMINI_AUTH_MODE === "vertex"
-    || Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
-  if (!localOnly && hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
-    return new Response(JSON.stringify({ error: "Paid AI usage has not been approved for this environment." }), { status: 503, headers });
-  }
-  // Approval is not metering. Never enable a paid provider without a separately
-  // verified persistent usage meter that enforces the spending ceiling.
-  if (!localOnly && hasPaidCredentials) {
-    return new Response(JSON.stringify({
-      error: "Paid model access is paused until a persistent usage budget is verified."
-    }), { status: 503, headers });
   }
   // Guard against oversized history even when the body has no Content-Length.
   if (JSON.stringify(body).length > 20000) {
     return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
   }
+
+  // Paid model usage requires ALL of: provider credentials, explicit founder
+  // approval, and headroom in the persistent daily budget (gBudget). When any
+  // condition is missing, G answers with the free local engine instead — the
+  // response's provider field says which engine answered, and a meter-driven
+  // fallback is flagged explicitly. Approval alone never enables spend.
+  const hasPaidCredentials = process.env.GEMINI_AUTH_MODE === "vertex"
+    || Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
+  const paidApproved = hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED === "true";
+  let localOnly = true;
+  let budgetFallback = false;
+  if (paidApproved) {
+    try {
+      const store = await netlifyBlobsBudgetStore();
+      const decision = await consumeBudget(store, "chat", process.env);
+      if (decision.allowed) {
+        localOnly = false;
+      } else {
+        budgetFallback = true;
+      }
+    } catch {
+      // Meter unavailable: fail closed to the free local engine.
+      budgetFallback = true;
+    }
+  }
+
   try {
     const data = await GIntelligenceGateway.processMessage({
       sessionId: body.sessionId || "", message: body.message.trim(), history: body.history, localOnly,
     });
-    return new Response(JSON.stringify(data), { status: 200, headers });
+    return new Response(JSON.stringify(budgetFallback ? { ...data, budgetFallback: true } : data), { status: 200, headers });
   } catch (error) {
     const rateLimited = error instanceof Error && error.message.startsWith("Rate limit exceeded");
     return new Response(JSON.stringify({ error: rateLimited ? "Too many messages." : "G is temporarily unavailable." }), { status: rateLimited ? 429 : 503, headers });
@@ -56,4 +68,3 @@ export const config = {
   method: "POST",
   rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 30 },
 };
-

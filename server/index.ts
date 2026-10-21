@@ -41,7 +41,7 @@ export function createApp() {
       provider: configured ? "gemini-configured" : "ocg-local-engine",
       conversationalModelConfigured: configured,
       liveModelVerified: false,
-      voiceMode: "browser-speech",
+      voiceMode: process.env.OCG_G_VAPI_ASSISTANT_ID?.trim() ? "vapi-web" : "browser-fallback",
       note: configured
         ? "Model authentication is configured but upstream access remains unverified; check a successful chat response."
         : "No conversational model credential configured. G is using the deterministic fallback.",

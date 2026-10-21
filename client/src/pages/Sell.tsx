@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowRight,
@@ -80,6 +80,35 @@ export function Sell() {
   const [actionPending, setActionPending] = useState<SellerAction | null>(null);
   const [actionMessage, setActionMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [leadReference, setLeadReference] = useState('');
+  const leadReferenceRef = useRef('');
+
+  // The durable lead record is a Netlify Forms submission (ocg-seller-intake).
+  // A review result is only shown after the lead is actually recorded; the
+  // same reference is reused across retries so duplicates are identifiable.
+  const recordSellerLead = async (payload: ISellerIntakePayload, trackingId: string, reviewStatus: string) => {
+    if (!leadReferenceRef.current) {
+      leadReferenceRef.current = `SELLER-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    const fields = new URLSearchParams({
+      'form-name': 'ocg-seller-intake',
+      name: payload.fullName,
+      email: payload.email,
+      phone: payload.phone,
+      address: payload.address,
+      details: JSON.stringify(payload).slice(0, 8000),
+      trackingId,
+      reviewStatus,
+      reference: leadReferenceRef.current,
+    });
+    const response = await fetch('/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: fields.toString(),
+    });
+    if (!response.ok) throw new Error('Lead could not be recorded');
+    setLeadReference(leadReferenceRef.current);
+  };
 
   const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +157,7 @@ export function Sell() {
       preferredContact: 'Phone',
     };
 
+    let result: ISellerOfferResult | null = null;
     try {
       const res = await fetch('/api/seller/preliminary-offer', {
         method: 'POST',
@@ -135,14 +165,29 @@ export function Sell() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error((await res.json())?.error || 'Unable to complete property review');
-      setOfferResult(await res.json());
-      setStep(4);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error: any) {
-      setErrorMessage(error?.message || 'We could not complete the review. Your information has not been lost; please try again.');
-    } finally {
-      setIsSubmitting(false);
+      result = await res.json();
+    } catch {
+      result = null;
     }
+
+    try {
+      // Record the lead durably before showing any result. If the review
+      // engine was unavailable, the lead still lands as a manual review.
+      await recordSellerLead(payload, result?.id || '', result?.sellerOfferPresentation?.status || 'MANUAL_REVIEW_ENGINE_UNAVAILABLE');
+    } catch {
+      setErrorMessage('We could not save your request, so nothing was recorded. Your information is still here — please try again, or email theocgroupict@gmail.com.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (result) {
+      setOfferResult(result);
+      setStep(4);
+    } else {
+      setStep(5);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsSubmitting(false);
   };
 
   const submitSellerAction = async (action: SellerAction) => {
@@ -172,6 +217,8 @@ export function Sell() {
 
   const reset = () => {
     setStep(1);
+    leadReferenceRef.current = '';
+    setLeadReference('');
     setAddress('');
     setSelectedAddress(false);
     setSuggestions([]);
@@ -377,6 +424,22 @@ export function Sell() {
                 </div>
 
                 <div className="text-center"><button onClick={reset} className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white">Review another property</button></div>
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div key="lead-only" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="rounded-[2rem] border border-slate-800 bg-slate-900/80 p-6 shadow-2xl sm:p-10">
+                <div className="py-6 text-center">
+                  <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider text-blue-300"><CheckCircle2 size={14} /> Request received</div>
+                  <h3 className="text-3xl font-black text-white">The OC Group has your property.</h3>
+                  <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-400">
+                    Your request for <span className="font-semibold text-slate-200">{address}</span> was recorded for human review.
+                    Your reference is <span className="font-mono text-slate-200">{leadReference}</span>. A person from OCG reviews
+                    every seller submission directly — no automated offer was generated, and we won't invent one.
+                  </p>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-400">Questions sooner? Call (720) 620-9929 or email theocgroupict@gmail.com.</p>
+                  <div className="mt-7"><button onClick={reset} className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white">Review another property</button></div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

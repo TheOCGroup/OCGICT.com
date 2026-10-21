@@ -1,0 +1,20 @@
+# OCGICT.com — Netlify deployment contract.
+# Production is Netlify (founder decision 2026-09-11). Vercel is not used.
+# The Express server build (`pnpm build`) remains for non-Netlify hosting;
+# Netlify serves the static site plus the functions in netlify/functions.
+
+[build]
+  command = "pnpm run build:netlify"
+  publish = "dist/public"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"

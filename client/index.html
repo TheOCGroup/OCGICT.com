@@ -24,7 +24,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <!-- Netlify build-time form detection: rendered React form submits to this exact name. -->
+    <!-- Netlify build-time form detection: rendered React forms and Netlify
+         functions submit to these exact names. Lead records live in Netlify
+         Forms (durable, team-visible) — never in browser or process memory. -->
     <form name="ocg-contact" data-netlify="true" netlify-honeypot="bot-field" hidden>
       <input name="form-name" value="ocg-contact" />
       <input name="bot-field" />
@@ -34,6 +36,40 @@
       <input name="phone" />
       <input name="message" />
       <input name="details" />
+    </form>
+    <form name="ocg-g-lead" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input name="form-name" value="ocg-g-lead" />
+      <input name="bot-field" />
+      <input name="name" />
+      <input name="email" />
+      <input name="phone" />
+      <input name="role" />
+      <input name="address" />
+      <input name="summary" />
+      <input name="reference" />
+      <input name="source" />
+    </form>
+    <form name="ocg-seller-intake" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input name="form-name" value="ocg-seller-intake" />
+      <input name="bot-field" />
+      <input name="name" />
+      <input name="email" />
+      <input name="phone" />
+      <input name="address" />
+      <input name="details" />
+      <input name="trackingId" />
+      <input name="reviewStatus" />
+      <input name="reference" />
+    </form>
+    <form name="ocg-seller-action" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input name="form-name" value="ocg-seller-action" />
+      <input name="bot-field" />
+      <input name="offerId" />
+      <input name="action" />
+      <input name="counterAmount" />
+      <input name="preferredWindow" />
+      <input name="notes" />
+      <input name="reference" />
     </form>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
