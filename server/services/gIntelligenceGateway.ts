@@ -64,7 +64,7 @@ export class GIntelligenceGateway {
       };
     }
 
-    OcgObservability.log("G_SESSION_STARTED", { sessionId });
+    OcgObservability.log("G_SESSION_STARTED", { source: "website_g" });
 
     // A brief greeting must work even when no paid conversational model is configured.
     // Match greetings only, not longer inquiries such as "Hey G, I want to sell".
