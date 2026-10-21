@@ -9,10 +9,11 @@ describe("Netlify G paid-model release safeguards", () => {
     expect(handler).toContain('process.env.OCG_G_PAID_MODEL_APPROVED !== "true"');
   });
   it("also blocks paid model invocation regardless of approval", () => {
-    expect(handler).toMatch(/if \(hasPaidCredentials\) \{[\s\S]*?persistent usage budget/);
-    expect(handler.indexOf('if (hasPaidCredentials) {')).toBeLessThan(handler.indexOf('GIntelligenceGateway.processMessage'));
+    expect(handler).toMatch(/if \(!previewLocalOnly && hasPaidCredentials\) \{[\s\S]*?persistent usage budget/);
+    expect(handler.indexOf('if (!previewLocalOnly && hasPaidCredentials) {')).toBeLessThan(handler.indexOf('GIntelligenceGateway.processMessage'));
   });
   it("limits requests with missing content length", () => {
     expect(handler).toContain('JSON.stringify(body).length > 20000');
   });
 });
+
