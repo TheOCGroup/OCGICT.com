@@ -1,4 +1,4 @@
-﻿import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
+import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
 
 // A standalone Netlify function: it never starts the Express server.
 export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
@@ -18,19 +18,20 @@ export default async function handler(request: Request, context?: { deploy?: { c
   // No billing-capable model invocation in preview until provider credentials,
   // budget and abuse checks have been independently verified.
   const previewLocalOnly = context?.deploy?.context === "deploy-preview";
-  if (!previewLocalOnly && process.env.OCG_G_CHAT_ENABLED !== "true") {
+  const localOnly = previewLocalOnly || context?.deploy?.context === "production";
+  if (!localOnly && process.env.OCG_G_CHAT_ENABLED !== "true") {
     return new Response(JSON.stringify({ error: "G backend is not enabled in this environment." }), { status: 503, headers });
   }
   // An explicit cost gate prevents accidental paid model calls after enabling chat.
   // Local-only mode permits free acceptance testing while paid providers stay blocked.
   const hasPaidCredentials = process.env.GEMINI_AUTH_MODE === "vertex"
     || Boolean((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim());
-  if (!previewLocalOnly && hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
+  if (!localOnly && hasPaidCredentials && process.env.OCG_G_PAID_MODEL_APPROVED !== "true") {
     return new Response(JSON.stringify({ error: "Paid AI usage has not been approved for this environment." }), { status: 503, headers });
   }
   // Approval is not metering. Never enable a paid provider without a separately
   // verified persistent usage meter that enforces the spending ceiling.
-  if (!previewLocalOnly && hasPaidCredentials) {
+  if (!localOnly && hasPaidCredentials) {
     return new Response(JSON.stringify({
       error: "Paid model access is paused until a persistent usage budget is verified."
     }), { status: 503, headers });
@@ -41,7 +42,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
   }
   try {
     const data = await GIntelligenceGateway.processMessage({
-      sessionId: body.sessionId || "", message: body.message.trim(), history: body.history, localOnly: previewLocalOnly,
+      sessionId: body.sessionId || "", message: body.message.trim(), history: body.history, localOnly,
     });
     return new Response(JSON.stringify(data), { status: 200, headers });
   } catch (error) {

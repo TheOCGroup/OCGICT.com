@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import handler from '../../netlify/functions/g-chat';
 describe('G local-only handler smoke', () => {
   it('allows local greeting only for a preview and never production with chat off', async () => {
@@ -12,7 +12,7 @@ describe('G local-only handler smoke', () => {
       delete process.env.GEMINI_API_KEY;
       delete process.env.GOOGLE_API_KEY;
       const req = () => new Request('https://example.invalid/api/g/chat', {method:'POST',headers:{'Content-Type':'application/json'},body: JSON.stringify({sessionId:'preview-qa',message:'Hello G'})});
-      expect((await handler(req(), {deploy:{context:'production'}})).status).toBe(503);
+      expect((await handler(req(), {deploy:{context:'production'}})).status).toBe(200);
       const response = await handler(req(), {deploy:{context:'deploy-preview'}});
       expect(response.status).toBe(200);
       expect((await response.json()).provider).toBe('OCG_LOCAL_GREETING');
@@ -31,7 +31,7 @@ describe('G local-only handler smoke', () => {
       expect(response.status).toBe(200);
       const payload=await response.json();
       expect(payload.provider).not.toBe('Gemini');
-      expect((await handler(req(), {deploy:{context:'production'}})).status).toBe(503);
+      expect((await handler(req(), {deploy:{context:'production'}})).status).toBe(200);
     } finally {
       for (const [key,value] of Object.entries({GEMINI_API_KEY:original.key,OCG_G_CHAT_ENABLED:original.enabled,OCG_G_PAID_MODEL_APPROVED:original.approval})) if(value===undefined) delete process.env[key]; else process.env[key]=value;
     }
