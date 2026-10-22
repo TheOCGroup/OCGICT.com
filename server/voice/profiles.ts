@@ -8,6 +8,13 @@
  * docs/voice-evaluation/SHARED-KOKORO-AUDITION.md). No profile here
  * replaces a live accepted voice until the founder approves audible
  * quality and the agent's own lane flips its rollout flag.
+ *
+ * PROMOTION RULE (TED experience review, 2026-10-21): alternates
+ * intentionally collide with other agents' primaries (am_adam is
+ * Aiden's primary and G's alternate; am_michael is G's primary and the
+ * Aiden/TED alternate). No alternate may be promoted to a primary
+ * until primary-voice uniqueness is re-verified across all five
+ * profiles and any displaced agent is re-auditioned.
  */
 
 export interface AgentVoiceProfile {

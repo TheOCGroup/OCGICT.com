@@ -101,6 +101,15 @@ describe("g-tts endpoint gates", () => {
     expect(JSON.stringify(data)).not.toContain("secret");
   });
 
+  it("GET reports enabled when the flag and service are configured (meter unreadable falls back to the config answer)", async () => {
+    process.env.OCG_G_KOKORO_TTS_ENABLED = "true";
+    process.env.OCG_KOKORO_TTS_URL = "http://tts.local";
+    process.env.OCG_KOKORO_TTS_KEY = "k";
+    const res = await ttsHandler(new Request("https://example.invalid/api/g/tts", { method: "GET" }));
+    const data = await res.json();
+    expect(data.enabled).toBe(true);
+  });
+
   it("POST refuses while the rollout flag is off, even if the service is configured", async () => {
     process.env.OCG_KOKORO_TTS_URL = "http://tts.local";
     process.env.OCG_KOKORO_TTS_KEY = "k";

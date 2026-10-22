@@ -9,7 +9,9 @@ Design rules (from the shared audition plan):
   matching OCG_KOKORO_TTS_KEY. No key configured -> the service refuses
   to start (never run an open TTS endpoint).
 - Privacy: request text is never logged. Logs carry voice, language,
-  character count, timings, and a rolling request id only.
+  character count, timings, a rolling request id, and an 8-hex-char
+  SHA-256 prefix of the text — a correlation aid for matching a log
+  line to a reported request, not a secrecy control.
 - Streaming: /tts/stream emits one WAV chunk per sentence as it is
   synthesized, so first-audio latency is the first sentence, not the
   full reply.
@@ -60,6 +62,8 @@ def wav_bytes(samples, sr) -> bytes:
     return buf.getvalue()
 
 
+SUPPORTED_LANGS = {"en-us", "en-gb", "es", "fr-fr", "it", "pt-br", "ja", "ko", "zh", "hi"}
+
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
 
 
@@ -97,6 +101,8 @@ async def parse_payload(request: Request):
         raise HTTPException(status_code=413, detail=f"text exceeds {MAX_CHARS} characters")
     if voice not in VOICE_SET:
         raise HTTPException(status_code=400, detail=f"unknown voice: {voice or '(empty)'}")
+    if lang not in SUPPORTED_LANGS:
+        raise HTTPException(status_code=400, detail=f"unsupported lang: {lang}")
     if speed < 0.5 or speed > 2.0:
         raise HTTPException(status_code=400, detail="speed out of range (0.5–2.0)")
     return text, voice, lang, speed

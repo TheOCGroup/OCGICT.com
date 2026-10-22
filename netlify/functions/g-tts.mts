@@ -13,7 +13,7 @@
  * falls back to labeled basic browser speech when this endpoint is not
  * available. The service key is never exposed to the browser.
  */
-import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { profileFor, rolloutEnabled, voiceForLanguage } from "../../server/voice/profiles.js";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
 
@@ -52,6 +52,24 @@ export default async function handler(request: Request): Promise<Response> {
   const g = gate(env);
 
   if (request.method === "GET") {
+    // Report the budget truth too: an exhausted day is "disabled" even
+    // when the configuration gate is open. If the meter can't be read,
+    // fall back to the configuration answer; POST stays the fail-closed
+    // arbiter (same pattern as the realtime voice-session status).
+    if (g.open) {
+      try {
+        const store = await netlifyBlobsBudgetStore();
+        const budget = await checkBudget(store, "tts", env);
+        if (!budget.allowed) {
+          return new Response(
+            JSON.stringify({ enabled: false, reason: "Kokoro voice has reached today's limit. Text chat is still ready." }),
+            { status: 200, headers: jsonHeaders },
+          );
+        }
+      } catch {
+        /* meter unreadable — the configuration answer stands */
+      }
+    }
     return new Response(
       JSON.stringify({ enabled: g.open, reason: g.open ? undefined : g.reason }),
       { status: 200, headers: jsonHeaders },

@@ -23,9 +23,11 @@ plan are set against the Aiden baseline, not against these numbers).
 ## Audition matrix (fp32, matched scripts, loudness-normalized MP3s)
 
 45 files, 653 s of audio, 1,064 s of generation → overall RTF 1.63 on
-this sandbox. Per-voice RTF means ranged 1.35 (em_alex) – 2.37
-(ef_dora); longer utterances amortize better (numbers script ≈ 0.75–1.8)
-than short ones (up to 3.4). Audio integrity independently checkable:
+this sandbox. (RTF is real-time factor: 1.63 means this machine needs
+about 1.6 seconds to produce 1 second of speech — slower than real
+time.) Per-voice RTF, weighted by audio seconds, ranged 1.35
+(am_michael) – 2.36 (ef_dora); longer utterances amortize better
+(numbers script ≈ 0.75–1.8) than short ones (up to 3.4). Audio integrity independently checkable:
 every file's duration matches its manifest entry, all carry real signal
 (no silent or empty files). Scripts: 15 s intro, numbers/currency/
 address, ~60 s real-estate talk, short follow-up, empathy passage;
@@ -58,9 +60,11 @@ acceptance at p50 first-audio ≤ 800 ms.
   $20–$80/mo class — market estimate, not a quote) versus Vapi's
   ≈ $0.10–$0.25/min all-in for G's realtime path. Break-even vs. metered
   realtime is a few hundred voice-minutes per month.
-- int8 trades a small quality delta (audition pairs included) for
-  ~25% faster first audio and a 3.5× smaller model — the better default
-  for CPU hosting; fp32 remains the quality reference.
+- int8 was benchmarked for speed only (~25% faster first audio, 3.5×
+  smaller model); **no int8 listening samples were generated** — the
+  audition package is fp32 throughout, so any int8 quality delta is
+  unmeasured here. int8 is the better default candidate for CPU
+  hosting; fp32 remains the quality reference.
 
 ## What was NOT measured here
 

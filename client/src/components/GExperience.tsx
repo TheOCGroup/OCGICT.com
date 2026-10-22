@@ -238,6 +238,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     // voice for this reply only.
     if (kokoroAvailable) {
       if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
+      // Synthesis + fetch take a moment; never leave dead air unexplained.
+      setVoiceStatus("G is about to speak…");
       void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
         onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
         onEnd: () => {
@@ -247,7 +249,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         },
         onError: () => {
           if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-          speakWithBrowserVoice(spoken, session);
+          // Never swap engines silently: the visitor is told this reply
+          // is coming from the basic browser voice instead.
+          speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
         },
       });
       return;
@@ -255,7 +259,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speakWithBrowserVoice(spoken, session);
   };
 
-  const speakWithBrowserVoice = (spoken: string, session: number) => {
+  const speakWithBrowserVoice = (spoken: string, session: number, startNotice?: string) => {
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const speech = new SpeechSynthesisUtterance(spoken);
@@ -288,7 +292,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     }
     voiceLocaleRef.current = voice.lang;
     speech.voice = voice;
-    speech.onstart = () => setVoiceStatus("G is speaking — tap Talk to interrupt");
+    speech.onstart = () => setVoiceStatus(startNotice ?? "G is speaking — tap Talk to interrupt");
     activeSpeechRef.current = speech;
     speech.onend = () => {
       if (activeSpeechRef.current !== speech || !voiceEnabledRef.current || voiceSessionRef.current !== session) return;
@@ -587,17 +591,17 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
           </form>
           <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
-            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : kokoroAvailable ? "Kokoro voice ready" : "Basic browser voice ready") : voiceStatus)}</span>
+            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : kokoroAvailable ? "OCG voice ready (preview)" : "Basic browser voice ready") : voiceStatus)}</span>
             <div className="flex shrink-0 items-center gap-3">
               {rtActive ? (
                 <button type="button" onClick={toggleRtMute} className="hover:text-white" aria-label={rtMuted ? "Unmute microphone" : "Mute microphone"}>{rtMuted ? "Unmute" : "Mute"}</button>
               ) : (
-                <button type="button" onClick={stopVoice} className="hover:text-white">Mute</button>
+                <button type="button" onClick={stopVoice} className="hover:text-white">Stop voice</button>
               )}
               <button type="button" onClick={openLeadCard} className="text-sky-300 hover:text-sky-100">Have OCG contact me</button>
             </div>
           </div>
-          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : kokoroAvailable ? "Kokoro voice — OCG's own voice service. Text chat is fully available." : "Basic browser voice — text chat is fully available."}</p>
+          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : kokoroAvailable ? "OCG voice (preview) — our own voice, still being tested. Text chat is fully available." : "Basic browser voice — text chat is fully available."}</p>
         </div>
       </div>
     );
@@ -655,7 +659,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <div className="text-lg font-bold text-white">Let's figure it out together.</div>
               <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">Selling a home? Exploring your next investment? Just curious? I'm here to help.</p>
               <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{rtStatusText() ?? (listening ? "Listening to you" : isTyping ? "Thinking through your question" : rtActive ? "Voice on" : "Tap G to speak")}</div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : kokoroAvailable ? "Kokoro voice" : "Basic browser voice"}</div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : kokoroAvailable ? "OCG voice — preview" : "Basic browser voice"}</div>
             </div>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -698,9 +702,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             {voiceConfig && (
               <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200">
                 {realtimeAvailable ? (
-                  <span><strong>Realtime voice:</strong> Tap Talk to G and allow microphone access. Talk naturally — you can interrupt G mid-sentence, and G follows English or Spanish. English and Spanish are both supported.</span>
+                  <span><strong>Realtime voice:</strong> Tap Talk to G and allow microphone access. Talk naturally — you can interrupt G mid-sentence, and G follows English or Spanish.</span>
                 ) : kokoroAvailable ? (
-                  <span><strong>Kokoro voice:</strong> G's replies are spoken by OCG's own Kokoro voice service (self-hosted, in evaluation) instead of your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. English and Spanish are both supported. Text chat works fully either way.</span>
+                  <span><strong>OCG voice (preview):</strong> G's replies are spoken in our own voice instead of your browser's built-in speech. We're still testing it, so it may change. Tap Talk to G and allow microphone access; tap Talk again to interrupt. English and Spanish are both supported. Text chat works fully either way.</span>
                 ) : (
                   <span><strong>Basic browser voice:</strong> Realtime voice isn't enabled on this site yet, so G uses your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. Chrome or Edge recommended. Text chat works fully either way.</span>
                 )}

@@ -74,6 +74,33 @@ provider path is never removed by this layer.
 - H3: Per-minute cost ≈ compute only (no per-call API fees); the
   binding constraint is CPU throughput per concurrent speaker.
 
+## QA correction cycle (2026-10-21, after QUINCEY PASS WITH NOTES + TED review)
+
+- QUINCEY U1: MEASUREMENTS.md per-voice RTF attribution corrected
+  (weighted minimum is am_michael 1.35; ef_dora max 2.36).
+- QUINCEY U2: `GET /api/g/tts` now consults the tts budget when the
+  gate is open, mirroring the voice-session status endpoint.
+- QUINCEY U3: the Kokoro service validates `lang` against its
+  supported set and returns 400 instead of an unhandled 500.
+- QUINCEY U5: the service docstring now states that logs carry an
+  8-char text-hash prefix as a correlation aid.
+- QUINCEY U4 (known limitation, recorded not fixed): the client picks
+  the synthesis language from a reply-text heuristic; a real language
+  signal from the dialogue layer should replace it before rollout.
+- TED 3-A: the engine name never appears on the visitor surface —
+  the mode is labeled "OCG voice (preview)" everywhere a visitor can
+  see it (code/docs keep the Kokoro name).
+- TED 3-B: duplicated bilingual claim removed from the realtime banner.
+- TED 4-A: a Kokoro failure no longer swaps engines silently — the
+  status line says that reply used the basic browser voice.
+- TED 4-B: "G is about to speak…" covers the synthesis wait.
+- TED 4-C: the widget button that ends the voice session is labeled
+  "Stop voice", not "Mute" (Mute is the realtime mic toggle only).
+- TED 6-A: MEASUREMENTS.md no longer implies int8 listening pairs
+  exist; int8 was benchmarked for speed only.
+- TED 2-A: the alternate-promotion uniqueness rule is recorded in
+  `server/voice/profiles.ts`.
+
 ## Boundaries kept
 
 - No paid service activated; no live voice replaced; no other repo
