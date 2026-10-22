@@ -8,8 +8,38 @@
  * (no model downloads in unit tests).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { preprocessText } from "./supertonicEngine";
+
+describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)", () => {
+  it("the browser-voice IIFE catches chunk-load failures into the cascade", () => {
+    const src = readFileSync(new URL("../../components/GExperience.tsx", import.meta.url), "utf8");
+    const block = src.slice(src.indexOf("if (browserVoiceOn)"), src.indexOf("// Preferred spoken path"));
+    expect(block).toContain("const fallThrough = () => {");
+    expect(block).toContain("onError: fallThrough,");
+    expect(block).toContain("})().catch(() => { fallThrough(); });");
+  });
+});
 import { GBrowserSpeech, __setBrowserEngineForTests } from "./gBrowserSpeech";
+import { browserVoiceFlagEnabled } from "./browserVoiceFlag";
+
+describe("browserVoiceFlagEnabled — explicit values only", () => {
+  it("accepts ?browserVoice and ?browserVoice=1, rejects ?browserVoice=0", () => {
+    const set = (search: string) => vi.stubGlobal("location", new URL(`http://localhost/${search}`));
+    try {
+      set("?browserVoice");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      set("?browserVoice=1");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      set("?browserVoice=0");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+      set("");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
 
 describe("preprocessText — parity with the reference implementation", () => {
   it("wraps with the language tag and appends a final period", () => {
@@ -88,6 +118,31 @@ describe("GBrowserSpeech — playback + stop semantics with a fake engine", () =
     const callsAtStop = synth.mock.calls.length;
     await new Promise((r) => setTimeout(r, 10));
     expect(synth.mock.calls.length).toBe(callsAtStop);
+  });
+
+  it("stop() during ACTIVE playback settles the speak() promise (QUINCEY D2)", async () => {
+    // A source that never ends on its own: without the stop race, the
+    // speak() promise would hang forever after stop() nulls onended.
+    class HeldSource {
+      onended: (() => void) | null = null;
+      buffer: unknown = null;
+      connect() {}
+      start() { /* held: never ends */ }
+      stop() { /* onended was already nulled by the provider */ }
+    }
+    vi.stubGlobal("AudioContext", class extends FakeCtx {
+      createBufferSource() { return new HeldSource(); }
+    });
+    const { speech, events } = makeSpeech();
+    let settled = false;
+    const p = speech.speak("A single held segment.", { lang: "en" }, events)
+      .then(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 25));
+    expect(events.onStart).toHaveBeenCalledTimes(1);
+    speech.stop();
+    await Promise.race([p, new Promise((r) => setTimeout(r, 250))]);
+    expect(settled).toBe(true);
+    expect(events.onEnd).not.toHaveBeenCalled();
   });
 
   it("reports onError (not silence) when synthesis fails", async () => {

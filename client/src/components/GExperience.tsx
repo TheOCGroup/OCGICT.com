@@ -244,6 +244,30 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     // the normal cascade below (server voice, then basic browser voice).
     if (browserVoiceOn) {
       setVoiceStatus("G is about to speak…");
+      // Fall through for this reply only — the server/basic paths take
+      // it from here, with the standard notice. Used by BOTH the
+      // provider's onError and any failure around it (chunk load,
+      // construction) so no failure class can strand the reply.
+      const fallThrough = () => {
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        if (kokoroAvailable) {
+          if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
+          void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
+            onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+            onEnd: () => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              setVoiceStatus("Listening for your reply");
+              startListening();
+            },
+            onError: () => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+            },
+          }, { expressive: true });
+        } else {
+          speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+        }
+      };
       void (async () => {
         // Dynamic import: the inference library ships only to visitors
         // who enable the prototype flag, never in the default bundle.
@@ -252,37 +276,16 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
           browserSpeechRef.current = new mod.GBrowserSpeech();
         }
         if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-        return browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en" }, {
-        onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
-        onEnd: () => {
-          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-          setVoiceStatus("Listening for your reply");
-          startListening();
-        },
-        onError: () => {
-          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-          // Fall through for this reply only — the server/basic paths
-          // take it from here, with the standard notice.
-          if (kokoroAvailable) {
-            if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
-            void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
-              onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
-              onEnd: () => {
-                if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-                setVoiceStatus("Listening for your reply");
-                startListening();
-              },
-              onError: () => {
-                if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-                speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
-              },
-            }, { expressive: true });
-          } else {
-            speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
-          }
-        },
+        await browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en" }, {
+          onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+          onEnd: () => {
+            if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+            setVoiceStatus("Listening for your reply");
+            startListening();
+          },
+          onError: fallThrough,
         });
-      })();
+      })().catch(() => { fallThrough(); });
       return;
     }
 

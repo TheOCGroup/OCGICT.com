@@ -94,6 +94,7 @@ export class GBrowserSpeech {
   private ctx: AudioContext | null = null;
   private current: AudioBufferSourceNode | null = null;
   private generation = 0;
+  private stopResolve: (() => void) | null = null;
 
   /** Load model assets + the M1 style (in the worker). Idempotent. */
   prepare(): Promise<void> {
@@ -149,8 +150,13 @@ export class GBrowserSpeech {
       this.current = source;
       if (!started) { started = true; events.onStart(); }
       const ended = new Promise<void>((resolve) => { source.onended = () => resolve(); });
+      // Race playback against stop(): stop() nulls onended (so a late
+      // end event can't fire onEnd), which would otherwise leave this
+      // await — and the whole speak() promise — unsettled forever.
+      const stopped = new Promise<void>((resolve) => { this.stopResolve = resolve; });
       source.start();
-      await ended;
+      await Promise.race([ended, stopped]);
+      this.stopResolve = null;
       this.current = null;
       if (segment.pauseAfterMs > 0 && gen === this.generation) {
         await new Promise((r) => setTimeout(r, segment.pauseAfterMs));
@@ -162,6 +168,7 @@ export class GBrowserSpeech {
   /** Halt playback and cancel every queued segment, immediately. */
   stop(): void {
     this.generation += 1;
+    if (this.stopResolve) { this.stopResolve(); this.stopResolve = null; }
     if (this.current) {
       try { this.current.onended = null; this.current.stop(); } catch { /* already stopped */ }
       this.current = null;

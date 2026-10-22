@@ -47,7 +47,10 @@ the acceptance environment is a real visitor device.
   needs a quality re-verification cycle).
 - The deploy payload includes the ONNX Runtime Web WASM binary
   (~28 MB static asset) — fetched only when the flag is on.
-- WASM multithreading needs cross-origin isolation (COOP/COEP); the
-  engine runs single-threaded WASM without it, WebGPU where available.
+- WASM multithreading needs cross-origin isolation (COOP/COEP);
+  without it the engine runs single-threaded WASM. The engine class
+  accepts an execution-providers option, but the shipped wiring uses
+  WASM only — WebGPU is probed in the research harness, NOT wired
+  into the product path.
 - Mobile Safari: WASM works; memory pressure on low-end devices is
   the open question the measurement pass must answer honestly.

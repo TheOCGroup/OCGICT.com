@@ -6,7 +6,10 @@
  */
 export function browserVoiceFlagEnabled(): boolean {
   try {
-    if (typeof location !== "undefined" && new URLSearchParams(location.search).has("browserVoice")) return true;
+    if (typeof location !== "undefined") {
+      const v = new URLSearchParams(location.search).get("browserVoice");
+      if (v === "" || v === "1") return true;
+    }
     if (typeof localStorage !== "undefined" && localStorage.getItem("ocg-g-browser-voice") === "1") return true;
   } catch { /* flags are best-effort */ }
   return false;
