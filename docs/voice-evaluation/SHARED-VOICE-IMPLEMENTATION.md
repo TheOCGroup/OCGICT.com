@@ -1,108 +1,85 @@
-# OCG Shared Voice — Implementation Record (Kokoro evaluation branch)
+# OCG Shared Voice — Implementation Record
 
-Status: IMPLEMENTED on `experiment/shared-kokoro-voice-audition` for
-evaluation and staged rollout. Nothing here changes a live voice.
-Production G (main, PR #13) is untouched by this branch; Aiden's live
-Vapi configuration is untouched everywhere.
+Status: RESTRUCTURED 2026-10-21 per the founder ownership decision.
+Nothing here changes a live voice. Production G (main, PR #13) is
+untouched by this branch; Aiden's live Vapi configuration is untouched
+everywhere.
 
-## What exists today (reconciled 2026-10-21)
+## Ownership model (FINAL)
 
-| Agent | Current voice path | Source of truth |
-|---|---|---|
-| G | Vapi realtime (primary, founder-gated off) + local chat + labeled basic browser speech | OCGICT.com production (verified live) |
-| Aiden | Vapi assistant v29 (LIVE, frozen by founder rule) + Gemini Live web client (Agent Workspace) | Vapi dashboard inspection; ONCALL voice baseline doc |
-| Piper | Gemini Live voice in the agent-floor client (Sulafat profile) inside PIPELINE | Implementation record 2026-10-15 |
-| TED | Provider-independent voice core (`voiceCore.ts`: VoiceProvider contract + session, web-speech provider, turn detection) in OCG LAB | Implementation record 2026-10-02 |
-| ORION | Vapi "ORION - OCG MEDIA Voice" v3 (Published) | Vapi dashboard inspection |
+| Component | Canonical owner |
+|---|---|
+| Kokoro inference service | Standalone `ocg-voice` repository (shared OCG voice infrastructure) |
+| G voice + integration | OCGICT.com (this repo) |
+| Aiden voice + integration | Aiden's canonical surfaces (`TheOCGroup/bryan-os`) |
+| Piper voice + integration | PIPELINE (`TheOCGroup/PIPELINE`) |
+| TED voice + integration | OCG LAB (`TheOCGroup/ocg-lab-site`) |
+| ORION voice + integration | OCG MEDIA (`TheOCGroup/nova`) |
 
-## Architecture (one service, isolated profiles)
+G is not the hub. There is only one G, and he belongs exclusively to
+OCGICT.com. The shared service is product-agnostic; each product keeps
+its own voice profile and rollout flag in its own repository and calls
+the service with its own caller key.
 
-- `services/kokoro-tts/` — the single Kokoro inference service
-  (FastAPI + kokoro-onnx, Docker image, key-authenticated, no transcript
-  logging). Endpoints: `/health`, `/voices`, `/tts`, `/tts/stream`
-  (sentence-chunked, length-prefixed WAV).
-- `server/voice/profiles.ts` — the five agent profiles as data:
-  primary/alternate EN voices, Spanish voices, speed, the current
-  provider preserved as fallback, and a **per-agent rollout env flag**
-  (all default off; one agent's flag never enables another).
-- `server/voice/voiceProvider.ts` — the provider contract (mirrors the
-  shape of TED's existing VoiceProvider core) + the Kokoro HTTP client.
-  Server-side only; the service key never reaches a browser.
-- Synthesis is metered: G's endpoint consumes the persistent daily
-  `tts` budget (default 300/day, hard ceiling 5000) and fails closed.
+## Where the evaluation originally lived (traceability)
 
-## G integration (this repo, flag-gated)
+The evaluation was staged on this branch through commit `d21cd79`
+(implementation) and `6573028` (QUINCEY/TED correction cycle): the
+service under `services/kokoro-tts/`, all five profiles in
+`server/voice/profiles.ts`. The 2026-10-21 restructure commit extracts
+and relocates those pieces as below — no evidence, tests, or QA
+findings were discarded (audition samples + manifest and measurements
+remain in the evaluation evidence set; see MEASUREMENTS.md).
 
-- `netlify/functions/g-tts.mts` — `POST /api/g/tts`: rollout flag +
-  service config gate → text validation → budget → synthesize with G's
-  profile voice (EN `am_michael`, ES `em_alex`). `GET` reports
-  availability only.
-- `client/src/voice/gKokoroSpeech.ts` — playback client (Blob URL +
-  HTMLAudioElement; stop = pause + revoke, so interruption is real).
-- `GExperience.tsx` — when Kokoro is available, spoken replies use it;
-  every stop path (Talk toggle, typing interrupt, listening re-arm,
-  unmount, widget close) halts Kokoro playback too. The UI labels the
-  three modes distinctly: "Realtime voice" / "Kokoro voice" / "Basic
-  browser voice". Any Kokoro failure falls back per-reply to the basic
-  browser voice; realtime Vapi remains the primary path when enabled.
+## What lives where now
 
-## Per-agent adoption (other lanes, unchanged repos)
+- **ocg-voice repo** (`60656b5` at extraction): `service/` (FastAPI +
+  kokoro-onnx, Docker, per-caller keys, per-caller rate limits, `/stats`
+  cost observability, contract version in `/health`), `contracts/`
+  (HTTP contract `ocg-tts/v1`, canonical TypeScript client + profile
+  types, profile JSON schema), `tests/test_contract.py` (17/17 wire
+  checks against the real service, incl. Spanish synthesis, streaming
+  framing, stream abort, per-caller isolation, rate limiting).
+- **This repo (G's adapter only)**: `server/voice/gProfile.ts` (G's
+  profile — am_michael / am_adam / em_alex — nothing else),
+  `server/voice/voiceProvider.ts` (vendored client, canonical home in
+  ocg-voice contracts), `netlify/functions/g-tts.mts` (`POST /api/g/tts`:
+  rollout flag + service config gate → validation → persistent daily
+  `tts` budget → synthesize), `client/src/voice/gKokoroSpeech.ts`
+  (playback; stop = pause + revoke), `GExperience.tsx` wiring with the
+  visitor label "OCG voice (preview)" — the engine name never appears
+  on the visitor surface (TED ruling).
+- **Home-repo profile branches (draft PRs, unmerged)**:
+  Piper → PIPELINE `voice/piper-kokoro-profile`; TED → ocg-lab-site
+  `voice/ted-kokoro-profile`; ORION → nova `voice/orion-kokoro-profile`;
+  Aiden → bryan-os `voice/aiden-kokoro-profile` (web surfaces only;
+  telephony frozen).
 
-Each agent adopts the same contract without this branch editing its repo:
+## Rollback
 
-1. Point a server-side `KokoroHttpProvider` at the shared service
-   (`OCG_KOKORO_TTS_URL` / `OCG_KOKORO_TTS_KEY`).
-2. Take its profile from `server/voice/profiles.ts` (single source).
-3. Synthesize spoken replies through the provider; keep the existing
-   provider wired as fallback behind the agent's own rollout flag
-   (`OCG_<AGENT>_KOKORO_TTS_ENABLED`).
-4. Aiden telephony is excluded: his live Vapi assistant, number, and
-   routing are frozen; Kokoro candidates apply to web surfaces only
-   after founder listening approval.
+Every agent's existing provider is preserved as its fallback; flipping
+that agent's rollout flag off restores it. The shared service is never
+in the critical path of a live voice while flags are off.
 
-Rollback for every agent = flip its rollout flag off; the previous
-provider path is never removed by this layer.
+## QA history (carried from the evaluation)
 
-## Hypotheses under test
-
-- H1: Kokoro-82M quality is at or above the current browser/Gemini
-  spoken paths for OCG scripts (founder/TED listening verdict — pending).
-- H2: Self-hosted CPU inference is fast enough for conversational
-  replies with sentence streaming (measured — see MEASUREMENTS.md;
-  this sandbox's 2 shared vCPUs are contention-bound and are NOT the
-  target hardware).
-- H3: Per-minute cost ≈ compute only (no per-call API fees); the
-  binding constraint is CPU throughput per concurrent speaker.
-
-## QA correction cycle (2026-10-21, after QUINCEY PASS WITH NOTES + TED review)
-
-- QUINCEY U1: MEASUREMENTS.md per-voice RTF attribution corrected
-  (weighted minimum is am_michael 1.35; ef_dora max 2.36).
-- QUINCEY U2: `GET /api/g/tts` now consults the tts budget when the
-  gate is open, mirroring the voice-session status endpoint.
-- QUINCEY U3: the Kokoro service validates `lang` against its
-  supported set and returns 400 instead of an unhandled 500.
-- QUINCEY U5: the service docstring now states that logs carry an
-  8-char text-hash prefix as a correlation aid.
-- QUINCEY U4 (known limitation, recorded not fixed): the client picks
-  the synthesis language from a reply-text heuristic; a real language
-  signal from the dialogue layer should replace it before rollout.
-- TED 3-A: the engine name never appears on the visitor surface —
-  the mode is labeled "OCG voice (preview)" everywhere a visitor can
-  see it (code/docs keep the Kokoro name).
-- TED 3-B: duplicated bilingual claim removed from the realtime banner.
-- TED 4-A: a Kokoro failure no longer swaps engines silently — the
-  status line says that reply used the basic browser voice.
-- TED 4-B: "G is about to speak…" covers the synthesis wait.
-- TED 4-C: the widget button that ends the voice session is labeled
-  "Stop voice", not "Mute" (Mute is the realtime mic toggle only).
-- TED 6-A: MEASUREMENTS.md no longer implies int8 listening pairs
-  exist; int8 was benchmarked for speed only.
-- TED 2-A: the alternate-promotion uniqueness rule is recorded in
-  `server/voice/profiles.ts`.
+- QUINCEY PASS WITH NOTES on `d21cd79`; findings U1–U3, U5 fixed in
+  `6573028`; U4 (client language heuristic) recorded as a known
+  limitation for the dialogue layer to fix before rollout.
+- TED: experience design SOUND; audible quality NOT VERIFIED by anyone
+  (founder listening session is the gate); visitor-copy rulings applied
+  (engine name off the visitor surface, "Stop voice" label, per-reply
+  fallback notice, "G is about to speak…" state, alternate-promotion
+  uniqueness rule).
+- Latency on the evaluation sandbox (2 shared vCPU): first-audio p50
+  4.82 s fp32 / 3.83 s int8 — NOT conversational on that hardware.
+  Rollout gate: re-run the battery on the target host, p50 ≤ 800 ms.
 
 ## Boundaries kept
 
-- No paid service activated; no live voice replaced; no other repo
-  edited; the experiment is never deployed to production (previews only).
+- No paid service activated; no live voice replaced; the experiment is
+  never deployed to production (previews only).
 - Founder approves audible quality before any live profile changes.
+- Founder action outstanding: create `TheOCGroup/ocg-voice` in the org
+  (automation cannot create org repos) so the standalone repo can be
+  pushed; deployment/hosting remains a separate founder decision.

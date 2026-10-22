@@ -1,6 +1,9 @@
 /**
- * G Kokoro TTS — spoken replies synthesized by the shared, self-hosted
- * Kokoro service instead of the browser's built-in speech.
+ * G Kokoro TTS — G's adapter to the standalone OCG shared voice service
+ * (ocg-voice repository, contract ocg-tts/v1). Spoken replies are
+ * synthesized by that self-hosted service instead of the browser's
+ * built-in speech. G's voice profile lives in server/voice/gProfile.ts;
+ * the other agents' profiles live in their own products.
  *
  * This is a TTS path only: dialogue, ASR, endpointing, and turn-taking
  * stay with G's existing chat/realtime machinery. The endpoint is inert
@@ -14,7 +17,7 @@
  * available. The service key is never exposed to the browser.
  */
 import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
-import { profileFor, rolloutEnabled, voiceForLanguage } from "../../server/voice/profiles.js";
+import { gVoiceProfile, rolloutEnabled, voiceForLanguage } from "../../server/voice/gProfile.js";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
 
 export const config = { path: "/api/g/tts" };
@@ -35,8 +38,7 @@ function rateLimited(request: Request): boolean {
 }
 
 function gate(env: Record<string, string | undefined>) {
-  const profile = profileFor("g");
-  if (!profile) return { open: false as const, reason: "G voice profile is missing." };
+  const profile = gVoiceProfile();
   if (!rolloutEnabled(profile, env)) {
     return { open: false as const, reason: "Kokoro voice is not enabled for this site yet." };
   }

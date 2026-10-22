@@ -1,5 +1,10 @@
 /**
- * OCG shared voice provider contract.
+ * OCG shared voice provider contract — VENDORED COPY.
+ *
+ * Canonical home: the standalone ocg-voice repository,
+ * contracts/typescript/voiceProvider.ts (contract ocg-tts/v1). This
+ * copy serves G's adapter in this repository; keep behavior in sync
+ * with the canonical contract.
  *
  * The shape deliberately mirrors the provider-independent core TED's
  * experience already uses (voiceCore.ts: a VoiceProvider contract behind

@@ -1,45 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AGENT_VOICE_PROFILES, auditionVoiceIds, profileFor, rolloutEnabled, voiceForLanguage } from "../../server/voice/profiles";
+import * as gProfileModule from "../../server/voice/gProfile";
+import { G_VOICE_PROFILE, gVoiceProfile, rolloutEnabled, voiceForLanguage } from "../../server/voice/gProfile";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider";
 import { dailyLimit } from "../../server/services/gBudget";
 // @ts-ignore - Node ESM handler under test
 import ttsHandler from "../../netlify/functions/g-tts.mts";
 
-describe("shared agent voice profiles", () => {
-  it("defines exactly the five OCG agents with distinct primary voices", () => {
-    const ids = Object.keys(AGENT_VOICE_PROFILES).sort();
-    expect(ids).toEqual(["aiden", "g", "orion", "piper", "ted"]);
-    const primaries = Object.values(AGENT_VOICE_PROFILES).map((p) => p.enVoice);
-    expect(new Set(primaries).size).toBe(5);
+describe("G's voice profile (owned by OCGICT only)", () => {
+  it("holds exactly G's audition selection", () => {
+    expect(gVoiceProfile()).toMatchObject({
+      enVoice: "am_michael",
+      enAlternate: "am_adam",
+      esVoice: "em_alex",
+      speed: 1.0,
+      fallbackProvider: "vapi-realtime",
+      rolloutEnv: "OCG_G_KOKORO_TTS_ENABLED",
+    });
+    expect(G_VOICE_PROFILE).toBe(gVoiceProfile());
   });
 
-  it("matches the founder's audition table", () => {
-    expect(profileFor("g")).toMatchObject({ enVoice: "am_michael", enAlternate: "am_adam", esVoice: "em_alex" });
-    expect(profileFor("aiden")).toMatchObject({ enVoice: "am_adam", enAlternate: "am_michael" });
-    expect(profileFor("piper")).toMatchObject({ enVoice: "af_heart", enAlternate: "af_bella", esVoice: "ef_dora" });
-    expect(profileFor("ted")).toMatchObject({ enVoice: "am_eric", enAlternate: "am_michael" });
-    expect(profileFor("orion")).toMatchObject({ enVoice: "am_puck", enAlternate: "am_liam" });
-    expect(auditionVoiceIds()).toEqual(
-      ["af_bella", "af_heart", "am_adam", "am_eric", "am_liam", "am_michael", "am_puck", "ef_dora", "em_alex"].sort(),
+  it("carries no other agent's runtime profile — their profiles live in their own products", () => {
+    expect(Object.keys(gProfileModule).sort()).toEqual(
+      ["G_VOICE_PROFILE", "gVoiceProfile", "rolloutEnabled", "voiceForLanguage"].sort(),
     );
   });
 
-  it("keeps every rollout flag off unless explicitly enabled per agent", () => {
-    for (const p of Object.values(AGENT_VOICE_PROFILES)) {
-      expect(rolloutEnabled(p, {})).toBe(false);
-      expect(rolloutEnabled(p, { [p.rolloutEnv]: "yes" })).toBe(false);
-    }
-    expect(rolloutEnabled(profileFor("g")!, { OCG_G_KOKORO_TTS_ENABLED: "true" })).toBe(true);
-    // One agent's flag never enables another agent.
-    expect(rolloutEnabled(profileFor("aiden")!, { OCG_G_KOKORO_TTS_ENABLED: "true" })).toBe(false);
+  it("keeps G's rollout flag off unless explicitly enabled for G", () => {
+    expect(rolloutEnabled(G_VOICE_PROFILE, {})).toBe(false);
+    expect(rolloutEnabled(G_VOICE_PROFILE, { OCG_G_KOKORO_TTS_ENABLED: "yes" })).toBe(false);
+    expect(rolloutEnabled(G_VOICE_PROFILE, { OCG_G_KOKORO_TTS_ENABLED: "true" })).toBe(true);
+    // Another agent's flag never enables G.
+    expect(rolloutEnabled(G_VOICE_PROFILE, { OCG_AIDEN_KOKORO_TTS_ENABLED: "true" })).toBe(false);
+    expect(rolloutEnabled(G_VOICE_PROFILE, { OCG_PIPER_KOKORO_TTS_ENABLED: "true" })).toBe(false);
   });
 
-  it("routes Spanish to the Spanish voice and everything else to the EN primary", () => {
-    const g = profileFor("g")!;
-    expect(voiceForLanguage(g, "es")).toEqual({ voice: "em_alex", serviceLang: "es" });
-    expect(voiceForLanguage(g, "es-MX")).toEqual({ voice: "em_alex", serviceLang: "es" });
-    expect(voiceForLanguage(g, "en")).toEqual({ voice: "am_michael", serviceLang: "en-us" });
-    expect(voiceForLanguage(profileFor("piper")!, "es")).toEqual({ voice: "ef_dora", serviceLang: "es" });
+  it("routes Spanish to G's Spanish voice and everything else to his EN primary", () => {
+    expect(voiceForLanguage(G_VOICE_PROFILE, "es")).toEqual({ voice: "em_alex", serviceLang: "es" });
+    expect(voiceForLanguage(G_VOICE_PROFILE, "es-MX")).toEqual({ voice: "em_alex", serviceLang: "es" });
+    expect(voiceForLanguage(G_VOICE_PROFILE, "en")).toEqual({ voice: "am_michael", serviceLang: "en-us" });
   });
 
   it("meters Kokoro synthesis under its own capped budget kind", () => {
