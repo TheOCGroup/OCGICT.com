@@ -33,18 +33,38 @@ export { browserVoiceFlagEnabled } from "./browserVoiceFlag";
  * GBrowserSpeech instance. */
 interface SynthResult { wav: Float32Array; durationSeconds: number; synthMs: number }
 
+export interface WorkerConfig {
+  assetBase?: string;
+  cacheName?: string;
+  providers?: string[];
+  numThreads?: number;
+  onProgress?: (e: { phase: string; file: string; fileBytes: number; fileTotal?: number; loadedBytes: number }) => void;
+}
+
 class WorkerSynth {
   private worker: Worker | null = null;
   private seq = 0;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   sampleRate = 44100;
+  providersUsed: string[] = ["wasm"];
   private readyPromise: Promise<void> | null = null;
+  private config: WorkerConfig = {};
+  private inited = false;
+
+  configure(cfg: WorkerConfig): void {
+    Object.assign(this.config, cfg);
+  }
 
   private spawn(): Worker {
     if (!this.worker) {
       this.worker = new Worker(new URL("./voiceWorker.ts", import.meta.url), { type: "module" });
       this.worker.onmessage = (ev: MessageEvent) => {
-        const { id, ...rest } = ev.data as { id: number; type: string; message?: string };
+        const data = ev.data as { id?: number; type: string; message?: string };
+        if (data.type === "progress") {
+          this.config.onProgress?.(data as never);
+          return;
+        }
+        const { id, ...rest } = data as { id: number; type: string; message?: string };
         const p = this.pending.get(id);
         if (!p) return;
         this.pending.delete(id);
@@ -70,8 +90,21 @@ class WorkerSynth {
 
   load(): Promise<void> {
     if (!this.readyPromise) {
-      this.readyPromise = this.call({ type: "load" }).then((r) => { this.sampleRate = r.sampleRate ?? 44100; })
-        .catch((err) => { this.readyPromise = null; throw err; });
+      this.readyPromise = (async () => {
+        if (!this.inited) {
+          this.inited = true;
+          await this.call({
+            type: "init",
+            assetBase: this.config.assetBase,
+            cacheName: this.config.cacheName,
+            providers: this.config.providers,
+            numThreads: this.config.numThreads,
+          });
+        }
+        const r = await this.call({ type: "load" });
+        this.sampleRate = r.sampleRate ?? 44100;
+        this.providersUsed = r.providersUsed ?? this.providersUsed;
+      })().catch((err) => { this.readyPromise = null; throw err; });
     }
     return this.readyPromise;
   }
@@ -96,10 +129,18 @@ export class GBrowserSpeech {
   private generation = 0;
   private stopResolve: (() => void) | null = null;
 
+  constructor(opts: WorkerConfig = {}) {
+    if (opts && Object.keys(opts).length > 0) sharedWorker.configure(opts);
+  }
+
   /** Load model assets + the M1 style (in the worker). Idempotent. */
   prepare(): Promise<void> {
     if (testEngine) return Promise.resolve();
     return sharedWorker.load();
+  }
+
+  get providersUsed(): string[] {
+    return sharedWorker.providersUsed;
   }
 
   get ready(): boolean {
@@ -132,16 +173,28 @@ export class GBrowserSpeech {
     if (!this.ctx) this.ctx = new AudioContext();
     if (this.ctx.state === "suspended") await this.ctx.resume().catch(() => {});
     let started = false;
-    for (const segment of plan.segments) {
+    // Lookahead pipeline: the next segment's synthesis starts while
+    // the current one plays, so conversation pacing is set by speech,
+    // not by synthesis latency. Stop cancels the queue: prefetched
+    // results are dropped by the generation check before playback.
+    let prefetched: Promise<SynthResult> | null = null;
+    for (let i = 0; i < plan.segments.length; i++) {
+      const segment = plan.segments[i];
       if (gen !== this.generation) return;
       let result;
       try {
-        result = await this.synth(segment.text, plan.lang, segment.speed);
+        result = await (prefetched ?? this.synth(segment.text, plan.lang, segment.speed));
       } catch (err) {
         if (gen === this.generation) events.onError(`browser synthesis failed: ${String(err).slice(0, 120)}`);
         return;
       }
+      prefetched = null;
       if (gen !== this.generation) return;
+      const next = plan.segments[i + 1];
+      if (next) {
+        prefetched = this.synth(next.text, plan.lang, next.speed);
+        prefetched.catch(() => { /* surfaced when its turn comes */ });
+      }
       const buffer = this.ctx.createBuffer(1, result.wav.length, this.sampleRate);
       buffer.copyToChannel(result.wav as Float32Array, 0);
       const source = this.ctx.createBufferSource();

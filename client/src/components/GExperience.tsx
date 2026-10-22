@@ -273,7 +273,31 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         // who enable the prototype flag, never in the default bundle.
         if (!browserSpeechRef.current) {
           const mod = await import("@/voice/browser/gBrowserSpeech");
-          browserSpeechRef.current = new mod.GBrowserSpeech();
+          const prof = await import("@/voice/browser/deviceProfile");
+          const profile = prof.selectDeviceProfile({
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemoryGB: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
+            mobileUserAgent: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent),
+            crossOriginIsolated: (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true,
+            webgpuAdapter: await prof.probeWebGPU(),
+          });
+          let lastShownMB = -1;
+          browserSpeechRef.current = new mod.GBrowserSpeech({
+            providers: profile.providers,
+            numThreads: profile.numThreads,
+            onProgress: (e) => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              if (e.phase === "init") {
+                setVoiceStatus("Preparing G's voice…");
+                return;
+              }
+              const mb = Math.floor(e.loadedBytes / 1_000_000);
+              if (mb !== lastShownMB) {
+                lastShownMB = mb;
+                setVoiceStatus(`Downloading G's voice model — ${mb} MB received (one-time)`);
+              }
+            },
+          });
         }
         if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
         await browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en" }, {

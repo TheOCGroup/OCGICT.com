@@ -22,6 +22,25 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
 });
 import { GBrowserSpeech, __setBrowserEngineForTests } from "./gBrowserSpeech";
 import { browserVoiceFlagEnabled } from "./browserVoiceFlag";
+import { selectDeviceProfile } from "./deviceProfile";
+
+describe("selectDeviceProfile — adaptive configuration", () => {
+  it("prefers webgpu with wasm fallback and caps threads at 4 when isolated", () => {
+    const p = selectDeviceProfile({ hardwareConcurrency: 16, deviceMemoryGB: 8, crossOriginIsolated: true, webgpuAdapter: true });
+    expect(p.providers).toEqual(["webgpu", "wasm"]);
+    expect(p.numThreads).toBe(4);
+    expect(p.constrained).toBe(false);
+  });
+  it("stays single-threaded without cross-origin isolation", () => {
+    const p = selectDeviceProfile({ hardwareConcurrency: 8, crossOriginIsolated: false, webgpuAdapter: false });
+    expect(p.providers).toEqual(["wasm"]);
+    expect(p.numThreads).toBe(1);
+  });
+  it("flags low-memory mobile as constrained without reducing quality knobs", () => {
+    const p = selectDeviceProfile({ hardwareConcurrency: 4, deviceMemoryGB: 2, mobileUserAgent: true });
+    expect(p.constrained).toBe(true);
+  });
+});
 
 describe("browserVoiceFlagEnabled — explicit values only", () => {
   it("accepts ?browserVoice and ?browserVoice=1, rejects ?browserVoice=0", () => {
@@ -142,6 +161,29 @@ describe("GBrowserSpeech — playback + stop semantics with a fake engine", () =
     speech.stop();
     await Promise.race([p, new Promise((r) => setTimeout(r, 250))]);
     expect(settled).toBe(true);
+    expect(events.onEnd).not.toHaveBeenCalled();
+  });
+
+  it("lookahead: the next segment synthesizes while the current one plays", async () => {
+    class HeldSource {
+      onended: (() => void) | null = null;
+      buffer: unknown = null;
+      connect() {}
+      start() { /* held: playback in progress */ }
+      stop() {}
+    }
+    vi.stubGlobal("AudioContext", class extends FakeCtx {
+      createBufferSource() { return new HeldSource(); }
+    });
+    const { speech, events, synth } = makeSpeech();
+    const p = speech.speak("First segment here. Second segment follows.", { lang: "en" }, events);
+    await new Promise((r) => setTimeout(r, 30));
+    // Segment 1 is still "playing" (held), yet segment 2's synthesis
+    // must already have been requested.
+    expect(events.onStart).toHaveBeenCalledTimes(1);
+    expect(synth.mock.calls.length).toBe(2);
+    speech.stop();
+    await p;
     expect(events.onEnd).not.toHaveBeenCalled();
   });
 

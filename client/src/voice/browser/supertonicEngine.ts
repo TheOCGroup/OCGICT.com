@@ -30,10 +30,22 @@ const MODEL_FILES = {
 
 type ModelKey = keyof typeof MODEL_FILES;
 
+export interface EngineProgress {
+  phase: "download" | "init";
+  file: string;
+  /** Bytes of the current asset received so far. */
+  fileBytes: number;
+  /** Total bytes of the current asset when the server reports it. */
+  fileTotal?: number;
+  /** Cumulative asset bytes received across the whole load. */
+  loadedBytes: number;
+}
+
 async function fetchAsset(
   base: string,
   rel: string,
   cache: Cache | null,
+  onChunk?: (fileBytes: number, fileTotal?: number) => void,
 ): Promise<{ buf: ArrayBuffer; fromCache: boolean }> {
   const url = `${base}/${rel}`;
   if (cache) {
@@ -42,7 +54,25 @@ async function fetchAsset(
   }
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`asset fetch failed ${resp.status}: ${rel}`);
-  const buf = await resp.arrayBuffer();
+  let buf: ArrayBuffer;
+  const total = Number(resp.headers.get("content-length")) || undefined;
+  if (resp.body && typeof resp.body.getReader === "function") {
+    const reader = resp.body.getReader();
+    const parts: Uint8Array[] = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) { parts.push(value); received += value.byteLength; onChunk?.(received, total); }
+    }
+    const merged = new Uint8Array(received);
+    let off = 0;
+    for (const p of parts) { merged.set(p, off); off += p.byteLength; }
+    buf = merged.buffer;
+  } else {
+    buf = await resp.arrayBuffer();
+    onChunk?.(buf.byteLength, total);
+  }
   if (cache) {
     cache
       .put(url, new Response(buf.slice(0), { headers: { "content-type": "application/octet-stream" } }))
@@ -133,6 +163,9 @@ export class SupertonicBrowserEngine {
     providers?: string[];
     totalSteps?: number;
     seed?: number;
+    /** Versioned cache namespace (per asset variant). */
+    cacheName?: string;
+    onProgress?: (e: EngineProgress) => void;
   } = {}) {
     this.totalSteps = opts.totalSteps ?? 8;
     this.seed = opts.seed ?? 1234;
@@ -144,13 +177,17 @@ export class SupertonicBrowserEngine {
 
   async load(): Promise<EngineLoadStats> {
     const t0 = performance.now();
-    this.cache = ("caches" in self) ? await caches.open("ocg-voice-assets-v1") : null;
+    this.cache = ("caches" in self)
+      ? await caches.open(this.opts.cacheName ?? "ocg-voice-assets-v1")
+      : null;
     const texts: Partial<Record<ModelKey, any>> = {};
     const bufs: Partial<Record<ModelKey, ArrayBuffer>> = {};
     let assetBytes = 0;
     let fromCache = 0;
     for (const [key, rel] of Object.entries(MODEL_FILES) as [ModelKey, string][]) {
-      const r = await fetchAsset(this.assetBase, rel, this.cache);
+      const base = assetBytes;
+      const r = await fetchAsset(this.assetBase, rel, this.cache, (fileBytes, fileTotal) =>
+        this.opts.onProgress?.({ phase: "download", file: rel, fileBytes, fileTotal, loadedBytes: base + fileBytes }));
       assetBytes += r.buf.byteLength;
       if (r.fromCache) fromCache += 1;
       if (rel.endsWith(".json")) texts[key] = JSON.parse(new TextDecoder().decode(r.buf));
@@ -163,6 +200,7 @@ export class SupertonicBrowserEngine {
     this.compress = this.cfg.ttl.chunk_compress_factor;
     this.latentDim = this.cfg.ttl.latent_dim;
     const t1 = performance.now();
+    this.opts.onProgress?.({ phase: "init", file: "", fileBytes: 0, loadedBytes: assetBytes });
     const sessionOpts = { executionProviders: this.opts.providers ?? ["wasm"] };
     this.sessions.dp = await ort.InferenceSession.create(bufs.dp!, sessionOpts);
     this.sessions.textEnc = await ort.InferenceSession.create(bufs.textEnc!, sessionOpts);

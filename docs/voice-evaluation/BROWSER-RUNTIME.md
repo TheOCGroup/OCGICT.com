@@ -48,9 +48,16 @@ the acceptance environment is a real visitor device.
 - The deploy payload includes the ONNX Runtime Web WASM binary
   (~28 MB static asset) — fetched only when the flag is on.
 - WASM multithreading needs cross-origin isolation (COOP/COEP);
-  without it the engine runs single-threaded WASM. The engine class
-  accepts an execution-providers option, but the shipped wiring uses
-  WASM only — WebGPU is probed in the research harness, NOT wired
-  into the product path.
+  without it the engine runs single-threaded WASM. The provider now
+  probes for a WebGPU adapter and requests ["webgpu", "wasm"]; on
+  session-creation failure the worker rebuilds on WASM and reports
+  what runs. WebGPU speed is NOT VERIFIED (no adapter in the test
+  sandbox) and no WebGPU performance is claimed.
+- Optimized asset sets exist and are quality-attributed: fp16
+  weights-only (206.5 MB, waveform corr 0.999 vs fp32) and a
+  balanced set — vector estimator + text encoder fp16, vocoder INT8
+  (181.9 MB, corr 0.982–0.992). INT8 on the vector estimator or text
+  encoder measurably degrades the voice and is rejected. The fp32
+  set remains the hosted default until a variant is hosted.
 - Mobile Safari: WASM works; memory pressure on low-end devices is
   the open question the measurement pass must answer honestly.
