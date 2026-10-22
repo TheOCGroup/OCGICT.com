@@ -7,6 +7,8 @@ import { persistStrategyBrief } from "@/lib/persistence";
 import { getActiveBookingProvider } from "@/lib/booking";
 import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig } from "@/voice/gRealtimeVoice";
 import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
+import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
+import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -68,6 +70,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   // failure falls back per-reply to the labeled basic browser voice.
   const [kokoroAvailable, setKokoroAvailable] = useState(false);
   const kokoroRef = useRef<GKokoroSpeech | null>(null);
+  // OCG Voice Runtime (browser inference) — prototype, flag-gated only.
+  const browserSpeechRef = useRef<GBrowserSpeech | null>(null);
+  const browserVoiceOn = browserVoiceFlagEnabled();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,6 +84,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     window.speechSynthesis?.cancel();
     activeSpeechRef.current = null;
     kokoroRef.current?.stop();
+    browserSpeechRef.current?.stop();
   };
   const rtActive = rtState === "connecting" || rtState === "listening" || rtState === "thinking" || rtState === "speaking";
 
@@ -232,6 +238,53 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
     const spanishReply = /[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]|\b(?:hola|gracias|usted|propiedad|inversi\u00f3n|necesita|ayudarle|quieres|puedo|podemos|buenos|buenas|vender|comprar)\b/i.test(spoken);
+
+    // OCG Voice Runtime prototype: on-device Supertonic M1, only when
+    // the explicit browserVoice flag is on. Any failure falls through to
+    // the normal cascade below (server voice, then basic browser voice).
+    if (browserVoiceOn) {
+      setVoiceStatus("G is about to speak…");
+      void (async () => {
+        // Dynamic import: the inference library ships only to visitors
+        // who enable the prototype flag, never in the default bundle.
+        if (!browserSpeechRef.current) {
+          const mod = await import("@/voice/browser/gBrowserSpeech");
+          browserSpeechRef.current = new mod.GBrowserSpeech();
+        }
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        return browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en" }, {
+        onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+        onEnd: () => {
+          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+          setVoiceStatus("Listening for your reply");
+          startListening();
+        },
+        onError: () => {
+          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+          // Fall through for this reply only — the server/basic paths
+          // take it from here, with the standard notice.
+          if (kokoroAvailable) {
+            if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
+            void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
+              onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+              onEnd: () => {
+                if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+                setVoiceStatus("Listening for your reply");
+                startListening();
+              },
+              onError: () => {
+                if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+                speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+              },
+            }, { expressive: true });
+          } else {
+            speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+          }
+        },
+        });
+      })();
+      return;
+    }
 
     // Preferred spoken path: OCG's own Kokoro voice service, when the
     // server has it enabled. Any failure falls back to the basic browser
