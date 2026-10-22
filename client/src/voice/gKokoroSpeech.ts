@@ -53,7 +53,7 @@ export class GKokoroSpeech {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Kokoro voice is unavailable right now.");
+        throw new Error(data.error || "OCG voice is unavailable right now.");
       }
       const blob = await res.blob();
       if (gen !== this.generation) return; // stopped while fetching
@@ -76,7 +76,7 @@ export class GKokoroSpeech {
     } catch (err) {
       if (gen !== this.generation) return; // aborted by stop()
       this.cleanup();
-      events.onError(err instanceof Error ? err.message : "Kokoro voice is unavailable right now.");
+      events.onError(err instanceof Error ? err.message : "OCG voice is unavailable right now.");
     }
   }
 
