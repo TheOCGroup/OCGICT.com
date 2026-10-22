@@ -253,7 +253,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
           // is coming from the basic browser voice instead.
           speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
         },
-      });
+      }, { expressive: true });
       return;
     }
     speakWithBrowserVoice(spoken, session);

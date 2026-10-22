@@ -140,6 +140,22 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
   }
 }
 
+const ES_STRONG = /(quiero vender|mi casa|heredé|herede|falleció|fallecio|cuánto|cuanto cuesta|necesito|gracias|hola|buenos días|buenas tardes|buenas noches|vender|propiedad|inversión|inversion|financiamiento|herencia)/i;
+const ES_WORDS = /\b(el|la|los|las|una|uno|de|en|y|es|está|esta|mi|su|para|por|con|que|qué|cómo|cuándo|tengo|puedo|quiero|busco|vendo|compro|renta|reparaciones|pronto|seguro|opciones|proceso|precio|valor|ayuda|veces|hace)\b/gi;
+
+/**
+ * Conservative Spanish detector for the local engine: inverted
+ * punctuation, a strong Spanish phrase, or at least three distinct
+ * Spanish function words. Tuned to never misfire on ordinary English
+ * (single shared words like "solo" or "como" are not signals).
+ */
+export function looksSpanish(text: string): boolean {
+  if (/[¿¡]/.test(text)) return true;
+  if (ES_STRONG.test(text)) return true;
+  const hits = new Set((text.toLowerCase().match(ES_WORDS) || []).map((w) => w.trim()));
+  return hits.size >= 3;
+}
+
 /**
  * Local Deterministic Provider with full Streaming & Action Emulation
  */
@@ -151,14 +167,58 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     const lastUserMsg = options.messages.filter((m) => m.role === "user").pop()?.content || "";
     const lower = lastUserMsg.toLowerCase();
     const priorConversation = options.messages.slice(0, -1).filter(m => m.role === "user").map(m => m.content.toLowerCase()).join(" ");
-    const sellerContext = /\b(sell|selling|homeowner|inherited|probate|my house|my property|estate)\b/i.test(priorConversation);
-    const investorContext = /\b(invest|flip|rental|financing|lender|capital|buy and hold)\b/i.test(priorConversation);
+    const sellerContext = /\b(sell|selling|homeowner|inherited|probate|my house|my property|estate|vender|venta|herencia|heredé|herede|mi casa|propietario)\b/i.test(priorConversation);
+    const investorContext = /\b(invest|flip|rental|financing|lender|capital|buy and hold|invertir|inversión|inversion|financiamiento|renta)\b/i.test(priorConversation);
 
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
     // Use prior visitor intent for short follow-ups instead of restarting the pitch.
     const briefFollowup = lower.trim().replace(/[.!?]+$/g, "");
+
+    // --- Spanish conversation path -------------------------------------
+    // The local engine answers in the visitor's language. A Spanish turn
+    // (or a short follow-up inside a Spanish conversation) is answered in
+    // Spanish with the same core flows — never by falling through to the
+    // English rules. Calculator requests fall through to the bilingual
+    // MAO branch below so the math lives in exactly one place.
+    const spanishTurn = looksSpanish(lastUserMsg)
+      || (looksSpanish(priorConversation) && briefFollowup.split(/\s+/).filter(Boolean).length <= 5);
+    const esCalcRequest = /(regla del 70|calcular|mao|70\s?%)/.test(lower);
+    if (spanishTurn && !esCalcRequest) {
+      // Word boundaries matter: "revender" (resell / fix-and-flip) must
+      // NOT match the seller verb "vender" — flip phrasing is investor
+      // intent. Flip markers are tested as investor signals below.
+      const sellerNow = /(\bvender\b|\bvendemos\b|\bvendo\b|venta de mi|mi casa|propietario|heredé|herede|herencia|falleció|fallecio)/i.test(lower);
+      const investorNow = /(invertir|inversión|inversion|financiamiento|préstamo|prestamo|renta|capital|revender|renovar|ganar dinero)/i.test(lower);
+      if ((sellerContext || sellerNow) && /^(pronto|lo antes posible|cuanto antes|rápido|rapido|este mes|en un mes)$/.test(briefFollowup)) {
+        content = "Perfecto, el tiempo importa. Podemos empezar con una revisión preliminar de la propiedad tal como está. ¿Cuál es la dirección de la propiedad? Si lo prefiere, puede comenzar en nuestra página de venta.";
+      } else if ((sellerContext || sellerNow) && /^(solo estoy explorando|estoy explorando|no estoy seguro|no estoy segura|no tengo prisa|más adelante|mas adelante|todavía no|todavia no)$/.test(briefFollowup)) {
+        content = "Claro, no hay ninguna prisa por decidir hoy. ¿Le ayudaría más comparar vender la propiedad tal como está o repararla primero?";
+      } else if ((sellerContext || sellerNow) && /^(necesita reparaciones|necesita arreglos|mal estado|así como está|asi como esta|vacía|vacia|con inquilinos)$/.test(briefFollowup)) {
+        content = "Gracias, eso ayuda. Una propiedad que necesita reparaciones también puede evaluarse tal como está. ¿Su mayor preocupación es obtener un precio justo o evitar las reparaciones y el trámite?";
+      } else if (/(heredé|herede|herencia|falleció|fallecio|mi madre|mi padre)/i.test(lower)) {
+        content = "Lo entiendo. Una propiedad heredada trae muchas decisiones a la vez. Podemos ayudarle a explorar una venta tal como está y los pasos siguientes, sin apresurarle. ¿Su prioridad es vender pronto o primero entender sus opciones?";
+        toolCalls = [{ name: "activate_seller_intake", arguments: { sellerStep: 1 } }];
+      } else if (investorNow && !sellerNow) {
+        content = "Podemos ayudarle a evaluar una oportunidad, revisar costos de renovación y riesgos, y planear el siguiente paso. ¿Ya tiene una propiedad en mente o todavía está decidiendo en qué invertir?";
+      } else if (sellerNow) {
+        content = "Claro que sí. Podemos revisar la opción de vender tal como está o hacer reparaciones primero, según lo que convenga a su tiempo. No necesita tener todos los detalles ahora. ¿Espera vender pronto o solo está explorando sus opciones?";
+      } else if (investorNow) {
+        content = "Podemos ayudarle a evaluar una oportunidad, revisar costos de renovación y riesgos, y planear el siguiente paso. ¿Ya tiene una propiedad en mente o todavía está decidiendo en qué invertir?";
+      } else if (/(qué hacen|que hacen|quiénes son|quienes son|servicios|qué es ocg|que es ocg|quién eres|quien eres)/i.test(lower)) {
+        content = "The OC Group es una empresa de Wichita dedicada a la adquisición y renovación de propiedades y a la asesoría de inversión. Ayudamos a propietarios a explorar opciones de venta y a inversionistas a evaluar oportunidades, planear renovaciones, coordinar financiamiento y decidir entre renovar, revender o mantener. Soy G, su guía de IA. ¿Viene como propietario, inversionista o solo a explorar?";
+      } else {
+        content = "Soy G, la guía de IA de The OC Group. Puedo ayudarle a vender una casa, evaluar una inversión, entender reparaciones o financiamiento, y conocer nuestros servicios. ¿Qué le gustaría explorar?";
+      }
+      return {
+        content,
+        toolCalls,
+        provider: "OCG_LOCAL_ENGINE",
+        model: "ocg-deterministic-v5",
+        latencyMs: Date.now() - startTime,
+      };
+    }
     if (sellerContext && /^(soon|as soon as possible|asap|right away|immediately|quickly|within a month|this month)$/.test(briefFollowup)) {
       content = "Got it, timing matters. We can start with a preliminary as-is review. What is the property address? If you prefer, you can begin on our Sell page.";
     } else if (sellerContext && /^(just looking|just exploring|exploring|not sure|no rush|later|not yet)$/.test(briefFollowup)) {
@@ -167,26 +227,32 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       content = "Thanks, that helps. Properties needing work can still be evaluated as-is. Is your main concern getting a fair price or avoiding the repairs and hassle?";
     } else if (investorContext && /^(flip|a flip|flipping|rental|a rental|buy and hold|hold)$/.test(briefFollowup)) {
       content = "Understood. Do you already have a specific property in mind, or would you like help understanding how OCG evaluates opportunities?";
-    } else if (lower.includes("70%") || lower.includes("calculate") || lower.includes("mao") || (lower.includes("arv") && lower.includes("property"))) {
+    } else if (lower.includes("70%") || lower.includes("calculate") || lower.includes("calcular") || lower.includes("regla del 70") || lower.includes("mao") || (lower.includes("arv") && lower.includes("property"))) {
       // Never populate interactive underwriting with fabricated sample inputs.
-      const hasArv = /(?:arv|after.repair.value)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
-      const hasRehab = /(?:rehab|repairs?|renovation)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
+      const hasArv = /(?:arv|after.repair.value|valor después de la reparación|valor tras la reparación|valor despues de la reparacion)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
+      const hasRehab = /(?:rehab|repairs?|renovation|reparaciones|rehabilitación|remodelación|reparacion)[^\n]{0,30}(?:\$?\d[\d,]*k?)/i.test(lastUserMsg);
       if (!hasArv || !hasRehab) {
-        return { content: "I can calculate a preliminary maximum allowable offer using the 70% rule. What are your estimated after-repair value (ARV) and renovation budget? We should also account for closing, holding, selling, financing and contingency costs before treating the result as an offer.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+        return { content: spanishTurn
+          ? "Puedo calcular una oferta máxima preliminar con la regla del 70%. ¿Cuáles son el valor estimado después de la reparación (ARV) y el presupuesto de reparaciones? También debemos considerar los costos de cierre, mantenimiento, venta, financiamiento y contingencia antes de tratar el resultado como una oferta."
+          : "I can calculate a preliminary maximum allowable offer using the 70% rule. What are your estimated after-repair value (ARV) and renovation budget? We should also account for closing, holding, selling, financing and contingency costs before treating the result as an offer.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
       }
       const parseAmount = (value: string): number => {
         const match = value.match(/\$?\s*([\d,]+(?:\.\d+)?)\s*(k|m)?/i);
         return match ? Number(match[1].replace(/,/g, "")) * (match[2]?.toLowerCase() === "k" ? 1000 : match[2]?.toLowerCase() === "m" ? 1000000 : 1) : NaN;
       };
-      const arvText = lastUserMsg.match(/(?:arv|after.repair.value)\s*(?:of|is|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
-      const rehabText = lastUserMsg.match(/(?:rehab|repairs?|renovation)\s*(?:budget|cost|estimate|of|is|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
+      const arvText = lastUserMsg.match(/(?:arv|after.repair.value|valor después de la reparación|valor tras la reparación|valor despues de la reparacion)\s*(?:of|is|de|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
+      const rehabText = lastUserMsg.match(/(?:rehab|repairs?|renovation|reparaciones|rehabilitación|remodelación|reparacion)\s*(?:budget|cost|estimate|presupuesto|of|is|de|:|=)?\s*(\$?\s*[\d,.]+\s*[km]?)/i)?.[1];
       const arv = parseAmount(arvText || "");
       const rehab = parseAmount(rehabText || "");
       if (!Number.isFinite(arv) || !Number.isFinite(rehab) || arv <= 0 || rehab < 0) {
-        return { content: "Please provide the numbers like this: ARV $300,000, rehab $40,000. I won't assume values for your property.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+        return { content: spanishTurn
+          ? "Por favor comparta las cifras así: ARV $300,000, reparaciones $40,000. No asumiré valores para su propiedad."
+          : "Please provide the numbers like this: ARV $300,000, rehab $40,000. I won't assume values for your property.", provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
       }
       const mao = Math.round(arv * 0.70) - rehab;
-      content = `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab Scope. On a $${arv.toLocaleString()} ARV with $${rehab.toLocaleString()} in repairs: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. This is a screening calculation, not a final offer; separately estimate closing, holding, selling, financing and contingency costs.`;
+      content = spanishTurn
+        ? `La regla del 70% establece su límite de adquisición: MAO = (ARV × 70%) − reparaciones. Con un ARV de $${arv.toLocaleString()} y $${rehab.toLocaleString()} en reparaciones: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. Es un cálculo de evaluación preliminar, no una oferta final; estime por separado los costos de cierre, mantenimiento, venta, financiamiento y contingencia.`
+        : `The 70% Rule establishes your acquisition boundary: MAO = (ARV × 70%) − Rehab Scope. On a $${arv.toLocaleString()} ARV with $${rehab.toLocaleString()} in repairs: ($${arv.toLocaleString()} × 0.70) − $${rehab.toLocaleString()} = $${mao.toLocaleString()} MAO. This is a screening calculation, not a final offer; separately estimate closing, holding, selling, financing and contingency costs.`;
       toolCalls = [
         {
           name: "set_calculator_values",

@@ -17,6 +17,16 @@ export interface KokoroSpeechEvents {
   onError: (detail: string) => void;
 }
 
+export interface KokoroSpeakOptions {
+  /**
+   * Ask the server to run the reply through G's expression layer
+   * (spoken-form numbers/addresses, per-intent pacing, real pauses).
+   * `intent` is an optional hint; the server classifies when omitted.
+   */
+  expressive?: boolean;
+  intent?: string;
+}
+
 export class GKokoroSpeech {
   private audio: HTMLAudioElement | null = null;
   private objectUrl: string | null = null;
@@ -39,7 +49,7 @@ export class GKokoroSpeech {
     return this.audio !== null && !this.audio.paused && !this.audio.ended;
   }
 
-  async speak(text: string, lang: string, events: KokoroSpeechEvents): Promise<void> {
+  async speak(text: string, lang: string, events: KokoroSpeechEvents, opts?: KokoroSpeakOptions): Promise<void> {
     this.stop();
     const gen = ++this.generation;
     const controller = new AbortController();
@@ -48,7 +58,12 @@ export class GKokoroSpeech {
       const res = await fetch("/api/g/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, lang }),
+        body: JSON.stringify({
+          text,
+          lang,
+          ...(opts?.expressive ? { expressive: true } : {}),
+          ...(opts?.intent ? { intent: opts.intent } : {}),
+        }),
         signal: controller.signal,
       });
       if (!res.ok) {

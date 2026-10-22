@@ -16,20 +16,28 @@
 
 export interface SynthesisRequest {
   text: string;
-  /** Kokoro voice id, e.g. "am_michael". */
+  /** Voice id for the selected engine, e.g. "am_michael" (kokoro) or "M1" (supertonic). */
   voice: string;
-  /** Service language: "en-us" | "es" (Kokoro lang codes). */
+  /** Service language: "en-us" | "es" (Kokoro lang codes); supertonic takes bare codes ("en", "es"). */
   lang: string;
   speed?: number;
+  /**
+   * Engine selection (ocg-tts/v1 extension): "kokoro" (default when
+   * omitted) or "supertonic". The service validates voice + lang per
+   * engine and fails closed on a mismatch.
+   */
+  engine?: string;
 }
 
 export interface SynthesisResult {
-  /** Complete WAV payload (24 kHz mono). */
+  /** Complete WAV payload (mono; 24 kHz kokoro, 44.1 kHz supertonic). */
   wav: ArrayBuffer;
   sampleRate: number;
   /** Server-reported generation seconds, when the provider supplies it. */
   genSeconds?: number;
   audioSeconds?: number;
+  /** Engine that produced the audio, when the service reports it. */
+  engine?: string;
   provider: string;
 }
 
@@ -78,7 +86,10 @@ export class KokoroHttpProvider implements VoiceProvider {
     const res = await this.fetchFn(`${this.baseUrl}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-OCG-TTS-Key": this.apiKey },
-      body: JSON.stringify({ text: req.text, voice: req.voice, lang: req.lang, speed: req.speed ?? 1.0 }),
+      body: JSON.stringify({
+        text: req.text, voice: req.voice, lang: req.lang, speed: req.speed ?? 1.0,
+        ...(req.engine ? { engine: req.engine } : {}),
+      }),
     });
     if (!res.ok) {
       throw new Error(`Kokoro TTS failed (${res.status})`);
@@ -92,6 +103,7 @@ export class KokoroHttpProvider implements VoiceProvider {
       sampleRate: Number.isFinite(sr) && sr > 0 ? sr : 24000,
       genSeconds: Number.isFinite(gen) ? gen : undefined,
       audioSeconds: Number.isFinite(dur) ? dur : undefined,
+      engine: res.headers.get("x-ocg-engine") ?? undefined,
       provider: this.id,
     };
   }
