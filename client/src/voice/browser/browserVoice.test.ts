@@ -38,7 +38,7 @@ describe("resolveVoiceVariant — fp32 default, balanced on explicit selection",
     expect(resolveVoiceVariant({ search: "" }, store("balanced")).key).toBe("balanced");
     const b = VOICE_VARIANTS.balanced;
     expect(b.assetBase).toBe("/voice-models/balanced");
-    expect(b.cacheName).toBe("ocg-voice-assets-balanced-v1");
+    expect(b.cacheName).toBe("ocg-voice-assets-balanced-v2");
   });
   it("ignores unknown values", () => {
     expect(resolveVoiceVariant({ search: "?voiceVariant=turbo" }, store("turbo")).key).toBe("fp32");

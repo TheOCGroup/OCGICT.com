@@ -33,7 +33,10 @@ export const VOICE_VARIANTS: Record<VoiceVariant["key"], VoiceVariant> = {
     label: "M1 balanced (182 MB)",
     sizeMB: 182,
     assetBase: "/voice-models/balanced",
-    cacheName: "ocg-voice-assets-balanced-v1",
+    // v2, not v1: pre-deployment probes of the variant (when the
+    // package was not yet hosted) could cache the host's HTML
+    // fallback page under v1 (QUINCEY N1) — v2 starts clean.
+    cacheName: "ocg-voice-assets-balanced-v2",
   },
 };
 
