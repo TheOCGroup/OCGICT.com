@@ -17,13 +17,17 @@ server, no per-call cost, no new hosting subscription:
   duration predictor → text encoder → 8-step flow-matching vector
   estimator → vocoder, 44.1 kHz. Voice identity: **M1**, the founder's
   selected voice, same style tensors for English and Spanish.
-- `client/src/voice/browser/gBrowserSpeech.ts` — playback provider:
+- `client/src/voice/browser/voiceWorker.ts` — the inference worker:
+  owns the engine and the M1 style so synthesis NEVER blocks the
+  website's main thread; receives text, returns audio buffers.
+- `client/src/voice/browser/gBrowserSpeech.ts` — page-side provider:
   runs the reply through the SAME certified expression layer as the
   server path (`planDelivery`: spoken-form numbers/addresses,
   per-intent pacing, real pauses), synthesizes segment by segment
-  (sentence-level streaming — first audio after the first segment,
-  not the whole reply), and implements the certified stop semantics
-  (stop halts the current segment and cancels the queue).
+  via the worker (sentence-level streaming — first audio after the
+  first segment, not the whole reply), and implements the certified
+  stop semantics (stop halts the current segment and cancels the
+  queue).
 - Model assets (~398 MB fp32) load from the public HuggingFace CDN on
   first use and persist in Cache Storage; repeat visits are warm.
   Netlify bandwidth is not consumed. A self-hosted mirror is possible
