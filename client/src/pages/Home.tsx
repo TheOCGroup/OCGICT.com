@@ -65,7 +65,7 @@ export function Home() {
                 className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-950/70 px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-300 shadow-lg shadow-black/40 backdrop-blur-md"
               >
                 <Sparkles size={13} className="text-blue-400" />
-                <span>Wichita, Kansas Â· Investment Â· Acquisition Â· Consulting</span>
+                <span>Wichita, Kansas · Investment · Acquisition · Consulting</span>
               </motion.div>
 
               <div className="mb-6">
@@ -150,7 +150,7 @@ export function Home() {
                 <div className="mt-5 grid gap-3">
                   {[
                     ['1', 'Enter your address', 'We begin property and public-record research.'],
-                    ['2', 'Answer a few questions', 'Condition, timing, and contactâ€”nothing unnecessary.'],
+                    ['2', 'Answer a few questions', 'Condition, timing, and contact—nothing unnecessary.'],
                     ['3', 'OCG intelligence runs', 'Property facts, condition signals, comps, ARV, repairs, and acquisition math.'],
                     ['4', 'Receive your preliminary offer', 'If confidence gates pass, review the range and accept or counter subject to walkthrough.'],
                   ].map(([number, title, copy], index) => (
@@ -212,7 +212,7 @@ export function Home() {
                 <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-500/10 text-blue-400 transition-transform group-hover:scale-110">
                   <DollarSign size={24} />
                 </div>
-                <div className="mb-1 text-xs font-bold uppercase tracking-widest text-blue-400">Investment Â· Acquisition Â· Consulting</div>
+                <div className="mb-1 text-xs font-bold uppercase tracking-widest text-blue-400">Investment · Acquisition · Consulting</div>
                 <h3 className="mb-3 text-2xl font-bold text-white">For Real Estate Investors</h3>
                 <p className="mb-6 text-sm leading-relaxed text-slate-300">Analyze opportunities, structure acquisitions, plan renovation, evaluate financing, and make better investment decisions with OCG alongside you.</p>
                 <div className="grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
@@ -238,7 +238,7 @@ export function Home() {
                 <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 transition-transform group-hover:scale-110">
                   <Building2 size={24} />
                 </div>
-                <div className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-400">Address â†’ Intelligence â†’ Preliminary Offer</div>
+                <div className="mb-1 text-xs font-bold uppercase tracking-widest text-amber-400">Address → Intelligence → Preliminary Offer</div>
                 <h3 className="mb-3 text-2xl font-bold text-white">For Property Sellers</h3>
                 <p className="mb-6 text-sm leading-relaxed text-slate-300">Enter the property. Answer a few questions. OCG researches what it can privately and, when the evidence is strong enough, gives you a preliminary as-is acquisition offer.</p>
                 <div className="grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
@@ -284,7 +284,7 @@ export function Home() {
       <section className="border-t border-slate-800 bg-gradient-to-b from-[#0B1220] to-[#070A0F] py-20 text-center">
         <div className="container mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="mb-3 text-xs font-bold uppercase tracking-widest text-blue-400">Your Next Move</div>
-          <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Start with the propertyâ€”or start with the strategy.</h2>
+          <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Start with the property—or start with the strategy.</h2>
           <p className="mb-8 text-base leading-relaxed text-slate-300">If you are selling, start with the address. If you are investing, start with the opportunity. OCG handles the analysis from there.</p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/sell" className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-8 py-4 text-xs font-black uppercase tracking-wider text-slate-950 shadow-xl shadow-amber-950 transition-all hover:-translate-y-0.5 hover:bg-amber-400">Get My Preliminary Offer <ArrowRight size={14} /></Link>
