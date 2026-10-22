@@ -17,7 +17,7 @@
  * It is NOT wired into production behavior by default.
  */
 import { planDelivery } from "../../../../server/voice/gExpression";
-import { SupertonicBrowserEngine, type VoiceStyle } from "./supertonicEngine";
+
 
 export interface BrowserSpeechEvents {
   onStart: () => void;
@@ -27,31 +27,67 @@ export interface BrowserSpeechEvents {
 
 export { browserVoiceFlagEnabled } from "./browserVoiceFlag";
 
-/** Model assets are heavy (~398 MB): engine + style are process-wide
- * singletons, shared by every GBrowserSpeech instance. */
-let sharedEngine: SupertonicBrowserEngine | null = null;
-let sharedStyle: VoiceStyle | null = null;
-let sharedPreparing: Promise<void> | null = null;
+/** Model assets are heavy (~398 MB) and inference must never block
+ * the page: synthesis runs in a dedicated Web Worker (voiceWorker.ts).
+ * The worker + engine are process-wide singletons shared by every
+ * GBrowserSpeech instance. */
+interface SynthResult { wav: Float32Array; durationSeconds: number; synthMs: number }
 
-function prepareShared(): Promise<void> {
-  if (!sharedPreparing) {
-    sharedPreparing = (async () => {
-      sharedEngine = new SupertonicBrowserEngine();
-      await sharedEngine.load();
-      sharedStyle = await sharedEngine.loadStyle("M1");
-    })().catch((err) => {
-      sharedPreparing = null;
-      throw err;
+class WorkerSynth {
+  private worker: Worker | null = null;
+  private seq = 0;
+  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  sampleRate = 44100;
+  private readyPromise: Promise<void> | null = null;
+
+  private spawn(): Worker {
+    if (!this.worker) {
+      this.worker = new Worker(new URL("./voiceWorker.ts", import.meta.url), { type: "module" });
+      this.worker.onmessage = (ev: MessageEvent) => {
+        const { id, ...rest } = ev.data as { id: number; type: string; message?: string };
+        const p = this.pending.get(id);
+        if (!p) return;
+        this.pending.delete(id);
+        if (rest.type === "error") p.reject(new Error(rest.message || "worker error"));
+        else p.resolve(rest);
+      };
+      this.worker.onerror = (e) => {
+        this.pending.forEach((p) => p.reject(new Error(`worker crashed: ${e.message || "unknown"}`)));
+        this.pending.clear();
+      };
+    }
+    return this.worker;
+  }
+
+  private call(msg: Record<string, unknown>): Promise<any> {
+    const w = this.spawn();
+    const id = ++this.seq;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      w.postMessage({ id, ...msg });
     });
   }
-  return sharedPreparing;
+
+  load(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.call({ type: "load" }).then((r) => { this.sampleRate = r.sampleRate ?? 44100; })
+        .catch((err) => { this.readyPromise = null; throw err; });
+    }
+    return this.readyPromise;
+  }
+
+  async synthesize(text: string, opts: { lang: string; speed: number }): Promise<SynthResult> {
+    const r = await this.call({ type: "synthesize", text, lang: opts.lang, speed: opts.speed });
+    return { wav: r.wav as Float32Array, durationSeconds: r.durationSeconds, synthMs: r.synthMs };
+  }
 }
 
-/** Test seam: substitute the shared engine/style without downloads. */
-export function __setBrowserEngineForTests(engine: unknown, style: unknown): void {
-  sharedEngine = engine as SupertonicBrowserEngine;
-  sharedStyle = style as VoiceStyle;
-  sharedPreparing = Promise.resolve();
+const sharedWorker = new WorkerSynth();
+
+/** Test seam: when set, speak() uses this engine directly (no worker). */
+let testEngine: { sampleRate: number; synthesize: (t: string, s: unknown, o: { lang: string; speed: number }) => Promise<SynthResult> } | null = null;
+export function __setBrowserEngineForTests(engine: unknown, _style: unknown): void {
+  testEngine = engine as typeof testEngine;
 }
 
 export class GBrowserSpeech {
@@ -59,13 +95,23 @@ export class GBrowserSpeech {
   private current: AudioBufferSourceNode | null = null;
   private generation = 0;
 
-  /** Load model assets + the M1 style. Idempotent; safe to call early. */
+  /** Load model assets + the M1 style (in the worker). Idempotent. */
   prepare(): Promise<void> {
-    return prepareShared();
+    if (testEngine) return Promise.resolve();
+    return sharedWorker.load();
   }
 
   get ready(): boolean {
-    return !!sharedEngine?.ready && !!sharedStyle;
+    return !!testEngine || !!sharedWorker;
+  }
+
+  private async synth(text: string, lang: string, speed: number): Promise<SynthResult> {
+    if (testEngine) return testEngine.synthesize(text, {}, { lang, speed });
+    return sharedWorker.synthesize(text, { lang, speed });
+  }
+
+  private get sampleRate(): number {
+    return testEngine ? testEngine.sampleRate : sharedWorker.sampleRate;
   }
 
   async speak(
@@ -75,7 +121,7 @@ export class GBrowserSpeech {
   ): Promise<void> {
     const gen = ++this.generation;
     try {
-      await prepareShared();
+      await this.prepare();
     } catch (err) {
       if (gen === this.generation) events.onError(`browser voice unavailable: ${String(err).slice(0, 120)}`);
       return;
@@ -89,15 +135,13 @@ export class GBrowserSpeech {
       if (gen !== this.generation) return;
       let result;
       try {
-        result = await sharedEngine!.synthesize(segment.text, sharedStyle!, {
-          lang: plan.lang, speed: segment.speed,
-        });
+        result = await this.synth(segment.text, plan.lang, segment.speed);
       } catch (err) {
         if (gen === this.generation) events.onError(`browser synthesis failed: ${String(err).slice(0, 120)}`);
         return;
       }
       if (gen !== this.generation) return;
-      const buffer = this.ctx.createBuffer(1, result.wav.length, sharedEngine!.sampleRate);
+      const buffer = this.ctx.createBuffer(1, result.wav.length, this.sampleRate);
       buffer.copyToChannel(result.wav as Float32Array, 0);
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
