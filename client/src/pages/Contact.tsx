@@ -41,6 +41,25 @@ export function Contact() {
   });
 
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Read only a recent, visitor-initiated handoff. This never sends or saves a lead.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("ocg:g-contact-handoff");
+      if (!raw) return;
+      sessionStorage.removeItem("ocg:g-contact-handoff");
+      const handoff = JSON.parse(raw);
+      if (typeof handoff?.timestamp !== "number" || Date.now() - handoff.timestamp > 30 * 60 * 1000) return;
+      if (typeof handoff.summary === "string" && handoff.summary.trim()) {
+        setFormData(previous => ({
+          ...previous,
+          message: handoff.summary.slice(0, 2400),
+        }));
+      }
+    } catch { /* contact form remains editable and usable */ }
+  }, []);
 
   // Load existing Strategy Brief context if created with G
   useEffect(() => {
@@ -54,9 +73,32 @@ export function Contact() {
     }
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    if (sending) return;
+    setSending(true);
+    setSubmitError(null);
+    try {
+      const fields = new URLSearchParams({
+        "form-name": "ocg-contact",
+        role, name: formData.name.trim(), email: formData.email.trim(),
+        phone: formData.phone.trim(), message: formData.message.slice(0, 4000),
+        details: JSON.stringify(formData).slice(0, 8000),
+      });
+      const response = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: fields.toString(),
+      });
+      // Netlify's form endpoint acknowledges a submission with an HTTP success code.
+      // Do not claim CRM delivery or human receipt.
+      if (!response.ok) throw new Error("Unable to submit your request.");
+      setSubmitted(true);
+    } catch {
+      setSubmitError("We couldn't confirm the submission. Your information is still here. Please use the email option below.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -99,9 +141,9 @@ export function Contact() {
                   <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto mb-4">
                     <CheckCircle2 size={32} />
                   </div>
-                  <h3 className="text-2xl font-bold text-white">Your request is ready to send</h3>
+                  <h3 className="text-2xl font-bold text-white">Your request was accepted for delivery</h3>
                   <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
-                    <strong className="text-white">{formData.name}</strong>, your request has not been submitted. Open your email app below, review the details, and send it to OCG. You can also call (720) 620-9929.
+                    <strong className="text-white">{formData.name}</strong>, your request was accepted by the website. OCG will review it; this is not an appointment confirmation. You can also call (720) 620-9929.
                   </p>
                   <a className="inline-flex rounded-xl bg-blue-600 px-5 py-3 font-bold text-white" href={`mailto:theocgroupict@gmail.com?subject=${encodeURIComponent(`OCG ${role} strategy inquiry`)}&body=${encodeURIComponent(Object.entries(formData).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join("\n"))}`}>Open request in email</a>
                   <button type="button" onClick={() => setSubmitted(false)} className="block mx-auto text-sm text-blue-300 underline">Edit request</button>
@@ -113,6 +155,8 @@ export function Contact() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {submitError && <p role="alert" className="text-sm text-amber-300">{submitError} <a href={`mailto:theocgroupict@gmail.com?subject=OCG%20inquiry`} className="underline">Email OCG</a></p>}
+                  <input type="hidden" name="form-name" value="ocg-contact" />
                   
                   {/* Step 1: Who Are You? (Role Switcher) */}
                   <div>
@@ -343,6 +387,7 @@ export function Contact() {
 
                   <button
                     type="submit"
+                    disabled={sending}
                     className="w-full py-4 rounded-xl bg-blue-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-blue-500 transition-all shadow-xl shadow-blue-950 cursor-pointer"
                   >
                     Prepare Strategy Request

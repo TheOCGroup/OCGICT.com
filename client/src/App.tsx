@@ -1,4 +1,4 @@
-import { MotionConfig } from "framer-motion";
+﻿import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import Navbar from "./components/Navbar";
 import { PersistentG } from "./components/PersistentG";
+import { GExperience } from "./components/GExperience";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
 import { Home } from "./pages/Home";
@@ -39,6 +40,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/g">{() => <GExperience />}</Route>
       <Route path="/about" component={About} />
       <Route path="/services" component={Services} />
       <Route path="/invest" component={Services} />
@@ -73,7 +75,7 @@ function PublicChrome() {
       <Navbar />
       <main className="pt-20"><Router /></main>
       <Footer />
-      <PersistentG />
+      {location !== "/g" && <PersistentG />}
     </div>
   );
 }
@@ -94,3 +96,4 @@ function App() {
 }
 
 export default App;
+

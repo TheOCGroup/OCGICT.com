@@ -118,7 +118,7 @@ export class PiperQueueAdapter {
       status: "ACTION_REQUIRED",
       receivedAt: new Date().toISOString(),
     });
-    OcgObservability.log("PIPER_LEAD_ENQUEUED", { outboxId, workItemId, fullName: lead.fullName, email: lead.email, strategy: lead.targetStrategy });
+    OcgObservability.log("PIPER_LEAD_ENQUEUED", { outboxId, workItemId, strategy: lead.targetStrategy });
     return { outboxId, status: "READY_FOR_PIPER", workItemId };
   }
 
