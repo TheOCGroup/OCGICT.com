@@ -96,14 +96,15 @@ export function numberToWordsEN(n: number): string {
   if (!Number.isFinite(n) || n < 0) return String(n);
   n = Math.floor(n);
   if (n === 0) return "zero";
-  const parts: string[] = [];
-  const millions = Math.floor(n / 1_000_000);
-  const thousands = Math.floor((n % 1_000_000) / 1000);
-  const rest = n % 1000;
-  if (millions) parts.push(`${enUnder1000(millions)} million`);
-  if (thousands) parts.push(`${enUnder1000(thousands)} thousand`);
-  if (rest) parts.push(enUnder1000(rest));
-  return parts.join(" ");
+  if (n < 1000) return enUnder1000(n);
+  for (const [scale, word] of [[1e12, "trillion"], [1e9, "billion"], [1e6, "million"], [1e3, "thousand"]] as const) {
+    if (n >= scale) {
+      const head = numberToWordsEN(Math.floor(n / scale));
+      const rest = n % scale;
+      return `${head} ${word}${rest ? ` ${numberToWordsEN(rest)}` : ""}`;
+    }
+  }
+  return enUnder1000(n);
 }
 
 export function ordinalToWordsEN(n: number): string {
@@ -152,14 +153,27 @@ export function numberToWordsES(n: number): string {
   if (!Number.isFinite(n) || n < 0) return String(n);
   n = Math.floor(n);
   if (n === 0) return "cero";
-  const parts: string[] = [];
-  const millions = Math.floor(n / 1_000_000);
-  const thousands = Math.floor((n % 1_000_000) / 1000);
+  if (n < 1000) return esUnder1000(n);
+  if (n >= 1e12) {
+    const head = numberToWordsES(Math.floor(n / 1e12));
+    const rest = n % 1e12;
+    const word = head === "uno" ? "un billón" : `${head.replace(/uno$/, "un")} billones`;
+    return `${word}${rest ? ` ${numberToWordsES(rest)}` : ""}`;
+  }
+  if (n >= 1e9) {
+    const head = numberToWordsES(Math.floor(n / 1e9));
+    const rest = n % 1e9;
+    return `${head === "uno" ? "mil millones" : `${head} mil millones`}${rest ? ` ${numberToWordsES(rest)}` : ""}`;
+  }
+  if (n >= 1e6) {
+    const head = numberToWordsES(Math.floor(n / 1e6));
+    const rest = n % 1e6;
+    const word = head === "uno" ? "un millón" : `${head.replace(/uno$/, "un")} millones`;
+    return `${word}${rest ? ` ${numberToWordsES(rest)}` : ""}`;
+  }
+  const head = numberToWordsES(Math.floor(n / 1000));
   const rest = n % 1000;
-  if (millions) parts.push(millions === 1 ? "un millón" : `${esUnder1000(millions)} millones`);
-  if (thousands) parts.push(thousands === 1 ? "mil" : `${esUnder1000(thousands)} mil`);
-  if (rest) parts.push(esUnder1000(rest));
-  return parts.join(" ");
+  return `${head === "uno" ? "mil" : `${head} mil`}${rest ? ` ${numberToWordsES(rest)}` : ""}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,7 +187,8 @@ function digitsToWordsEN(digits: string): string {
 }
 
 export function normalizeSpokenTextEN(text: string): string {
-  let t = text;
+  // Square brackets are never spoken; strip the marks, keep the words.
+  let t = text.replace(/\[|\]/g, "");
   // Phone numbers first: (316) 555-0134 / 316-555-0134 / 3165550134.
   t = t.replace(
     /(?:\+?1[\s.-]?)?\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})\b/g,
@@ -199,6 +214,16 @@ export function normalizeSpokenTextEN(text: string): string {
     if (min === "00") return `${hour} ${suffix}`;
     if (Number(min) < 10) return `${hour} oh ${EN_SMALL[Number(min)]} ${suffix}`;
     return `${hour} ${numberToWordsEN(Number(min))} ${suffix}`;
+  });
+  // Negative currency first: -$5,000 -> minus five thousand dollars (only
+  // when the minus leads the amount; "$5-$10" is a range, not a negative).
+  t = t.replace(/(^|[\s(])-\$([\d,]+(?:\.\d{1,2})?)/g, (_m, pre: string, amt: string) => {
+    const [dollarsRaw, centsRaw] = amt.split(".");
+    const dollars = Number(dollarsRaw.replace(/,/g, ""));
+    const words = `${pre}minus ${numberToWordsEN(dollars)} ${dollars === 1 ? "dollar" : "dollars"}`;
+    if (!centsRaw) return words;
+    const cents = Number(centsRaw.padEnd(2, "0"));
+    return cents === 0 ? words : `${words} and ${numberToWordsEN(cents)} ${cents === 1 ? "cent" : "cents"}`;
   });
   // Currency: $285,000 -> two hundred eighty-five thousand dollars; $99.50 -> ... and fifty cents.
   t = t.replace(/\$([\d,]+(?:\.\d{1,2})?)/g, (_m, amt: string) => {
@@ -248,7 +273,16 @@ export function normalizeSpokenTextEN(text: string): string {
 }
 
 export function normalizeSpokenTextES(text: string): string {
-  let t = text;
+  let t = text.replace(/\[|\]/g, "");
+  // Negative currency first: -$5,000 -> menos cinco mil dólares.
+  t = t.replace(/(^|[\s(])-\$([\d,]+(?:\.\d{1,2})?)/g, (_m, pre: string, amt: string) => {
+    const [dollarsRaw, centsRaw] = amt.split(".");
+    const dollars = Number(dollarsRaw.replace(/,/g, ""));
+    const words = `${pre}menos ${numberToWordsES(dollars)} ${dollars === 1 ? "dólar" : "dólares"}`;
+    if (!centsRaw) return words;
+    const cents = Number(centsRaw.padEnd(2, "0"));
+    return cents === 0 ? words : `${words} con ${numberToWordsES(cents)} centavos`;
+  });
   // Currency (content uses US formatting): $285,000 -> doscientos ochenta y cinco mil dólares.
   t = t.replace(/\$([\d,]+(?:\.\d{1,2})?)/g, (_m, amt: string) => {
     const [dollarsRaw, centsRaw] = amt.split(".");
@@ -340,10 +374,14 @@ function splitSentences(text: string): string[] {
     }
     if (cur) out.push(cur);
   }
-  if (out.length > MAX_SEGMENTS) {
-    const head = out.slice(0, MAX_SEGMENTS - 1);
-    head.push(out.slice(MAX_SEGMENTS - 1).join(" "));
-    return head;
+  // Cap segment count by merging the tail ONLY while the merged segment
+  // stays within the per-segment character cap (a merged segment must
+  // never exceed what a single synthesis request accepts).
+  while (out.length > MAX_SEGMENTS) {
+    const last = out[out.length - 1];
+    const prev = out[out.length - 2];
+    if (`${prev} ${last}`.length > MAX_SEGMENT_CHARS) break;
+    out.splice(out.length - 2, 2, `${prev} ${last}`);
   }
   return out;
 }

@@ -186,8 +186,11 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       || (looksSpanish(priorConversation) && briefFollowup.split(/\s+/).filter(Boolean).length <= 5);
     const esCalcRequest = /(regla del 70|calcular|mao|70\s?%)/.test(lower);
     if (spanishTurn && !esCalcRequest) {
-      const sellerNow = /(vender|venta|mi casa|propietario|heredé|herede|herencia|falleció|fallecio)/i.test(lower);
-      const investorNow = /(invertir|inversión|inversion|financiamiento|préstamo|prestamo|renta|capital)/i.test(lower);
+      // Word boundaries matter: "revender" (resell / fix-and-flip) must
+      // NOT match the seller verb "vender" — flip phrasing is investor
+      // intent. Flip markers are tested as investor signals below.
+      const sellerNow = /(\bvender\b|\bvendemos\b|\bvendo\b|venta de mi|mi casa|propietario|heredé|herede|herencia|falleció|fallecio)/i.test(lower);
+      const investorNow = /(invertir|inversión|inversion|financiamiento|préstamo|prestamo|renta|capital|revender|renovar|ganar dinero)/i.test(lower);
       if ((sellerContext || sellerNow) && /^(pronto|lo antes posible|cuanto antes|rápido|rapido|este mes|en un mes)$/.test(briefFollowup)) {
         content = "Perfecto, el tiempo importa. Podemos empezar con una revisión preliminar de la propiedad tal como está. ¿Cuál es la dirección de la propiedad? Si lo prefiere, puede comenzar en nuestra página de venta.";
       } else if ((sellerContext || sellerNow) && /^(solo estoy explorando|estoy explorando|no estoy seguro|no estoy segura|no tengo prisa|más adelante|mas adelante|todavía no|todavia no)$/.test(briefFollowup)) {
@@ -197,6 +200,8 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       } else if (/(heredé|herede|herencia|falleció|fallecio|mi madre|mi padre)/i.test(lower)) {
         content = "Lo entiendo. Una propiedad heredada trae muchas decisiones a la vez. Podemos ayudarle a explorar una venta tal como está y los pasos siguientes, sin apresurarle. ¿Su prioridad es vender pronto o primero entender sus opciones?";
         toolCalls = [{ name: "activate_seller_intake", arguments: { sellerStep: 1 } }];
+      } else if (investorNow && !sellerNow) {
+        content = "Podemos ayudarle a evaluar una oportunidad, revisar costos de renovación y riesgos, y planear el siguiente paso. ¿Ya tiene una propiedad en mente o todavía está decidiendo en qué invertir?";
       } else if (sellerNow) {
         content = "Claro que sí. Podemos revisar la opción de vender tal como está o hacer reparaciones primero, según lo que convenga a su tiempo. No necesita tener todos los detalles ahora. ¿Espera vender pronto o solo está explorando sus opciones?";
       } else if (investorNow) {

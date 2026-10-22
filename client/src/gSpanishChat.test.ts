@@ -94,3 +94,11 @@ describe("G answers Spanish in Spanish (local engine)", () => {
     expect(follow.replyText).toContain("timing matters");
   });
 });
+
+describe("QUINCEY delta regression (D2)", () => {
+  it("routes Spanish fix-and-flip phrasing to the investor flow, not seller intake", async () => {
+    const r = await ask("Quiero renovar y revender casas para ganar dinero");
+    expect(r.replyText).toMatch(/evaluar una oportunidad/);
+    expect(r.replyText).not.toMatch(/¿Espera vender pronto/);
+  });
+});

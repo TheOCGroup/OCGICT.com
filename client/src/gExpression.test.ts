@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   classifyIntent,
   normalizeSpokenText,
+  normalizeSpokenTextEN,
+  normalizeSpokenTextES,
   numberToWordsEN,
   numberToWordsES,
   ordinalToWordsEN,
@@ -222,5 +224,32 @@ describe("g-tts expressive path gates", () => {
       body: JSON.stringify({ text: "Hello there.", expressive: true }),
     }));
     expect(res.status).toBe(503);
+  });
+});
+
+describe("QUINCEY delta regressions (D1, LOW notes)", () => {
+  it("expands billions correctly in EN", () => {
+    expect(normalizeSpokenTextEN("Worth $2,500,000,000 today.")).toContain("two billion five hundred million dollars");
+    expect(normalizeSpokenTextEN("Exactly $1,000,000,000.")).toContain("one billion dollars");
+    expect(normalizeSpokenTextEN("About $1,250,000,000.")).toContain("one billion two hundred fifty million dollars");
+    expect(normalizeSpokenTextEN("Worth $2,500,000,000 today.")).not.toContain("undefined");
+  });
+  it("expands billions correctly in ES", () => {
+    expect(normalizeSpokenTextES("Vale $2,500,000,000 hoy.")).toContain("dos mil millones quinientos millones dólares");
+    expect(normalizeSpokenTextES("Exacto $1,000,000,000.")).toContain("mil millones dólares");
+    expect(normalizeSpokenTextES("Vale $2,500,000,000 hoy.")).not.toContain("undefined");
+  });
+  it("speaks negative currency as minus, but ranges stay ranges", () => {
+    expect(normalizeSpokenTextEN("A loss of -$5,000.")).toContain("minus five thousand dollars");
+    expect(normalizeSpokenTextEN("Between $5-$10 each.")).not.toContain("minus");
+  });
+  it("strips square bracket marks from spoken text", () => {
+    expect(normalizeSpokenTextEN("See the note [internal draft] today.")).not.toContain("[");
+    expect(normalizeSpokenTextES("Vea la nota [borrador] hoy.")).not.toContain("[");
+  });
+  it("never merges tail segments past the per-segment cap", () => {
+    const sentence = "This is a fairly long sentence with several clauses, extra detail, and more context to fill it out well beyond a short line.";
+    const plan = planDelivery(Array(10).fill(sentence).join(" "));
+    for (const seg of plan.segments) expect(seg.text.length).toBeLessThanOrEqual(400);
   });
 });
