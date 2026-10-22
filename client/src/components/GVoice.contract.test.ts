@@ -59,3 +59,22 @@ describe("G realtime voice module contract", () => {
     expect(voiceModule).toContain("this.cancelled");
   });
 });
+
+describe("G Kokoro speech integration contract", () => {
+  const experience = code;
+  const kokoroModule = readFileSync(new URL("../voice/gKokoroSpeech.ts", import.meta.url), "utf8");
+  it("probes the server gate and speaks through /api/g/tts, never directly to the service", () => {
+    expect(kokoroModule).toContain("/api/g/tts");
+    expect(kokoroModule).not.toContain("OCG_KOKORO_TTS_KEY");
+    expect(experience).toContain("GKokoroSpeech");
+    expect(experience).toContain("kokoroAvailable");
+  });
+  it("labels the Kokoro path distinctly from the basic browser fallback", () => {
+    expect(experience).toContain("Kokoro voice");
+    expect(experience).toContain("Basic browser voice");
+  });
+  it("stops Kokoro playback on every interrupt path (stop, typing, listening)", () => {
+    expect(experience).toContain("stopAllSpeech");
+    expect(kokoroModule).toContain("revokeObjectURL");
+  });
+});

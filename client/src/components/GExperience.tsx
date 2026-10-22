@@ -6,6 +6,7 @@ import { processGDialogue } from "@/intelligence/gActionDispatcher";
 import { persistStrategyBrief } from "@/lib/persistence";
 import { getActiveBookingProvider } from "@/lib/booking";
 import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig } from "@/voice/gRealtimeVoice";
+import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -60,6 +61,25 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const [useFallbackVoice, setUseFallbackVoice] = useState(false);
   const rtRef = useRef<GRealtimeVoice | null>(null);
   const realtimeAvailable = !!voiceConfig?.enabled && !useFallbackVoice;
+
+  // ── Kokoro speech (shared self-hosted TTS) ────────────────────────────
+  // When the server enables it, spoken replies come from OCG's own Kokoro
+  // service instead of the browser's built-in speech. Probed once; any
+  // failure falls back per-reply to the labeled basic browser voice.
+  const [kokoroAvailable, setKokoroAvailable] = useState(false);
+  const kokoroRef = useRef<GKokoroSpeech | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    GKokoroSpeech.probe(controller.signal).then(setKokoroAvailable).catch(() => setKokoroAvailable(false));
+    return () => controller.abort();
+  }, []);
+
+  const stopAllSpeech = () => {
+    window.speechSynthesis?.cancel();
+    activeSpeechRef.current = null;
+    kokoroRef.current?.stop();
+  };
   const rtActive = rtState === "connecting" || rtState === "listening" || rtState === "thinking" || rtState === "speaking";
 
   useEffect(() => {
@@ -172,6 +192,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   useEffect(() => () => {
     recognitionRef.current?.abort?.();
     window.speechSynthesis?.cancel();
+    kokoroRef.current?.stop();
     rtRef.current?.stop();
   }, []);
 
@@ -181,8 +202,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       voiceEnabledRef.current = false;
       recognitionRef.current?.abort?.();
       recognitionRef.current = null;
-      window.speechSynthesis?.cancel();
-      activeSpeechRef.current = null;
+      stopAllSpeech();
       rtRef.current?.stop();
       if (rtState !== "idle") setRtState("idle");
       setListening(false);
@@ -195,8 +215,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     voiceSessionRef.current += 1;
     voiceEnabledRef.current = false;
     recognitionRef.current?.abort?.();
-    window.speechSynthesis?.cancel();
-    activeSpeechRef.current = null;
+    stopAllSpeech();
     recognitionRef.current = null;
     setListening(false);
     setVoiceStatus("Voice stopped");
@@ -205,13 +224,40 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const speakReply = (text: string) => {
     // Realtime voice speaks through its own session; never double-speak.
     if (rtRef.current?.isActive) return;
-    if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
+    if (!voiceEnabledRef.current) return;
+    stopAllSpeech();
     const session = voiceSessionRef.current;
     const clean = text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*_#`]/g, '').trim();
     // Speak a concise first turn; leave full details visible in chat.
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
+    const spanishReply = /[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]|\b(?:hola|gracias|usted|propiedad|inversi\u00f3n|necesita|ayudarle|quieres|puedo|podemos|buenos|buenas|vender|comprar)\b/i.test(spoken);
+
+    // Preferred spoken path: OCG's own Kokoro voice service, when the
+    // server has it enabled. Any failure falls back to the basic browser
+    // voice for this reply only.
+    if (kokoroAvailable) {
+      if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
+      void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
+        onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+        onEnd: () => {
+          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+          setVoiceStatus("Listening for your reply");
+          startListening();
+        },
+        onError: () => {
+          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+          speakWithBrowserVoice(spoken, session);
+        },
+      });
+      return;
+    }
+    speakWithBrowserVoice(spoken, session);
+  };
+
+  const speakWithBrowserVoice = (spoken: string, session: number) => {
+    if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
     const speech = new SpeechSynthesisUtterance(spoken);
     // Pick the output language from G's actual reply, not the user's last language.
     // Otherwise an English reply can accidentally inherit a Spanish synthesizer.
@@ -273,6 +319,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const session = voiceSessionRef.current;
     activeSpeechRef.current = null;
     window.speechSynthesis?.cancel();
+    kokoroRef.current?.stop();
     recognitionRef.current?.abort?.();
     voiceEnabledRef.current = true;
     const recognition = new Recognition();
@@ -536,11 +583,11 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             ) : (
               <button type="button" onClick={listening ? stopVoice : startListening} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${listening ? "bg-sky-500 text-white animate-pulse" : "text-sky-200 hover:bg-white/10"}`} aria-label={listening ? "Stop listening" : "Talk to G"} title={listening ? "Stop listening" : "Talk to G"}><Mic size={18} /></button>
             )}
-            <input value={inputVal} onChange={e => { if (activeSpeechRef.current) { window.speechSynthesis.cancel(); activeSpeechRef.current = null; setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
+            <input value={inputVal} onChange={e => { if (activeSpeechRef.current || kokoroRef.current?.isPlaying) { stopAllSpeech(); setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }} maxLength={4000} aria-label="Message G" placeholder="Message G..." className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-400" />
             <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
           </form>
           <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
-            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : "Basic browser voice ready") : voiceStatus)}</span>
+            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : kokoroAvailable ? "Kokoro voice ready" : "Basic browser voice ready") : voiceStatus)}</span>
             <div className="flex shrink-0 items-center gap-3">
               {rtActive ? (
                 <button type="button" onClick={toggleRtMute} className="hover:text-white" aria-label={rtMuted ? "Unmute microphone" : "Mute microphone"}>{rtMuted ? "Unmute" : "Mute"}</button>
@@ -550,7 +597,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <button type="button" onClick={openLeadCard} className="text-sky-300 hover:text-sky-100">Have OCG contact me</button>
             </div>
           </div>
-          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : "Basic browser voice — text chat is fully available."}</p>
+          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : kokoroAvailable ? "Kokoro voice — OCG's own voice service. Text chat is fully available." : "Basic browser voice — text chat is fully available."}</p>
         </div>
       </div>
     );
@@ -608,7 +655,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <div className="text-lg font-bold text-white">Let's figure it out together.</div>
               <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">Selling a home? Exploring your next investment? Just curious? I'm here to help.</p>
               <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{rtStatusText() ?? (listening ? "Listening to you" : isTyping ? "Thinking through your question" : rtActive ? "Voice on" : "Tap G to speak")}</div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : "Basic browser voice"}</div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : kokoroAvailable ? "Kokoro voice" : "Basic browser voice"}</div>
             </div>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -652,6 +699,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <div className="my-2 rounded-xl border border-blue-500/30 bg-blue-950/40 p-3 text-[11px] text-blue-200">
                 {realtimeAvailable ? (
                   <span><strong>Realtime voice:</strong> Tap Talk to G and allow microphone access. Talk naturally — you can interrupt G mid-sentence, and G follows English or Spanish. English and Spanish are both supported.</span>
+                ) : kokoroAvailable ? (
+                  <span><strong>Kokoro voice:</strong> G's replies are spoken by OCG's own Kokoro voice service (self-hosted, in evaluation) instead of your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. English and Spanish are both supported. Text chat works fully either way.</span>
                 ) : (
                   <span><strong>Basic browser voice:</strong> Realtime voice isn't enabled on this site yet, so G uses your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. Chrome or Edge recommended. Text chat works fully either way.</span>
                 )}
@@ -715,7 +764,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <input
                 type="text"
                 value={inputVal}
-                onChange={(e) => { if (activeSpeechRef.current) { window.speechSynthesis.cancel(); activeSpeechRef.current = null; setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }}
+                onChange={(e) => { if (activeSpeechRef.current || kokoroRef.current?.isPlaying) { stopAllSpeech(); setVoiceStatus("Interrupted"); } setInputVal(e.target.value); }}
                 placeholder="Tell G what you need, or tap the microphone..."
                 maxLength={4000}
                 aria-label="Message G"
