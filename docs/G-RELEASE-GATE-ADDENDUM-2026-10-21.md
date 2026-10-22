@@ -79,8 +79,19 @@ WORKING / PARTIAL / MOCKED / UNTESTED / BLOCKED, with evidence.
    `docs/g-vapi-assistant.json`, set `VAPI_PUBLIC_KEY`,
    `OCG_G_VAPI_ASSISTANT_ID`, `OCG_G_VOICE_ENABLED=true` in Netlify env.
    Bounded by 25 sessions/day × 10 min; estimated $0.10–$0.25/min
-   all-in (confirm against the account at creation). Includes the voice
-   audition: Adam (primary candidate) vs Antoni vs Josh.
+   all-in. Includes the voice audition: Adam (primary candidate) vs
+   Antoni vs Josh.
+   Account facts (read-only dashboard inspection, 2026-10-21): the Vapi
+   org has **no paid package** and a credit balance of **1.49 credits**,
+   so a top-up is required before even the audition can run; call
+   concurrency is 4 (ample for 25 sessions/day); no assistant named G
+   exists yet; Aiden's number 316-778-4416 is the only number and stays
+   untouched.
+   **Key-scoping warning:** the account's existing public key is
+   unrestricted — all domains, all assistants, transient assistants
+   allowed. Do NOT put that key on the public website. Create a
+   dedicated public key for G, scoped to the ocgict.com domains and to
+   G's assistant only, and use that value for `VAPI_PUBLIC_KEY`.
 2. **Paid text chat (optional):** set `GEMINI_API_KEY` +
    `OCG_G_PAID_MODEL_APPROVED=true` to unlock the metered paid model
    (fixes Spanish text chat properly). Local engine remains the default.
