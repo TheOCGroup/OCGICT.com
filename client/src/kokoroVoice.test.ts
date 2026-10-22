@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as gProfileModule from "../../server/voice/gProfile";
-import { G_VOICE_PROFILE, gVoiceProfile, rolloutEnabled, voiceForLanguage } from "../../server/voice/gProfile";
+import { G_VOICE_PROFILE, engineForEnv, gVoiceProfile, rolloutEnabled, voiceForEngineLanguage, voiceForLanguage } from "../../server/voice/gProfile";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider";
 import { dailyLimit } from "../../server/services/gBudget";
 // @ts-ignore - Node ESM handler under test
@@ -12,17 +12,36 @@ describe("G's voice profile (owned by OCGICT only)", () => {
       enVoice: "am_michael",
       enAlternate: "am_adam",
       esVoice: "em_alex",
+      supertonicEnVoice: "M1",
+      supertonicEsVoice: "M1",
       speed: 1.0,
       fallbackProvider: "vapi-realtime",
       rolloutEnv: "OCG_G_KOKORO_TTS_ENABLED",
+      engineEnv: "OCG_G_TTS_ENGINE",
     });
     expect(G_VOICE_PROFILE).toBe(gVoiceProfile());
   });
 
   it("carries no other agent's runtime profile — their profiles live in their own products", () => {
     expect(Object.keys(gProfileModule).sort()).toEqual(
-      ["G_VOICE_PROFILE", "gVoiceProfile", "rolloutEnabled", "voiceForLanguage"].sort(),
+      ["G_VOICE_PROFILE", "engineForEnv", "gVoiceProfile", "rolloutEnabled", "voiceForEngineLanguage", "voiceForLanguage"].sort(),
     );
+  });
+
+  it("selects the engine from G's env switch, defaulting to the kokoro baseline", () => {
+    const p = gVoiceProfile();
+    expect(engineForEnv(p, {})).toBe("kokoro");
+    expect(engineForEnv(p, { OCG_G_TTS_ENGINE: "kokoro" })).toBe("kokoro");
+    expect(engineForEnv(p, { OCG_G_TTS_ENGINE: "supertonic" })).toBe("supertonic");
+    expect(engineForEnv(p, { OCG_G_TTS_ENGINE: "anything-else" })).toBe("kokoro");
+  });
+
+  it("maps voices per engine and language", () => {
+    const p = gVoiceProfile();
+    expect(voiceForEngineLanguage(p, "kokoro", "en")).toEqual({ voice: "am_michael", serviceLang: "en-us" });
+    expect(voiceForEngineLanguage(p, "kokoro", "es")).toEqual({ voice: "em_alex", serviceLang: "es" });
+    expect(voiceForEngineLanguage(p, "supertonic", "en")).toEqual({ voice: "M1", serviceLang: "en" });
+    expect(voiceForEngineLanguage(p, "supertonic", "es")).toEqual({ voice: "M1", serviceLang: "es" });
   });
 
   it("keeps G's rollout flag off unless explicitly enabled for G", () => {
@@ -75,6 +94,27 @@ describe("KokoroHttpProvider", () => {
     const fetchFn = vi.fn(async () => new Response("nope", { status: 500 }));
     const provider = new KokoroHttpProvider({ baseUrl: "http://tts.local", apiKey: "k", fetchFn: fetchFn as any });
     await expect(provider.synthesize({ text: "Hi", voice: "am_michael", lang: "en-us" })).rejects.toThrow(/500/);
+  });
+
+  it("passes the engine selection through and reports the engine that answered", async () => {
+    const fetchFn = vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { "X-OCG-Gen-Seconds": "0.5", "X-OCG-Audio-Seconds": "1.0", "X-OCG-Sample-Rate": "44100", "X-OCG-Engine": "supertonic" },
+    }));
+    const provider = new KokoroHttpProvider({ baseUrl: "http://tts.local", apiKey: "k", fetchFn: fetchFn as any });
+    const result = await provider.synthesize({ text: "Hola", voice: "M1", lang: "es", engine: "supertonic" });
+    const [, init] = fetchFn.mock.calls[0] as any[];
+    expect(JSON.parse(init.body)).toMatchObject({ text: "Hola", voice: "M1", lang: "es", engine: "supertonic" });
+    expect(result.engine).toBe("supertonic");
+    expect(result.sampleRate).toBe(44100);
+  });
+
+  it("omits the engine field entirely when none is requested (v1 wire compat)", async () => {
+    const fetchFn = vi.fn(async () => new Response(new Uint8Array([1]), { status: 200, headers: {} }));
+    const provider = new KokoroHttpProvider({ baseUrl: "http://tts.local", apiKey: "k", fetchFn: fetchFn as any });
+    await provider.synthesize({ text: "Hi", voice: "am_michael", lang: "en-us" });
+    const [, init] = fetchFn.mock.calls[0] as any[];
+    expect(JSON.parse(init.body)).not.toHaveProperty("engine");
   });
 });
 

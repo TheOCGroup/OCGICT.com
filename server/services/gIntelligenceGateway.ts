@@ -78,6 +78,15 @@ export class GIntelligenceGateway {
         latencyMs: Date.now() - startTime,
       };
     }
+    if (/^(?:¡?(?:hola|buenas|buenos días|buenas tardes|buenas noches)(?:,? g)?|hola g)$/.test(greeting)) {
+      return {
+        sessionId,
+        replyText: "¡Hola! Bienvenido a The OC Group. ¿Qué le trae a nuestro sitio hoy?",
+        provider: "OCG_LOCAL_GREETING",
+        model: "g-concierge-greeting-v1",
+        latencyMs: Date.now() - startTime,
+      };
+    }
 
     // 2. Prepare Context & Tool Schemas
     const messages: ModelMessage[] = [

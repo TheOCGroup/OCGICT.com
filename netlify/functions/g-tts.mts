@@ -17,13 +17,17 @@
  * available. The service key is never exposed to the browser.
  */
 import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
-import { gVoiceProfile, rolloutEnabled, voiceForLanguage } from "../../server/voice/gProfile.js";
+import { planDelivery } from "../../server/voice/gExpression.js";
+import { engineForEnv, gVoiceProfile, rolloutEnabled, voiceForEngineLanguage } from "../../server/voice/gProfile.js";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
+import { stitchWavs } from "../../server/voice/wavStitch.js";
 
 export const config = { path: "/api/g/tts" };
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const MAX_TEXT_CHARS = 1200;
+/** Spoken-form expansion (numbers -> words) may lengthen text; cap the plan, not just the raw reply. */
+const MAX_SPOKEN_CHARS = 2400;
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60_000;
 const hits = new Map<string, number[]>();
@@ -90,7 +94,7 @@ export default async function handler(request: Request): Promise<Response> {
     });
   }
 
-  let payload: { text?: unknown; lang?: unknown };
+  let payload: { text?: unknown; lang?: unknown; intent?: unknown; expressive?: unknown };
   try {
     payload = await request.json();
   } catch {
@@ -125,15 +129,70 @@ export default async function handler(request: Request): Promise<Response> {
     );
   }
 
-  const { voice, serviceLang } = voiceForLanguage(g.profile, lang);
+  const engine = engineForEnv(g.profile, env);
+  const { voice, serviceLang } = voiceForEngineLanguage(g.profile, engine, lang);
+
+  // Expressive path: G's expression layer plans the delivery (spoken-form
+  // text, per-intent segment speed, real silence between sentences) and the
+  // segments are synthesized individually, then stitched. One request is
+  // metered once, however many segments it takes. Any failure returns the
+  // same fail-closed errors as the plain path, and the client falls back
+  // to the labeled basic browser voice for that reply.
+  if (payload.expressive === true) {
+    const plan = planDelivery(text, { lang, intent: payload.intent });
+    if (plan.segments.length === 0) {
+      return new Response(JSON.stringify({ error: "Nothing to say." }), { status: 400, headers: jsonHeaders });
+    }
+    if (plan.spokenText.length > MAX_SPOKEN_CHARS) {
+      return new Response(JSON.stringify({ error: "That reply is too long to speak." }), {
+        status: 413,
+        headers: jsonHeaders,
+      });
+    }
+    try {
+      const parts: { wav: ArrayBuffer; pauseAfterMs: number }[] = [];
+      let genTotal = 0;
+      for (const seg of plan.segments) {
+        const r = await g.provider.synthesize({ text: seg.text, voice, lang: serviceLang, speed: seg.speed, engine });
+        if (r.genSeconds !== undefined) genTotal += r.genSeconds;
+        parts.push({ wav: r.wav, pauseAfterMs: seg.pauseAfterMs });
+      }
+      const stitched = parts.length === 1
+        ? { wav: parts[0].wav, audioSeconds: undefined as number | undefined }
+        : stitchWavs(parts);
+      return new Response(stitched.wav, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "X-OCG-Voice": voice,
+          "X-OCG-Provider": "kokoro-http",
+          "X-OCG-Engine": engine,
+          "X-OCG-Expressive": "1",
+          "X-OCG-Intent": plan.intent,
+          "X-OCG-Segments": String(plan.segments.length),
+          "X-OCG-Gen-Seconds": String(genTotal),
+          ...(stitched.audioSeconds !== undefined
+            ? { "X-OCG-Audio-Seconds": String(stitched.audioSeconds) }
+            : {}),
+        },
+      });
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Voice synthesis failed. Text chat is still ready." }),
+        { status: 502, headers: jsonHeaders },
+      );
+    }
+  }
+
   try {
-    const result = await g.provider.synthesize({ text, voice, lang: serviceLang, speed: g.profile.speed });
+    const result = await g.provider.synthesize({ text, voice, lang: serviceLang, speed: g.profile.speed, engine });
     return new Response(result.wav, {
       status: 200,
       headers: {
         "Content-Type": "audio/wav",
         "X-OCG-Voice": voice,
         "X-OCG-Provider": result.provider,
+        "X-OCG-Engine": result.engine ?? engine,
         ...(result.genSeconds !== undefined ? { "X-OCG-Gen-Seconds": String(result.genSeconds) } : {}),
       },
     });
