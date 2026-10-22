@@ -177,4 +177,18 @@ describe("g-voice-session gates", () => {
     expect(data.enabled).toBe(true);
     expect(data.mode).toBe("vapi-web");
   });
+
+  it("GET defers to POST arbitration when the meter cannot be read", async () => {
+    // Budget reflection on GET is best-effort: with no Blobs context the
+    // status keeps the config answer, while POST (tested above) still
+    // fails closed on the same missing meter. Availability truth for an
+    // exhausted day is covered by the gBudget checkBudget tests.
+    process.env.OCG_G_VOICE_ENABLED = "true";
+    process.env.VAPI_PUBLIC_KEY = "pk_test";
+    process.env.OCG_G_VAPI_ASSISTANT_ID = "asst_test";
+    const res = await voiceHandler(new Request("https://example.invalid/api/g/voice/session", { method: "GET" }));
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.enabled).toBe(true);
+  });
 });

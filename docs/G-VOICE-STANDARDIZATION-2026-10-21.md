@@ -13,7 +13,7 @@ Source of truth: `ONCALL-VOICE-PERFORMANCE-BASELINE-AIDEN-2026-10-21.md`
 | Layer | Shared choice | G's application |
 |---|---|---|
 | Platform | Vapi | Vapi Web SDK (`@vapi-ai/web`) in the browser; G's OWN assistant |
-| Transcription | Deepgram Flux Multilingual, automatic language detection | Same; transcriber object kept bare like Aiden's (no fallback plan, no confidenceThreshold — Maya's extras are a suspect lever) |
+| Transcription | Deepgram Flux Multilingual, automatic language detection | Multilingual with automatic detection; transcriber object kept bare like Aiden's (no fallback plan, no confidenceThreshold — Maya's extras are a suspect lever). Config default: Deepgram Nova-3 `multi` (creatable verbatim, multilingual); at creation, prefer the account's multilingual Flux string if exposed, for exact Aiden parity — never `flux-general-en` (English-only) |
 | Endpointing | LiveKit smart endpointing | Same (`startSpeakingPlan.smartEndpointingPlan.provider = livekit`) |
 | Interruption | stopSpeakingPlan `numWords 0, voiceSeconds 0.2, backoffSeconds 0.6`; `firstMessageInterruptionsEnabled=true` | Identical |
 | Opening | `firstMessageMode = assistant-speaks-first`, backgroundSound off | Same; G's own first message |
@@ -58,9 +58,14 @@ Source of truth: `ONCALL-VOICE-PERFORMANCE-BASELINE-AIDEN-2026-10-21.md`
 
 - `server/services/gBudget.ts` — persistent daily meter on Netlify Blobs
   (store `g-budget`, strong consistency). Defaults: 500 paid chat
-  requests/day, 25 voice sessions/day. Hard ceilings 5000 / 200 that
-  environment values can only lower, never raise. When the meter is
-  unavailable, paid features fail closed; free local paths keep working.
+  requests/day, 25 voice sessions/day. Hard ceilings 5000 / 200: an
+  environment value may set a limit anywhere up to the ceiling (including
+  above the default) but can never exceed it — raising a ceiling takes a
+  code change. Consumption is atomic (ETag compare-and-swap) so
+  concurrent bursts cannot overrun the cap, and a unit is consumed when
+  access is granted (the meter over-counts failed starts rather than
+  under-charging). When the meter is unavailable, paid features fail
+  closed; free local paths keep working.
 - Voice sessions are additionally capped per call:
   `maxDurationSeconds = 600` in the assistant config.
 - Nothing is enabled by this change: no env values were set, no assistant

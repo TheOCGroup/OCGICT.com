@@ -54,4 +54,8 @@ describe("G realtime voice module contract", () => {
       expect(voiceModule).toContain(`"${state}"`);
     }
   });
+  it("guards the connect window against double-start and orphaned sessions", () => {
+    expect(voiceModule).toContain("this.starting");
+    expect(voiceModule).toContain("this.cancelled");
+  });
 });

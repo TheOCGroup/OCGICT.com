@@ -6,8 +6,15 @@
  * deliberately conservative:
  * - Counts are stored outside process memory (Netlify Blobs in production), so
  *   restarts and multiple instances share one meter.
- * - Environment variables may only LOWER a limit below the hard ceiling in code;
- *   raising spend requires a code change, never just a dashboard edit.
+ * - Environment variables may set a limit anywhere up to the hard ceiling in
+ *   code (including above the defaults); they can never exceed the ceiling.
+ *   Raising a ceiling requires a code change, never just a dashboard edit.
+ * - Consumption is atomic where the store supports compare-and-swap (the
+ *   Netlify Blobs store does, via ETag preconditions): concurrent bursts
+ *   cannot overrun the cap. Stores without CAS fall back to check-then-set.
+ * - A unit is consumed when access is granted (a paid chat turn is admitted,
+ *   a voice session is issued), not when the downstream work finishes; the
+ *   meter therefore over-counts failed starts rather than under-charging.
  * - When the store is unavailable, paid features fail closed. Free local
  *   behavior (deterministic chat, browser fallback voice) is never metered.
  */
@@ -15,6 +22,14 @@
 export interface BudgetStore {
   get(key: string): Promise<number | null>;
   set(key: string, value: number): Promise<void>;
+  /**
+   * Optional atomic increment with a cap. Returns the post-increment count
+   * and whether this call was admitted, or null when the store cannot
+   * perform the operation atomically (caller falls back to check-then-set).
+   * Implementations must throw on infrastructure failure so callers fail
+   * closed rather than silently degrading under contention.
+   */
+  atomicIncrement?(key: string, limit: number): Promise<{ used: number; allowed: boolean } | null>;
 }
 
 export type BudgetKind = "chat" | "voice";
@@ -67,7 +82,9 @@ export async function checkBudget(
 
 /**
  * Reserve one unit of budget. Returns the post-reservation decision; when the
- * budget is exhausted nothing is consumed and `allowed` is false.
+ * budget is exhausted nothing is consumed and `allowed` is false. Uses the
+ * store's atomic increment when available so concurrent bursts cannot
+ * overrun the cap.
  */
 export async function consumeBudget(
   store: BudgetStore,
@@ -75,6 +92,12 @@ export async function consumeBudget(
   env: Record<string, string | undefined>,
   now: Date = new Date(),
 ): Promise<BudgetDecision> {
+  const key = budgetKey(kind, now);
+  const limit = dailyLimit(kind, env);
+  if (typeof store.atomicIncrement === "function") {
+    const result = await store.atomicIncrement(key, limit);
+    if (result) return { allowed: result.allowed, used: result.used, limit, key };
+  }
   const before = await checkBudget(store, kind, env, now);
   if (!before.allowed) return before;
   const used = before.used + 1;
@@ -99,6 +122,41 @@ export async function netlifyBlobsBudgetStore(): Promise<BudgetStore> {
     },
     async set(key: string, value: number): Promise<void> {
       await store.set(key, String(value));
+    },
+    /**
+     * Atomic increment via ETag compare-and-swap: read with metadata, then
+     * write back with an onlyIfMatch / onlyIfNew precondition. A lost race
+     * retries against the fresh value; persistent contention throws so the
+     * caller fails closed instead of degrading to a racy write.
+     */
+    async atomicIncrement(key: string, limit: number): Promise<{ used: number; allowed: boolean }> {
+      const MAX_ATTEMPTS = 8;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const current = await store.getWithMetadata(key, { type: "text" });
+        const raw = current?.data ?? null;
+        const parsed = raw === null || raw === undefined ? 0 : Number(raw);
+        const used = Number.isFinite(parsed) ? parsed : 0;
+        if (used >= limit) return { used, allowed: false };
+        const next = used + 1;
+        try {
+          if (current?.etag) {
+            await store.set(key, String(next), { onlyIfMatch: current.etag });
+          } else {
+            await store.set(key, String(next), { onlyIfNew: true });
+          }
+          return { used: next, allowed: true };
+        } catch (err) {
+          // Precondition failures (a concurrent writer won) surface as a 412
+          // from the Blobs API; retry against fresh state. Anything else is
+          // an infrastructure failure and must fail closed.
+          const status = (err as { status?: number; cause?: { status?: number } })?.status
+            ?? (err as { cause?: { status?: number } })?.cause?.status;
+          const message = err instanceof Error ? err.message : "";
+          if (status === 412 || /precondition/i.test(message)) continue;
+          throw err;
+        }
+      }
+      throw new Error("Budget meter contention: could not reserve atomically.");
     },
   };
 }

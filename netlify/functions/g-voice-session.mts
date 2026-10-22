@@ -1,4 +1,4 @@
-import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { jsonError, jsonHeaders } from "./_forms.js";
 
 /**
@@ -32,12 +32,29 @@ export default async function handler(request: Request): Promise<Response> {
   const gate = voiceGate(env);
 
   if (request.method === "GET") {
+    let enabled = gate.open;
+    let reason = gate.open ? undefined : gate.reason;
+    if (gate.open) {
+      // Reflect today's budget in the status: an exhausted day must not be
+      // reported as available. If the meter cannot be read here, leave the
+      // config answer in place — POST remains the fail-closed arbiter.
+      try {
+        const store = await netlifyBlobsBudgetStore();
+        const budget = await checkBudget(store, "voice", env);
+        if (!budget.allowed) {
+          enabled = false;
+          reason = "Voice has reached today's session limit. Text chat is ready, or please try again tomorrow.";
+        }
+      } catch {
+        /* meter unreadable: POST arbitrates */
+      }
+    }
     return new Response(
       JSON.stringify({
-        enabled: gate.open,
-        reason: gate.open ? undefined : gate.reason,
+        enabled,
+        reason,
         maxDurationSeconds: MAX_DURATION_SECONDS,
-        mode: gate.open ? "vapi-web" : "browser-fallback",
+        mode: enabled ? "vapi-web" : "browser-fallback",
       }),
       { status: 200, headers: jsonHeaders },
     );
