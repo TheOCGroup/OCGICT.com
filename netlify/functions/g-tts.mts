@@ -40,11 +40,11 @@ function rateLimited(request: Request): boolean {
 function gate(env: Record<string, string | undefined>) {
   const profile = gVoiceProfile();
   if (!rolloutEnabled(profile, env)) {
-    return { open: false as const, reason: "Kokoro voice is not enabled for this site yet." };
+    return { open: false as const, reason: "OCG voice is not enabled for this site yet." };
   }
   const provider = KokoroHttpProvider.fromEnv(env);
   if (!provider) {
-    return { open: false as const, reason: "Kokoro voice is not configured on the server yet." };
+    return { open: false as const, reason: "OCG voice is not configured on the server yet." };
   }
   return { open: true as const, profile, provider };
 }
@@ -64,7 +64,7 @@ export default async function handler(request: Request): Promise<Response> {
         const budget = await checkBudget(store, "tts", env);
         if (!budget.allowed) {
           return new Response(
-            JSON.stringify({ enabled: false, reason: "Kokoro voice has reached today's limit. Text chat is still ready." }),
+            JSON.stringify({ enabled: false, reason: "OCG voice has reached today's limit. Text chat is still ready." }),
             { status: 200, headers: jsonHeaders },
           );
         }

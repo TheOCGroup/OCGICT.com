@@ -55,6 +55,13 @@ remain in the evaluation evidence set; see MEASUREMENTS.md).
   Aiden → bryan-os `voice/aiden-kokoro-profile` (web surfaces only;
   telephony frozen).
 
+## Spanish identity (known v1 limitation)
+
+G, Aiden, TED, and ORION all share the same Spanish voice (em_alex) — a
+Spanish-speaking caller hears the same voice under different names.
+Piper alone has a distinct Spanish voice (ef_dora). Splitting Spanish
+identities is a founder decision pending the listening session.
+
 ## Rollback
 
 Every agent's existing provider is preserved as its fallback; flipping
