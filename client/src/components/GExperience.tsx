@@ -39,6 +39,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
   const [listening, setListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice is off');
+  const [voiceDiag, setVoiceDiag] = useState('');
   const recognitionRef = useRef<any>(null);
   const voiceEnabledRef = useRef(false);
   const activeSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -274,6 +275,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         if (!browserSpeechRef.current) {
           const mod = await import("@/voice/browser/gBrowserSpeech");
           const prof = await import("@/voice/browser/deviceProfile");
+          const vv = await import("@/voice/browser/voiceVariant");
+          const variant = vv.resolveVoiceVariant();
           const profile = prof.selectDeviceProfile({
             hardwareConcurrency: navigator.hardwareConcurrency,
             deviceMemoryGB: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
@@ -285,16 +288,22 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
           browserSpeechRef.current = new mod.GBrowserSpeech({
             providers: profile.providers,
             numThreads: profile.numThreads,
+            assetBase: variant.assetBase,
+            cacheName: variant.cacheName,
+            variantLabel: variant.label,
+            onReady: (info) => {
+              setVoiceDiag(`${info.variantLabel ?? "M1"} · ${info.providersUsed.includes("webgpu") ? "WebGPU" : "WASM"}`);
+            },
             onProgress: (e) => {
               if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
               if (e.phase === "init") {
-                setVoiceStatus("Preparing G's voice…");
+                setVoiceStatus(`Preparing G's voice… (${variant.label})`);
                 return;
               }
               const mb = Math.floor(e.loadedBytes / 1_000_000);
               if (mb !== lastShownMB) {
                 lastShownMB = mb;
-                setVoiceStatus(`Downloading G's voice model — ${mb} MB received (one-time)`);
+                setVoiceStatus(`Downloading G's voice model — ${variant.label} · ${mb} MB received (one-time)`);
               }
             },
           });
@@ -798,6 +807,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             )}
 
             <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{rtStatusText() ?? voiceStatus}</div>
+            {browserVoiceOn && voiceDiag && (
+              <div className="mt-1 text-[11px] text-blue-200/60">Voice engine: {voiceDiag} · on-device</div>
+            )}
             {/* Conversation activity */}
             <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (

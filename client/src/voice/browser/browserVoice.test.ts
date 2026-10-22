@@ -20,9 +20,49 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
     expect(block).toContain("})().catch(() => { fallThrough(); });");
   });
 });
-import { GBrowserSpeech, __setBrowserEngineForTests } from "./gBrowserSpeech";
+import { GBrowserSpeech, __setBrowserEngineForTests, withOpenerSplit } from "./gBrowserSpeech";
 import { browserVoiceFlagEnabled } from "./browserVoiceFlag";
 import { selectDeviceProfile } from "./deviceProfile";
+import { resolveVoiceVariant, VOICE_VARIANTS } from "./voiceVariant";
+
+describe("resolveVoiceVariant — fp32 default, balanced on explicit selection", () => {
+  const store = (v: string | null) => ({ getItem: (_k: string) => v });
+  it("defaults to fp32 with the certified v1 cache", () => {
+    const v = resolveVoiceVariant({ search: "" }, store(null));
+    expect(v.key).toBe("fp32");
+    expect(v.cacheName).toBe("ocg-voice-assets-v1");
+    expect(v.assetBase).toBeUndefined();
+  });
+  it("selects balanced via query param or localStorage, with its own cache", () => {
+    expect(resolveVoiceVariant({ search: "?voiceVariant=balanced" }, store(null)).key).toBe("balanced");
+    expect(resolveVoiceVariant({ search: "" }, store("balanced")).key).toBe("balanced");
+    const b = VOICE_VARIANTS.balanced;
+    expect(b.assetBase).toBe("/voice-models/balanced");
+    expect(b.cacheName).toBe("ocg-voice-assets-balanced-v1");
+  });
+  it("ignores unknown values", () => {
+    expect(resolveVoiceVariant({ search: "?voiceVariant=turbo" }, store("turbo")).key).toBe("fp32");
+  });
+});
+
+describe("withOpenerSplit — first-audio refinement", () => {
+  const seg = (text: string, pauseAfterMs = 300) => ({ text, speed: 1.0, pauseAfterMs });
+  it("splits a long opening segment at a clause boundary, preserving all words", () => {
+    const long = "Hi, I'm G with The OC Group here in Wichita, and I can help you buy or sell a home, whenever you're ready to talk.";
+    const out = withOpenerSplit([seg(long), seg("Second sentence.")]);
+    expect(out.length).toBe(3);
+    expect(out[0].text).toBe("Hi, I'm G with The OC Group here in Wichita,");
+    expect(out[0].pauseAfterMs).toBe(120);
+    expect(out[1].text + " " + out[2].text).toContain("whenever you're ready to talk.");
+    expect(out.map((s) => s.text).join(" ")).toBe([long, "Second sentence."].join(" "));
+  });
+  it("leaves short openings and boundary-less text untouched", () => {
+    const short = [seg("Hello there, welcome in.")];
+    expect(withOpenerSplit(short)).toBe(short);
+    const noBoundary = [seg("A very long single clause without any punctuation marks inside it at all whatsoever really quite long indeed yes")];
+    expect(withOpenerSplit(noBoundary)).toBe(noBoundary);
+  });
+});
 
 describe("selectDeviceProfile — adaptive configuration", () => {
   it("prefers webgpu with wasm fallback and caps threads at 4 when isolated", () => {

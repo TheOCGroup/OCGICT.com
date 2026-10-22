@@ -38,7 +38,35 @@ export interface WorkerConfig {
   cacheName?: string;
   providers?: string[];
   numThreads?: number;
+  variantLabel?: string;
   onProgress?: (e: { phase: string; file: string; fileBytes: number; fileTotal?: number; loadedBytes: number }) => void;
+  onReady?: (info: { providersUsed: string[]; variantLabel?: string }) => void;
+}
+
+/**
+ * First-audio refinement: if the opening segment is long, split it at
+ * the first clause boundary so speech starts after a short opener
+ * instead of after the whole first sentence synthesizes. The text is
+ * already in spoken form (the certified expression layer ran first);
+ * splitting at punctuation changes no words, speeds, or order — the
+ * remainder keeps the segment's pacing and trailing pause.
+ */
+export function withOpenerSplit<T extends { text: string; speed: number; pauseAfterMs: number }>(segments: T[]): T[] {
+  if (segments.length === 0) return segments;
+  const first = segments[0];
+  if (first.text.length <= 90) return segments;
+  const window = first.text.slice(24, 96);
+  const m = window.match(/[,;:]\s|\s—\s|\s–\s/);
+  if (!m || m.index === undefined) return segments;
+  const cut = 24 + m.index + m[0].length;
+  const opener = first.text.slice(0, cut).trim();
+  const rest = first.text.slice(cut).trim();
+  if (!opener || !rest) return segments;
+  return [
+    { ...first, text: opener, pauseAfterMs: 120 },
+    { ...first, text: rest },
+    ...segments.slice(1),
+  ];
 }
 
 class WorkerSynth {
@@ -104,6 +132,7 @@ class WorkerSynth {
         const r = await this.call({ type: "load" });
         this.sampleRate = r.sampleRate ?? 44100;
         this.providersUsed = r.providersUsed ?? this.providersUsed;
+        this.config.onReady?.({ providersUsed: this.providersUsed, variantLabel: this.config.variantLabel });
       })().catch((err) => { this.readyPromise = null; throw err; });
     }
     return this.readyPromise;
@@ -170,6 +199,7 @@ export class GBrowserSpeech {
     }
     if (gen !== this.generation) return;
     const plan = planDelivery(text, { lang: opts.lang ?? "en", intent: opts.intent });
+    plan.segments = withOpenerSplit(plan.segments);
     if (!this.ctx) this.ctx = new AudioContext();
     if (this.ctx.state === "suspended") await this.ctx.resume().catch(() => {});
     let started = false;
