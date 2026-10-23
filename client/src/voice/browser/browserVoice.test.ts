@@ -15,9 +15,80 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
   it("the browser-voice IIFE catches chunk-load failures into the cascade", () => {
     const src = readFileSync(new URL("../../components/GExperience.tsx", import.meta.url), "utf8");
     const block = src.slice(src.indexOf("if (browserVoiceOn)"), src.indexOf("// Preferred spoken path"));
-    expect(block).toContain("const fallThrough = () => {");
-    expect(block).toContain("onError: fallThrough,");
-    expect(block).toContain("})().catch(() => { fallThrough(); });");
+    // P0 refactor (2026-10-23): fallThrough now carries a reason, the
+    // provider is built by ensureBrowserSpeech, and a first-audio
+    // deadline routes silent replies into the same cascade. The D1
+    // property is unchanged: every failure class lands in fallThrough.
+    expect(block).toContain('const fallThrough = (reason: "error" | "preparing" = "error") => {');
+    expect(block).toContain('onError: () => { gate.clear(); doFallThrough("error"); },');
+    expect(block).toContain('})().catch(() => { gate.clear(); doFallThrough("error"); });');
+    expect(block).toContain("gateRegistryRef.current.arm({");
+    expect(block).toContain('doFallThrough("preparing")');
+    expect(block).toContain("gate.markStarted()");
+  });
+});
+
+describe("armFirstAudioDeadline — the gate executes correctly (QUINCEY P0 delta)", () => {
+  it("fires onTimeout when speech never starts, and clear() disarms without throwing", async () => {
+    const { armFirstAudioDeadline } = await import("./firstAudioGate");
+    vi.useFakeTimers();
+    try {
+      let fired = 0;
+      const g1 = armFirstAudioDeadline({ timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      g1.clear(); // must not throw (the recursion defect) and must disarm
+      vi.advanceTimersByTime(60000);
+      expect(fired).toBe(0);
+      const g2 = armFirstAudioDeadline({ timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      vi.advanceTimersByTime(15000);
+      expect(fired).toBe(1);
+      const g3 = armFirstAudioDeadline({ timeoutMs: 10000, onTimeout: () => { fired += 1; } });
+      g3.markStarted();
+      vi.advanceTimersByTime(60000);
+      expect(fired).toBe(1);
+      // Warm replies arm too (founder latency directive): a warm gate
+      // that never hears onStart must fire at its own budget.
+      const g4 = armFirstAudioDeadline({ timeoutMs: 10000, onTimeout: () => { fired += 1; } });
+      vi.advanceTimersByTime(10000);
+      expect(fired).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("registry: arming a new gate disarms the superseded turn's gate (QUINCEY L1)", async () => {
+    const { createGateRegistry } = await import("./firstAudioGate");
+    vi.useFakeTimers();
+    try {
+      const reg = createGateRegistry();
+      let firedA = 0; let firedB = 0;
+      // Turn A arms a 15 s gate, then is superseded pre-onStart: its
+      // provider speak returns silently, nothing clears its gate —
+      // except the registry, when turn B arms.
+      reg.arm({ timeoutMs: 15000, onTimeout: () => { firedA += 1; } });
+      vi.advanceTimersByTime(3000);
+      reg.arm({ timeoutMs: 10000, onTimeout: () => { firedB += 1; } });
+      vi.advanceTimersByTime(12000); // past A's deadline AND B's
+      expect(firedA).toBe(0); // the dead gate must never fire
+      expect(firedB).toBe(1); // the live gate fires on schedule
+      // Session teardown clears whatever is active.
+      let firedC = 0;
+      reg.arm({ timeoutMs: 10000, onTimeout: () => { firedC += 1; } });
+      reg.clearActive();
+      vi.advanceTimersByTime(20000);
+      expect(firedC).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the worker protocol skips stale generations, and the provider threads gen", async () => {    const fs = await import("node:fs");
+    const worker = fs.readFileSync(new URL("./voiceWorker.ts", import.meta.url), "utf8");
+    expect(worker).toContain('msg.type === "flush"');
+    expect(worker).toContain("msg.gen < validGen");
+    expect(worker).toContain('type: "skipped"');
+    const provider = fs.readFileSync(new URL("./gBrowserSpeech.ts", import.meta.url), "utf8");
+    expect(provider).toContain("sharedWorker.flush(gen)");
+    expect(provider).toContain("sharedWorker.flush(this.generation)");
   });
 });
 import { GBrowserSpeech, __setBrowserEngineForTests, withOpenerSplit } from "./gBrowserSpeech";
@@ -42,6 +113,14 @@ describe("resolveVoiceVariant — fp32 default, balanced on explicit selection",
   });
   it("ignores unknown values", () => {
     expect(resolveVoiceVariant({ search: "?voiceVariant=turbo" }, store("turbo")).key).toBe("fp32");
+  });
+  it("voiceStyle=M2 relabels and reselects the style; other styles are ignored", () => {
+    const m2 = resolveVoiceVariant({ search: "?voiceVariant=balanced&voiceStyle=M2" }, store(null));
+    expect(m2.key).toBe("balanced");
+    expect(m2.styleName).toBe("M2");
+    expect(m2.label).toMatch(/^M2 /);
+    expect(resolveVoiceVariant({ search: "?voiceStyle=F3" }, store(null)).styleName).toBe("M1");
+    expect(resolveVoiceVariant({ search: "?voiceVariant=balanced" }, store(null)).styleName).toBe("M1");
   });
 });
 
@@ -90,6 +169,30 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       expect(browserVoiceFlagEnabled()).toBe(true);
       set("?browserVoice=1");
       expect(browserVoiceFlagEnabled()).toBe(true);
+      set("?browserVoice=0");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+      set("");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("persists the URL choice so in-app navigation keeps the voice (P0)", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    const set = (search: string) => vi.stubGlobal("location", new URL(`http://localhost/${search}`));
+    try {
+      set("?browserVoice=1");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      // Query string dropped by SPA navigation — still on.
+      set("");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      // Explicit off clears the persisted choice everywhere.
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");

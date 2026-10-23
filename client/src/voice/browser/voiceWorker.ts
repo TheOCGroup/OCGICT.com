@@ -27,9 +27,21 @@ interface WorkerConfig {
   cacheName?: string;
   providers?: string[];
   numThreads?: number;
+  styleName?: string;
 }
 
 let config: WorkerConfig = {};
+/**
+ * Latency repair (2026-10-23): the newest speak generation. Synthesis
+ * jobs posted for an older generation are STALE — the visitor has
+ * already moved on (new reply, stop, or deadline fall-through). A
+ * flush message advances this marker; when a queued synthesize is
+ * picked up with an older gen it is skipped WITHOUT running inference,
+ * so a new reply never waits behind a dead turn's prefetch backlog.
+ * The one job already mid-inference cannot be preempted (ONNX runs
+ * synchronously) — that single job is the worst case, by design.
+ */
+let validGen = 0;
 let engine: SupertonicBrowserEngine | null = null;
 let style: VoiceStyle | null = null;
 let loading: Promise<void> | null = null;
@@ -43,7 +55,7 @@ async function buildEngine(providers: string[]): Promise<void> {
     onProgress: (e) => (self as any).postMessage({ type: "progress", ...e }),
   });
   await engine.load();
-  style = await engine.loadStyle("M1");
+  style = await engine.loadStyle(config.styleName ?? "M1");
   providersUsed = providers;
 }
 
@@ -70,7 +82,7 @@ function ensureLoaded(): Promise<void> {
 }
 
 self.onmessage = async (ev: MessageEvent) => {
-  const msg = ev.data as { id: number; type: string; text?: string; lang?: string; speed?: number } & WorkerConfig;
+  const msg = ev.data as { id: number; type: string; text?: string; lang?: string; speed?: number; gen?: number } & WorkerConfig;
   try {
     if (msg.type === "init") {
       config = {
@@ -78,6 +90,7 @@ self.onmessage = async (ev: MessageEvent) => {
         cacheName: msg.cacheName,
         providers: msg.providers,
         numThreads: msg.numThreads,
+        styleName: msg.styleName,
       };
       if (msg.numThreads && msg.numThreads > 1) {
         try { (ort as any).env.wasm.numThreads = msg.numThreads; } catch { /* single-thread env */ }
@@ -90,8 +103,20 @@ self.onmessage = async (ev: MessageEvent) => {
       (self as any).postMessage({ id: msg.id, type: "ready", sampleRate: engine!.sampleRate, providersUsed });
       return;
     }
+    if (msg.type === "flush") {
+      if (typeof msg.gen === "number" && msg.gen > validGen) validGen = msg.gen;
+      return;
+    }
     if (msg.type === "synthesize") {
+      if (typeof msg.gen === "number" && msg.gen < validGen) {
+        (self as any).postMessage({ id: msg.id, type: "skipped" });
+        return;
+      }
       await ensureLoaded();
+      if (typeof msg.gen === "number" && msg.gen < validGen) {
+        (self as any).postMessage({ id: msg.id, type: "skipped" });
+        return;
+      }
       const r = await engine!.synthesize(msg.text!, style!, { lang: msg.lang ?? "en", speed: msg.speed ?? 1.0 });
       (self as any).postMessage(
         { id: msg.id, type: "audio", wav: r.wav, durationSeconds: r.durationSeconds, synthMs: r.synthMs },
