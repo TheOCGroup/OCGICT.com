@@ -79,6 +79,11 @@ describe("seller policy — emotional context", () => {
     // nearby — selling a car or shoes is not a property conversation.
     expect(analyzeSellerContext([], "Vendo mi carro, es un Toyota", { spanish: true }).isSeller).toBe(false);
     expect(analyzeSellerContext([], "Trabajo vendiendo zapatos en el mercado", { spanish: true }).isSeller).toBe(false);
+    // Final-acceptance probe: a trust challenge asked COLD (no seller
+    // token anywhere) is a prospective seller testing the company —
+    // it must engage the trust policy, not fall to the generic menu.
+    expect(analyzeSellerContext([], "How do I know this isn't a scam?", {}).primary).toBe("skeptical");
+    expect(analyzeSellerContext([], "¿Cómo sé que esto no es una estafa?", { spanish: true }).primary).toBe("skeptical");
   });
 
   it("does not flag investor conversation as seller", () => {
