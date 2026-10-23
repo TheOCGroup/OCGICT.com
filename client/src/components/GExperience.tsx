@@ -9,6 +9,7 @@ import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig
 import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
 import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
 import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
+import { armFirstAudioDeadline } from "@/voice/browser/firstAudioGate";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -384,28 +385,31 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       // The deadline applies only while the engine is NOT ready: once
       // warm, synthesis is bounded by the worker-call timeouts, and a
       // slow-but-working engine must not be cut off mid-synthesis.
-      const deadline = browserReadyRef.current ? null : setTimeout(() => {
-        if (!started && !fellThrough) {
-          browserSpeechRef.current?.stop();
-          doFallThrough("preparing");
-        }
-      }, 15000);
-      const clearDeadline = () => { if (deadline) clearDeadline(); };
+      const gate = armFirstAudioDeadline({
+        ready: browserReadyRef.current,
+        timeoutMs: 15000,
+        onTimeout: () => {
+          if (!started && !fellThrough) {
+            browserSpeechRef.current?.stop();
+            doFallThrough("preparing");
+          }
+        },
+      });
       void (async () => {
         const provider = await ensureBrowserSpeech();
-        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { clearDeadline(); return; }
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { gate.clear(); return; }
         await provider.speak(spoken, { lang: spanishReply ? "es" : "en", emotion }, {
-          onStart: () => { started = true; clearDeadline(); armBargeIn(); setVoiceStatus(speakingStatus()); },
+          onStart: () => { started = true; gate.markStarted(); armBargeIn(); setVoiceStatus(speakingStatus()); },
           onEnd: () => {
-            clearDeadline();
+            gate.clear();
             disarmBargeIn();
             if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
             setVoiceStatus("Listening for your reply");
             startListening();
           },
-          onError: () => { clearDeadline(); doFallThrough("error"); },
+          onError: () => { gate.clear(); doFallThrough("error"); },
         });
-      })().catch(() => { clearDeadline(); doFallThrough("error"); });
+      })().catch(() => { gate.clear(); doFallThrough("error"); });
       return;
     }
 
@@ -919,6 +923,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
                   <span><strong>Realtime voice:</strong> Tap Talk to G and allow microphone access. Talk naturally — you can interrupt G mid-sentence, and G follows English or Spanish.</span>
                 ) : kokoroAvailable ? (
                   <span><strong>OCG voice (preview):</strong> G's replies are spoken in our own voice instead of your browser's built-in speech. We're still testing it, so it may change. Tap Talk to G and allow microphone access; tap Talk again to interrupt. English and Spanish are both supported. Text chat works fully either way.</span>
+                ) : browserVoiceOn ? (
+                  <span><strong>OCG voice (on-device):</strong> G's voice runs in your browser — the first use downloads the voice model once, then it is cached on your device. Tap Talk to G and allow microphone access; just start talking to interrupt. English and Spanish are both supported. Text chat works fully either way.</span>
                 ) : (
                   <span><strong>Basic browser voice:</strong> Realtime voice isn't enabled on this site yet, so G uses your browser's built-in speech. Tap Talk to G and allow microphone access; tap Talk again to interrupt. Chrome or Edge recommended. Text chat works fully either way.</span>
                 )}

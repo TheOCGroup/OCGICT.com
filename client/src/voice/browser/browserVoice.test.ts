@@ -20,10 +20,38 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
     // deadline routes silent replies into the same cascade. The D1
     // property is unchanged: every failure class lands in fallThrough.
     expect(block).toContain('const fallThrough = (reason: "error" | "preparing" = "error") => {');
-    expect(block).toContain('onError: () => { clearDeadline(); doFallThrough("error"); },');
-    expect(block).toContain('})().catch(() => { clearDeadline(); doFallThrough("error"); });');
-    expect(block).toContain("browserReadyRef.current ? null : setTimeout(() => {");
+    expect(block).toContain('onError: () => { gate.clear(); doFallThrough("error"); },');
+    expect(block).toContain('})().catch(() => { gate.clear(); doFallThrough("error"); });');
+    expect(block).toContain("armFirstAudioDeadline({");
     expect(block).toContain('doFallThrough("preparing")');
+    expect(block).toContain("gate.markStarted()");
+  });
+});
+
+describe("armFirstAudioDeadline — the gate executes correctly (QUINCEY P0 delta)", () => {
+  it("fires onTimeout when speech never starts, and clear() disarms without throwing", async () => {
+    const { armFirstAudioDeadline } = await import("./firstAudioGate");
+    vi.useFakeTimers();
+    try {
+      let fired = 0;
+      const g1 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      g1.clear(); // must not throw (the recursion defect) and must disarm
+      vi.advanceTimersByTime(60000);
+      expect(fired).toBe(0);
+      const g2 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      vi.advanceTimersByTime(15000);
+      expect(fired).toBe(1);
+      const g3 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      g3.markStarted();
+      vi.advanceTimersByTime(60000);
+      expect(fired).toBe(1);
+      const g4 = armFirstAudioDeadline({ ready: true, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      g4.clear(); g4.markStarted();
+      vi.advanceTimersByTime(60000);
+      expect(fired).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 import { GBrowserSpeech, __setBrowserEngineForTests, withOpenerSplit } from "./gBrowserSpeech";
