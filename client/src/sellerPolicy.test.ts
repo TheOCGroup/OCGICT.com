@@ -68,6 +68,17 @@ describe("seller policy — emotional context", () => {
     expect(analyzeSellerContext([], "Vendo casa en Wichita, tiene tres recámaras", { spanish: true }).isSeller).toBe(true);
     expect(analyzeSellerContext([], "Estoy vendiendo la casa de mi madre", { spanish: true }).isSeller).toBe(true);
     expect(analyzeSellerContext([], "Soy la propietaria de la casa de la esquina", { spanish: true }).isSeller).toBe(true);
+    // QUINCEY delta-2 N6: standalone "vendí" — JS \b treats í as a
+    // non-word char, so the token needs its own alternative without
+    // the trailing boundary (and must NOT match inside "vendía").
+    expect(analyzeSellerContext([], "Vendí el terreno la semana pasada", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Ya vendí, gracias", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Vendí la casa de mi madre la semana pasada", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Mi abuela vendía tamales en el mercado", { spanish: true }).isSeller).toBe(false);
+    // QUINCEY delta-2 N7: bare vendo/vendiendo need a property noun
+    // nearby — selling a car or shoes is not a property conversation.
+    expect(analyzeSellerContext([], "Vendo mi carro, es un Toyota", { spanish: true }).isSeller).toBe(false);
+    expect(analyzeSellerContext([], "Trabajo vendiendo zapatos en el mercado", { spanish: true }).isSeller).toBe(false);
   });
 
   it("does not flag investor conversation as seller", () => {
