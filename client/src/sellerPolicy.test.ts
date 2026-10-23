@@ -57,6 +57,10 @@ describe("seller policy — emotional context", () => {
     expect(analyzeSellerContext([], "Quiero venderlo, es el terreno de mi papá", { spanish: true }).isSeller).toBe(true);
     // Precision guard: "ventana" (window) must not trip the venta token.
     expect(analyzeSellerContext([], "La ventana de la cocina está rota", { spanish: true }).isSeller).toBe(false);
+    // The clitic sits inside the urgent pattern too, not just the
+    // seller signal: "venderla pronto" is an urgent seller.
+    expect(analyzeSellerContext([], "Necesito venderla pronto", { spanish: true }).primary).toBe("urgent");
+    expect(analyzeSellerContext([], "Necesito venderlo rápido", { spanish: true }).primary).toBe("urgent");
   });
 
   it("does not flag investor conversation as seller", () => {

@@ -92,7 +92,7 @@ const RE = {
   inherited:
     /\b(inherit\w*|probate|passed away|my (mother|father|mom|dad|parent) (died|passed)|hered\w*|falleci\w*|mi (madre|padre|mam[aá]|pap[aá]) (falleci\w*|muri\w*))\b/i,
   urgent:
-    /\b(sell (fast|quickly|soon|asap)|as soon as possible|need to (move|sell) (soon|quickly|fast)|relocat\w*|job transfer|divorce|moving (soon|out of state)|vender (pronto|r[aá]pido)|lo antes posible|cuanto antes|necesito vender (pronto|r[aá]pido)|me (mudo|voy a mudar)|traslado)\b/i,
+    /\b(sell (fast|quickly|soon|asap)|as soon as possible|need to (move|sell) (soon|quickly|fast)|relocat\w*|job transfer|divorce|moving (soon|out of state)|vender(la|lo)? (pronto|r[aá]pido)|lo antes posible|cuanto antes|necesito vender(la|lo)? (pronto|r[aá]pido)|me (mudo|voy a mudar)|traslado)\b/i,
   skeptical:
     /\b(lowball|low[- ]ball|scam|rip ?off|legit(imate)?|how do i know|too good to be true|trust you|what'?s the catch|estafa|enga[ñn]o|¿?c[oó]mo s[eé] que|oferta (muy )?baja|no conf[ií]o)\b/i,
   comparing:
