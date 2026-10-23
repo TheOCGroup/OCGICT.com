@@ -61,6 +61,13 @@ describe("seller policy — emotional context", () => {
     // seller signal: "venderla pronto" is an urgent seller.
     expect(analyzeSellerContext([], "Necesito venderla pronto", { spanish: true }).primary).toBe("urgent");
     expect(analyzeSellerContext([], "Necesito venderlo rápido", { spanish: true }).primary).toBe("urgent");
+    // QUINCEY delta N4/N5: full clitic set in emotion patterns, and
+    // non-infinitive / feminine forms in the seller signal.
+    expect(analyzeSellerContext([], "Necesito venderlas pronto", { spanish: true }).primary).toBe("urgent");
+    expect(analyzeSellerContext([], "Quiero venderlo", { spanish: true }).primary).toBe("motivated");
+    expect(analyzeSellerContext([], "Vendo casa en Wichita, tiene tres recámaras", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Estoy vendiendo la casa de mi madre", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Soy la propietaria de la casa de la esquina", { spanish: true }).isSeller).toBe(true);
   });
 
   it("does not flag investor conversation as seller", () => {

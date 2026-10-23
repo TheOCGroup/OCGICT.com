@@ -92,15 +92,15 @@ const RE = {
   inherited:
     /\b(inherit\w*|probate|passed away|my (mother|father|mom|dad|parent) (died|passed)|hered\w*|falleci\w*|mi (madre|padre|mam[aá]|pap[aá]) (falleci\w*|muri\w*))\b/i,
   urgent:
-    /\b(sell (fast|quickly|soon|asap)|as soon as possible|need to (move|sell) (soon|quickly|fast)|relocat\w*|job transfer|divorce|moving (soon|out of state)|vender(la|lo)? (pronto|r[aá]pido)|lo antes posible|cuanto antes|necesito vender(la|lo)? (pronto|r[aá]pido)|me (mudo|voy a mudar)|traslado)\b/i,
+    /\b(sell (fast|quickly|soon|asap)|as soon as possible|need to (move|sell) (soon|quickly|fast)|relocat\w*|job transfer|divorce|moving (soon|out of state)|vender(?:la|lo|las|los)? (pronto|r[aá]pido)|lo antes posible|cuanto antes|necesito vender(?:la|lo|las|los)? (pronto|r[aá]pido)|me (mudo|voy a mudar)|traslado)\b/i,
   skeptical:
     /\b(lowball|low[- ]ball|scam|rip ?off|legit(imate)?|how do i know|too good to be true|trust you|what'?s the catch|estafa|enga[ñn]o|¿?c[oó]mo s[eé] que|oferta (muy )?baja|no conf[ií]o)\b/i,
   comparing:
-    /\b(list (it|the house|my house) (with|on)|real ?estate agent|realtor|traditional (listing|sale)|on the market|compare (my )?options|should i list|listar(la)? con un agente|agente (inmobiliario|de bienes)|vender(la)? con un agente|poner(la)? en (el mercado|venta)|comparar opciones)\b/i,
+    /\b(list (it|the house|my house) (with|on)|real ?estate agent|realtor|traditional (listing|sale)|on the market|compare (my )?options|should i list|listar(la)? con un agente|agente (inmobiliario|de bienes)|vender(?:la|lo|las|los)? con un agente|poner(la)? en (el mercado|venta)|comparar opciones)\b/i,
   frustrated:
     /\b(stop (calling|texting|messaging)|leave me alone|annoying|frustrat\w*|already told you|not interested|don'?t (call|contact) me|dejen de (llamar|escribir)|no me llamen|molest\w*|no me interesa|ya les dije)\b/i,
   motivated:
-    /\b(ready to sell|want to sell (now|it)|let'?s do it|i (do )?want to sell|quiero vender(la)?( ya)?|listo para vender|quiero vender mi casa)\b/i,
+    /\b(ready to sell|want to sell (now|it)|let'?s do it|i (do )?want to sell|quiero vender(?:la|lo|las|los)?( ya)?|listo para vender|quiero vender mi casa)\b/i,
   curious:
     /\b(how (does|do) (it|you|this) work|how do you (evaluate|decide|value)|what'?s the process|how (would|do) (an? )?offer|c[oó]mo funciona|c[oó]mo (eval[uú]an|deciden|calculan)|cu[aá]l es el proceso|c[oó]mo ser[ií]a una oferta)\b/i,
 } as const;
@@ -113,7 +113,7 @@ const EMOTION_ORDER: SellerEmotion[] = [
 ];
 
 const SELLER_SIGNAL =
-  /\b(sell|selling|my house|my property|homeowner|inherited|probate|estate|vender(?:la|lo|las|los)?|venta|mi casa|mi propiedad|herencia|propietario|hered\w*)\b/i;
+  /\b(sell|selling|my house|my property|homeowner|inherited|probate|estate|vender(?:la|lo|las|los)?|vendiendo|vendo|vend[ií]|vendid[oa]|venta|mi casa|mi propiedad|herencia|propietari[oa]|hered\w*)\b/i;
 
 const EVALUATION_EXPLAINED =
   /\b(comparable sales|we (evaluate|look at)|how we evaluate|ventas comparables|evaluamos|comps)\b/i;
