@@ -43,6 +43,14 @@ describe("resolveVoiceVariant — fp32 default, balanced on explicit selection",
   it("ignores unknown values", () => {
     expect(resolveVoiceVariant({ search: "?voiceVariant=turbo" }, store("turbo")).key).toBe("fp32");
   });
+  it("voiceStyle=M2 relabels and reselects the style; other styles are ignored", () => {
+    const m2 = resolveVoiceVariant({ search: "?voiceVariant=balanced&voiceStyle=M2" }, store(null));
+    expect(m2.key).toBe("balanced");
+    expect(m2.styleName).toBe("M2");
+    expect(m2.label).toMatch(/^M2 /);
+    expect(resolveVoiceVariant({ search: "?voiceStyle=F3" }, store(null)).styleName).toBe("M1");
+    expect(resolveVoiceVariant({ search: "?voiceVariant=balanced" }, store(null)).styleName).toBe("M1");
+  });
 });
 
 describe("withOpenerSplit — first-audio refinement", () => {

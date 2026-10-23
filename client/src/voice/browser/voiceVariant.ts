@@ -62,6 +62,7 @@ export function resolveVoiceVariant(
     if (style === "M2") {
       return { ...base, styleName: "M2", label: base.label.replace(/^M1/, "M2") };
     }
+    return base;
   } catch { /* fall through to default */ }
   return VOICE_VARIANTS.fp32;
 }
