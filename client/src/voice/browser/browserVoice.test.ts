@@ -34,24 +34,36 @@ describe("armFirstAudioDeadline — the gate executes correctly (QUINCEY P0 delt
     vi.useFakeTimers();
     try {
       let fired = 0;
-      const g1 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      const g1 = armFirstAudioDeadline({ timeoutMs: 15000, onTimeout: () => { fired += 1; } });
       g1.clear(); // must not throw (the recursion defect) and must disarm
       vi.advanceTimersByTime(60000);
       expect(fired).toBe(0);
-      const g2 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      const g2 = armFirstAudioDeadline({ timeoutMs: 15000, onTimeout: () => { fired += 1; } });
       vi.advanceTimersByTime(15000);
       expect(fired).toBe(1);
-      const g3 = armFirstAudioDeadline({ ready: false, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
+      const g3 = armFirstAudioDeadline({ timeoutMs: 10000, onTimeout: () => { fired += 1; } });
       g3.markStarted();
       vi.advanceTimersByTime(60000);
       expect(fired).toBe(1);
-      const g4 = armFirstAudioDeadline({ ready: true, timeoutMs: 15000, onTimeout: () => { fired += 1; } });
-      g4.clear(); g4.markStarted();
-      vi.advanceTimersByTime(60000);
-      expect(fired).toBe(1);
+      // Warm replies arm too (founder latency directive): a warm gate
+      // that never hears onStart must fire at its own budget.
+      const g4 = armFirstAudioDeadline({ timeoutMs: 10000, onTimeout: () => { fired += 1; } });
+      vi.advanceTimersByTime(10000);
+      expect(fired).toBe(2);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("the worker protocol skips stale generations, and the provider threads gen", async () => {
+    const fs = await import("node:fs");
+    const worker = fs.readFileSync(new URL("./voiceWorker.ts", import.meta.url), "utf8");
+    expect(worker).toContain('msg.type === "flush"');
+    expect(worker).toContain("msg.gen < validGen");
+    expect(worker).toContain('type: "skipped"');
+    const provider = fs.readFileSync(new URL("./gBrowserSpeech.ts", import.meta.url), "utf8");
+    expect(provider).toContain("sharedWorker.flush(gen)");
+    expect(provider).toContain("sharedWorker.flush(this.generation)");
   });
 });
 import { GBrowserSpeech, __setBrowserEngineForTests, withOpenerSplit } from "./gBrowserSpeech";

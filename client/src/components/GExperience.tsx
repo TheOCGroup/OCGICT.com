@@ -10,6 +10,7 @@ import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
 import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
 import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
 import { armFirstAudioDeadline } from "@/voice/browser/firstAudioGate";
+import { voiceTrace } from "@/voice/browser/voiceTrace";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -348,6 +349,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       // construction) so no failure class can strand the reply.
       const fallThrough = (reason: "error" | "preparing" = "error") => {
         if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        voiceTrace("fallThrough", { reason });
         const notice = reason === "preparing"
           ? "That reply used the basic browser voice while the main voice finishes preparing"
           : "That reply used the basic browser voice — the main voice had a hiccup";
@@ -385,11 +387,15 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       // The deadline applies only while the engine is NOT ready: once
       // warm, synthesis is bounded by the worker-call timeouts, and a
       // slow-but-working engine must not be cut off mid-synthesis.
+      // The deadline guards EVERY reply, cold or warm: a warm stall is
+      // a defect, not a download, so its budget is shorter. On fire,
+      // this reply falls through to the prompt fallback; the stale
+      // synthesis is flushed worker-side by stop().
       const gate = armFirstAudioDeadline({
-        ready: browserReadyRef.current,
-        timeoutMs: 15000,
+        timeoutMs: browserReadyRef.current ? 10_000 : 15_000,
         onTimeout: () => {
           if (!started && !fellThrough) {
+            voiceTrace("deadlineFired", { ready: browserReadyRef.current });
             browserSpeechRef.current?.stop();
             doFallThrough("preparing");
           }
@@ -398,6 +404,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       void (async () => {
         const provider = await ensureBrowserSpeech();
         if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { gate.clear(); return; }
+        provider.stop();
         await provider.speak(spoken, { lang: spanishReply ? "es" : "en", emotion }, {
           onStart: () => { started = true; gate.markStarted(); armBargeIn(); setVoiceStatus(speakingStatus()); },
           onEnd: () => {
@@ -623,6 +630,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 20000);
         let res: Response;
+        voiceTrace("chatRequest", {});
         try {
           res = await fetch("/api/g/chat", {
             method: "POST",
@@ -648,6 +656,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
           throw new Error("G did not return a usable response. Please try again.");
         }
         replyText = data.replyText;
+        voiceTrace("chatResponse", { chars: replyText.length });
         actionInvocation = data.action;
         generatedBrief = data.strategyBrief;
         replyEmotion = typeof data?.delivery?.emotion === "string" ? data.delivery.emotion : undefined;

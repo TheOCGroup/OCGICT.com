@@ -17,6 +17,7 @@
  * It is NOT wired into production behavior by default.
  */
 import { planDelivery } from "../../../../server/voice/gExpression";
+import { voiceTrace } from "./voiceTrace";
 
 
 export interface BrowserSpeechEvents {
@@ -152,8 +153,15 @@ class WorkerSynth {
     return this.readyPromise;
   }
 
-  async synthesize(text: string, opts: { lang: string; speed: number }): Promise<SynthResult> {
-    const r = await this.call({ type: "synthesize", text, lang: opts.lang, speed: opts.speed });
+  /** Advance the worker's valid generation; older queued jobs skip. */
+  flush(gen: number): void {
+    if (!this.worker) return;
+    this.worker.postMessage({ type: "flush", gen });
+  }
+
+  async synthesize(text: string, opts: { lang: string; speed: number; gen: number }): Promise<SynthResult> {
+    const r = await this.call({ type: "synthesize", text, lang: opts.lang, speed: opts.speed, gen: opts.gen });
+    if (r.type === "skipped") throw new Error("synthesis skipped (stale generation)");
     return { wav: r.wav as Float32Array, durationSeconds: r.durationSeconds, synthMs: r.synthMs };
   }
 }
@@ -191,9 +199,9 @@ export class GBrowserSpeech {
     return !!testEngine || !!sharedWorker;
   }
 
-  private async synth(text: string, lang: string, speed: number): Promise<SynthResult> {
+  private async synth(text: string, lang: string, speed: number, gen = 0): Promise<SynthResult> {
     if (testEngine) return testEngine.synthesize(text, {}, { lang, speed });
-    return sharedWorker.synthesize(text, { lang, speed });
+    return sharedWorker.synthesize(text, { lang, speed, gen });
   }
 
   private get sampleRate(): number {
@@ -206,8 +214,12 @@ export class GBrowserSpeech {
     events: BrowserSpeechEvents,
   ): Promise<void> {
     const gen = ++this.generation;
+    if (!testEngine) sharedWorker.flush(gen);
+    voiceTrace("speakCall", { gen, chars: text.length });
     try {
+      voiceTrace("prepareStart", { gen });
       await this.prepare();
+      voiceTrace("prepareReady", { gen });
     } catch (err) {
       if (gen === this.generation) events.onError(`browser voice unavailable: ${String(err).slice(0, 120)}`);
       return;
@@ -228,7 +240,9 @@ export class GBrowserSpeech {
       if (gen !== this.generation) return;
       let result;
       try {
-        result = await (prefetched ?? this.synth(segment.text, plan.lang, segment.speed));
+        voiceTrace("segSynthStart", { gen, i });
+        result = await (prefetched ?? this.synth(segment.text, plan.lang, segment.speed, gen));
+        voiceTrace("segSynthEnd", { gen, i, synthMs: result.synthMs });
       } catch (err) {
         if (gen === this.generation) events.onError(`browser synthesis failed: ${String(err).slice(0, 120)}`);
         return;
@@ -237,7 +251,7 @@ export class GBrowserSpeech {
       if (gen !== this.generation) return;
       const next = plan.segments[i + 1];
       if (next) {
-        prefetched = this.synth(next.text, plan.lang, next.speed);
+        prefetched = this.synth(next.text, plan.lang, next.speed, gen);
         prefetched.catch(() => { /* surfaced when its turn comes */ });
       }
       const buffer = this.ctx.createBuffer(1, result.wav.length, this.sampleRate);
@@ -255,7 +269,7 @@ export class GBrowserSpeech {
       if (this.outAnalyser) source.connect(this.outAnalyser);
       else source.connect(this.ctx.destination);
       this.current = source;
-      if (!started) { started = true; events.onStart(); }
+      if (!started) { started = true; voiceTrace("playbackStart", { gen, i }); events.onStart(); }
       const ended = new Promise<void>((resolve) => { source.onended = () => resolve(); });
       // Race playback against stop(): stop() nulls onended (so a late
       // end event can't fire onEnd), which would otherwise leave this
@@ -285,6 +299,7 @@ export class GBrowserSpeech {
   /** Halt playback and cancel every queued segment, immediately. */
   stop(): void {
     this.generation += 1;
+    if (!testEngine) sharedWorker.flush(this.generation);
     if (this.stopResolve) { this.stopResolve(); this.stopResolve = null; }
     if (this.current) {
       try { this.current.onended = null; this.current.stop(); } catch { /* already stopped */ }
