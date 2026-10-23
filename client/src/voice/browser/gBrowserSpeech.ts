@@ -112,7 +112,19 @@ class WorkerSynth {
     const w = this.spawn();
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // P0 repair: a worker call must never hang forever. A hung ORT
+      // init previously stranded a reply in silence indefinitely.
+      // Budgets are generous (downloads emit progress and legitimately
+      // take minutes on slow links only for load; synthesis is fast).
+      const budgetMs = msg.type === "synthesize" ? 120_000 : 300_000;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`worker ${String(msg.type)} timed out`));
+      }, budgetMs);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
       w.postMessage({ id, ...msg });
     });
   }

@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
 import { analyzeSellerContext } from "../voice/sellerPolicy.js";
+import { routeGeneralIntent, generalFallback, introAlreadyGiven } from "../voice/gIntent.js";
 import { numberToWordsEN, numberToWordsES } from "../voice/gExpression.js";
 
 export interface StreamingChunk {
@@ -180,6 +181,12 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
     const sctx = analyzeSellerContext(histForCtx, lastUserMsg, { spanish: looksSpanish(lastUserMsg) || looksSpanish(priorConversation) });
 
+    // P0 repair: informational intents (fees, areas, process, human,
+    // contact...) outrank the generic seller/investor branches — a
+    // question about fees that mentions "mi casa" is a fees question.
+    const giInfoEs = (() => { const g = routeGeneralIntent(lastUserMsg, { spanish: true }); return g && g.intent !== "sellerGeneric" && g.intent !== "investorGeneric" ? g : null; })();
+    const giInfoEn = (() => { const g = routeGeneralIntent(lastUserMsg, { spanish: false }); return g && g.intent !== "sellerGeneric" && g.intent !== "investorGeneric" ? g : null; })();
+
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
@@ -243,6 +250,8 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       } else if (/(heredé|herede|herencia|falleció|fallecio|mi madre|mi padre)/i.test(lower)) {
         content = "Lo entiendo. Una propiedad heredada trae muchas decisiones a la vez. Podemos ayudarle a explorar una venta tal como está y los pasos siguientes, sin apresurarle. ¿Su prioridad es vender pronto o primero entender sus opciones?";
         toolCalls = [{ name: "activate_seller_intake", arguments: { sellerStep: 1 } }];
+      } else if (giInfoEs) {
+        content = giInfoEs.reply;
       } else if (investorNow && !sellerNow) {
         content = "Podemos ayudarle a evaluar una oportunidad, revisar costos de renovación y riesgos, y planear el siguiente paso. ¿Ya tiene una propiedad en mente o todavía está decidiendo en qué invertir?";
       } else if (sellerNow) {
@@ -252,7 +261,12 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       } else if (/(qué hacen|que hacen|quiénes son|quienes son|servicios|qué es ocg|que es ocg|quién eres|quien eres)/i.test(lower)) {
         content = "The OC Group es una empresa de Wichita dedicada a la adquisición y renovación de propiedades y a la asesoría de inversión. Ayudamos a propietarios a explorar opciones de venta y a inversionistas a evaluar oportunidades, planear renovaciones, coordinar financiamiento y decidir entre renovar, revender o mantener. Soy G, su guía de IA. ¿Viene como propietario, inversionista o solo a explorar?";
       } else {
-        content = "Soy G, la guía de IA de The OC Group. Puedo ayudarle a vender una casa, evaluar una inversión, entender reparaciones o financiamiento, y conocer nuestros servicios. ¿Qué le gustaría explorar?";
+        // P0 repair: scored general-intent routing, then a fallback
+        // that never repeats the introduction once it has been given.
+        const gi = routeGeneralIntent(lastUserMsg, { spanish: true });
+        content = gi
+          ? gi.reply
+          : generalFallback({ spanish: true, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx) });
       }
       return {
         content,
@@ -371,18 +385,23 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
           arguments: { propertyId: "delano" },
         },
       ];
+    } else if (giInfoEn) {
+      content = giInfoEn.reply;
     } else if (sellerContext && /(address|located|street|wichita|\d{2,6}\s+\w+|needs work|repairs|quickly|as.is|timeline)/i.test(lower)) {
       content = "Thanks for the property details. I can help outline the as-is sale process, renovation tradeoffs, and information needed for a preliminary evaluation. I cannot verify its condition, ownership or market value from this message alone. The next useful details are its general condition and when you hope to sell; you can also begin a property review on our Sell page.";
     } else if (investorContext && /(address|located|street|\d{2,6}\s+\w+|budget|numbers|scope|offer|analyze|next)/i.test(lower)) {
       content = "We can screen this opportunity using verified comparable sales, an itemized repair budget, and financing, closing, carrying and resale costs. I won't invent ARV or lender terms. What property address or financial figures do you already have?";
-    } else if (/(sell|selling|cash offer|as.is|my house|my property|homeowner|tenants|vacant)/i.test(lower)) {
-      content = "Absolutely. We can look at selling as-is or making repairs first, and figure out what fits your timeline. You don\u0027t need all the details right now. Are you hoping to sell soon, or just exploring your options?";
-    } else if (/(investor|investing|first flip|flip|lender|finance|financing|buy and hold|capital)/i.test(lower)) {
-      content = "We can help you evaluate a deal, check renovation costs and risks, and plan the next move. Are you looking at a particular property or still deciding what to invest in?";
-    } else if (/(what do you do|what does.*(?:ocg|group).*do|what is ocg|who are you|services|how does.*work|curious|learn more|about.*group)/i.test(lower)) {
-      content = "The OC Group is a Wichita-based real estate acquisition and renovation advisory business. We help property owners explore sale options and help investors evaluate deals, plan renovations, coordinate financing, and decide whether to renovate, resell, or hold. I am G, its AI guide. Are you here as a property owner, investor, or just exploring?";
     } else {
-      content = "I am G, The OC Group's AI guide. I can help with selling a house, evaluating an investment, understanding repairs or financing, and learning about our services. What would you like to explore?";
+      // P0 repair: the old tail was three brittle regexes over a
+      // generic-introduction default — natural questions ("What
+      // exactly do you guys do?", "Do you charge any fees?") all fell
+      // through to the identical intro, repeatedly. Scored intent
+      // routing answers the actual question; the fallback never
+      // repeats the introduction once given.
+      const gi = routeGeneralIntent(lastUserMsg, { spanish: false });
+      content = gi
+        ? gi.reply
+        : generalFallback({ spanish: false, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx) });
     }
 
     return {

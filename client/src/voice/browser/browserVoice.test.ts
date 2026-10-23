@@ -15,9 +15,15 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
   it("the browser-voice IIFE catches chunk-load failures into the cascade", () => {
     const src = readFileSync(new URL("../../components/GExperience.tsx", import.meta.url), "utf8");
     const block = src.slice(src.indexOf("if (browserVoiceOn)"), src.indexOf("// Preferred spoken path"));
-    expect(block).toContain("const fallThrough = () => {");
-    expect(block).toContain("onError: fallThrough,");
-    expect(block).toContain("})().catch(() => { fallThrough(); });");
+    // P0 refactor (2026-10-23): fallThrough now carries a reason, the
+    // provider is built by ensureBrowserSpeech, and a first-audio
+    // deadline routes silent replies into the same cascade. The D1
+    // property is unchanged: every failure class lands in fallThrough.
+    expect(block).toContain('const fallThrough = (reason: "error" | "preparing" = "error") => {');
+    expect(block).toContain('onError: () => { clearTimeout(deadline); doFallThrough("error"); },');
+    expect(block).toContain('})().catch(() => { clearTimeout(deadline); doFallThrough("error"); });');
+    expect(block).toContain("const deadline = setTimeout(() => {");
+    expect(block).toContain('doFallThrough("preparing")');
   });
 });
 import { GBrowserSpeech, __setBrowserEngineForTests, withOpenerSplit } from "./gBrowserSpeech";
@@ -98,6 +104,30 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       expect(browserVoiceFlagEnabled()).toBe(true);
       set("?browserVoice=1");
       expect(browserVoiceFlagEnabled()).toBe(true);
+      set("?browserVoice=0");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+      set("");
+      expect(browserVoiceFlagEnabled()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("persists the URL choice so in-app navigation keeps the voice (P0)", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    const set = (search: string) => vi.stubGlobal("location", new URL(`http://localhost/${search}`));
+    try {
+      set("?browserVoice=1");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      // Query string dropped by SPA navigation — still on.
+      set("");
+      expect(browserVoiceFlagEnabled()).toBe(true);
+      // Explicit off clears the persisted choice everywhere.
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");

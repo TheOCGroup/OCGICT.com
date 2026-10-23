@@ -74,6 +74,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   // OCG Voice Runtime (browser inference) — prototype, flag-gated only.
   const browserSpeechRef = useRef<GBrowserSpeech | null>(null);
   const browserVoiceOn = browserVoiceFlagEnabled();
+  const [browserVoiceState, setBrowserVoiceState] = useState<"idle" | "preparing" | "ready">("idle");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -273,6 +274,54 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     setVoiceStatus("Voice stopped");
   };
 
+  // Construct the on-device voice provider once (dynamic import keeps
+  // the inference library out of the default bundle). Used by the
+  // speak path AND by a warmup when voice mode starts, so the one-time
+  // model download overlaps the conversation instead of blocking the
+  // first spoken reply (P0 repair).
+  const ensureBrowserSpeech = async (): Promise<GBrowserSpeech> => {
+    if (browserSpeechRef.current) return browserSpeechRef.current;
+    const mod = await import("@/voice/browser/gBrowserSpeech");
+    const prof = await import("@/voice/browser/deviceProfile");
+    const vv = await import("@/voice/browser/voiceVariant");
+    const variant = vv.resolveVoiceVariant();
+    const profile = prof.selectDeviceProfile({
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      deviceMemoryGB: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
+      mobileUserAgent: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent),
+      crossOriginIsolated: (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true,
+      webgpuAdapter: await prof.probeWebGPU(),
+    });
+    let lastShownMB = -1;
+    const provider = new mod.GBrowserSpeech({
+      providers: profile.providers,
+      numThreads: profile.numThreads,
+      assetBase: variant.assetBase,
+      cacheName: variant.cacheName,
+      variantLabel: variant.label,
+      styleName: variant.styleName,
+      onReady: (info) => {
+        setBrowserVoiceState("ready");
+        setVoiceDiag(`${info.variantLabel ?? "M1"} · ${info.providersUsed.includes("webgpu") ? "WebGPU" : "WASM"}`);
+      },
+      onProgress: (e) => {
+        if (!voiceEnabledRef.current) return;
+        if (e.phase === "init") {
+          setVoiceStatus(`Preparing G's voice… (${variant.label})`);
+          return;
+        }
+        const mb = Math.floor(e.loadedBytes / 1_000_000);
+        if (mb !== lastShownMB) {
+          lastShownMB = mb;
+          setVoiceStatus(`Downloading G's voice model — ${variant.label} · ${mb} MB received (one-time)`);
+        }
+      },
+    });
+    browserSpeechRef.current = provider;
+    setBrowserVoiceState("preparing");
+    return provider;
+  };
+
   const speakReply = (text: string, emotion?: string) => {
     // Realtime voice speaks through its own session; never double-speak.
     if (rtRef.current?.isActive) return;
@@ -294,8 +343,11 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       // it from here, with the standard notice. Used by BOTH the
       // provider's onError and any failure around it (chunk load,
       // construction) so no failure class can strand the reply.
-      const fallThrough = () => {
+      const fallThrough = (reason: "error" | "preparing" = "error") => {
         if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        const notice = reason === "preparing"
+          ? "That reply used the basic browser voice while the main voice finishes preparing"
+          : "That reply used the basic browser voice — the main voice had a hiccup";
         if (kokoroAvailable) {
           if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
           void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
@@ -312,61 +364,42 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             },
           }, { expressive: true, emotion });
         } else {
-          speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+          speakWithBrowserVoice(spoken, session, notice);
         }
       };
-      void (async () => {
-        // Dynamic import: the inference library ships only to visitors
-        // who enable the prototype flag, never in the default bundle.
-        if (!browserSpeechRef.current) {
-          const mod = await import("@/voice/browser/gBrowserSpeech");
-          const prof = await import("@/voice/browser/deviceProfile");
-          const vv = await import("@/voice/browser/voiceVariant");
-          const variant = vv.resolveVoiceVariant();
-          const profile = prof.selectDeviceProfile({
-            hardwareConcurrency: navigator.hardwareConcurrency,
-            deviceMemoryGB: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
-            mobileUserAgent: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent),
-            crossOriginIsolated: (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true,
-            webgpuAdapter: await prof.probeWebGPU(),
-          });
-          let lastShownMB = -1;
-          browserSpeechRef.current = new mod.GBrowserSpeech({
-            providers: profile.providers,
-            numThreads: profile.numThreads,
-            assetBase: variant.assetBase,
-            cacheName: variant.cacheName,
-            variantLabel: variant.label,
-            styleName: variant.styleName,
-            onReady: (info) => {
-              setVoiceDiag(`${info.variantLabel ?? "M1"} · ${info.providersUsed.includes("webgpu") ? "WebGPU" : "WASM"}`);
-            },
-            onProgress: (e) => {
-              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-              if (e.phase === "init") {
-                setVoiceStatus(`Preparing G's voice… (${variant.label})`);
-                return;
-              }
-              const mb = Math.floor(e.loadedBytes / 1_000_000);
-              if (mb !== lastShownMB) {
-                lastShownMB = mb;
-                setVoiceStatus(`Downloading G's voice model — ${variant.label} · ${mb} MB received (one-time)`);
-              }
-            },
-          });
+      let started = false;
+      let fellThrough = false;
+      const doFallThrough = (reason: "error" | "preparing") => {
+        if (fellThrough) return;
+        fellThrough = true;
+        fallThrough(reason);
+      };
+      // First-audio deadline (P0 repair): never leave the visitor in
+      // silence while the on-device voice downloads or starts. If G
+      // has not begun speaking within the deadline, THIS reply goes to
+      // the fallback cascade with an honest notice; the engine keeps
+      // preparing in the background and takes over from the next reply.
+      const deadline = setTimeout(() => {
+        if (!started && !fellThrough) {
+          browserSpeechRef.current?.stop();
+          doFallThrough("preparing");
         }
-        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
-        await browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en", emotion }, {
-          onStart: () => { armBargeIn(); setVoiceStatus(speakingStatus()); },
+      }, 12000);
+      void (async () => {
+        const provider = await ensureBrowserSpeech();
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { clearTimeout(deadline); return; }
+        await provider.speak(spoken, { lang: spanishReply ? "es" : "en", emotion }, {
+          onStart: () => { started = true; clearTimeout(deadline); armBargeIn(); setVoiceStatus(speakingStatus()); },
           onEnd: () => {
+            clearTimeout(deadline);
             disarmBargeIn();
             if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
             setVoiceStatus("Listening for your reply");
             startListening();
           },
-          onError: fallThrough,
+          onError: () => { clearTimeout(deadline); doFallThrough("error"); },
         });
-      })().catch(() => { fallThrough(); });
+      })().catch(() => { clearTimeout(deadline); doFallThrough("error"); });
       return;
     }
 
@@ -397,9 +430,21 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     speakWithBrowserVoice(spoken, session);
   };
 
+  const waitForVoices = (timeoutMs: number): Promise<SpeechSynthesisVoice[]> => new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    const initial = synth.getVoices();
+    if (initial.length > 0) { resolve(initial); return; }
+    let done = false;
+    const finish = () => { if (done) return; done = true; resolve(synth.getVoices()); };
+    const onChange = () => { synth.removeEventListener?.("voiceschanged", onChange); finish(); };
+    synth.addEventListener?.("voiceschanged", onChange);
+    setTimeout(finish, timeoutMs);
+  });
+
   const speakWithBrowserVoice = (spoken: string, session: number, startNotice?: string) => {
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
+    void (async () => {
     const speech = new SpeechSynthesisUtterance(spoken);
     // Pick the output language from G's actual reply, not the user's last language.
     // Otherwise an English reply can accidentally inherit a Spanish synthesizer.
@@ -411,17 +456,21 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     // Do not select an arbitrary browser voice: natural/neural does not indicate gender.
     // Browser TTS offers no reliable gender property. Permit only explicitly identified
     // male voice names; otherwise do not synthesize a potentially female voice.
-    const availableVoices = window.speechSynthesis.getVoices();
+    const availableVoices = await waitForVoices(1200);
+    if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
     const matching = availableVoices
-      .filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()));
-    const maleEnglish = /\b(?:guy|davis|andrew|brian|tony|ryan|david|james)\b/i;
-    const maleSpanish = /\b(?:jorge|alvaro|\u00e1lvaro|diego|pablo|raul|ra\u00fal|carlos|enrique)\b/i;
+      .filter(v => v.lang.toLowerCase().startsWith(locale.slice(0, 2).toLowerCase()))
+      .filter(v => !/\bfemale\b|\bmujer\b/i.test(v.name));
+    // Explicitly male-identified voices only: known male voice names
+    // (Microsoft, macOS, Google) or a name that itself says "male".
+    // Never substitute an unidentified or female-identified voice.
+    const maleEnglish = /\b(?:guy|davis|andrew|brian|tony|ryan|david|james|alex|daniel|fred|aaron|tom|christopher|george|arthur|richard)\b/i;
+    const maleSpanish = /\b(?:jorge|alvaro|\u00e1lvaro|diego|pablo|raul|ra\u00fal|carlos|enrique|juan|miguel|fernando)\b/i;
     const maleName = locale.startsWith("es") ? maleSpanish : maleEnglish;
-    const voice = matching.find(v => maleName.test(v.name)
+    const isMale = (v: SpeechSynthesisVoice) => maleName.test(v.name) || /\bmale\b/i.test(v.name);
+    const voice = matching.find(v => isMale(v)
       && v.lang.toLowerCase() === locale.toLowerCase())
-      || matching.find(v => maleName.test(v.name));
-    // Browser voice inventories may arrive asynchronously. The user can retry Talk
-    // after voiceschanged; never substitute an unidentified voice.
+      || matching.find(v => isMale(v));
     if (!voice) {
       setVoiceStatus("No identified male voice is available. Listening remains available; text chat is ready.");
       // A missing TTS voice must not terminate the hands-free listening session.
@@ -451,6 +500,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       }
     };
     window.speechSynthesis.speak(speech);
+    })();
   };
 
   const startListening = () => {
@@ -467,6 +517,14 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     recognitionRef.current?.abort?.();
     voiceEnabledRef.current = true;
     void ensureBargeIn();
+    // Warm the on-device voice in the background (P0 repair): the
+    // one-time download/init overlaps listening and the gateway reply
+    // instead of blocking the first spoken answer.
+    if (browserVoiceOn) {
+      void ensureBrowserSpeech()
+        .then((provider) => provider.prepare())
+        .catch(() => { /* the speak path surfaces failures honestly */ });
+    }
     const recognition = new Recognition();
     recognitionRef.current = recognition;
     recognition.lang = voiceLocaleRef.current;
@@ -734,7 +792,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             <button type="submit" disabled={!inputVal.trim() || isTyping} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500 text-slate-950 hover:bg-sky-400 disabled:opacity-35"><Send size={17}/></button>
           </form>
           <div className="mt-2 flex items-center justify-between gap-2 px-1 text-[11px] text-slate-400">
-            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : kokoroAvailable ? "OCG voice ready (preview)" : "Basic browser voice ready") : voiceStatus)}</span>
+            <span role="status" className="truncate">{rtStatusText() ?? (listening ? "Listening…" : voiceStatus === "Voice paused" || voiceStatus === "Voice is off" ? (realtimeAvailable ? "Realtime voice ready" : kokoroAvailable ? "OCG voice ready (preview)" : browserVoiceOn ? (browserVoiceState === "ready" ? "OCG voice ready (on-device)" : "OCG voice (on-device) — tap Talk to G") : "Basic browser voice ready") : voiceStatus)}</span>
             <div className="flex shrink-0 items-center gap-3">
               {rtActive ? (
                 <button type="button" onClick={toggleRtMute} className="hover:text-white" aria-label={rtMuted ? "Unmute microphone" : "Mute microphone"}>{rtMuted ? "Unmute" : "Mute"}</button>
@@ -744,7 +802,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <button type="button" onClick={openLeadCard} className="text-sky-300 hover:text-sky-100">Have OCG contact me</button>
             </div>
           </div>
-          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : kokoroAvailable ? "OCG voice (preview) — our own voice, still being tested. Text chat is fully available." : "Basic browser voice — text chat is fully available."}</p>
+          <p className="mt-1 px-1 text-[10px] text-slate-500">{realtimeAvailable ? "Realtime voice — talk naturally, interrupt anytime." : kokoroAvailable ? "OCG voice (preview) — our own voice, still being tested. Text chat is fully available." : browserVoiceOn ? "OCG voice runs on your device — the first use downloads the voice model once. Text chat is fully available." : "Basic browser voice — text chat is fully available."}</p>
         </div>
       </div>
     );
@@ -802,7 +860,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
               <div className="text-lg font-bold text-white">Let's figure it out together.</div>
               <p className="max-w-sm text-sm leading-relaxed text-blue-100/80">Selling a home? Exploring your next investment? Just curious? I'm here to help.</p>
               <div className="text-xs font-semibold uppercase tracking-widest text-sky-300">{rtStatusText() ?? (listening ? "Listening to you" : isTyping ? "Thinking through your question" : rtActive ? "Voice on" : "Tap G to speak")}</div>
-              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : kokoroAvailable ? "OCG voice — preview" : "Basic browser voice"}</div>
+              <div className="text-[10px] font-medium uppercase tracking-widest text-blue-200/60">{realtimeAvailable ? "Realtime voice" : kokoroAvailable ? "OCG voice — preview" : browserVoiceOn ? "OCG voice — on-device" : "Basic browser voice"}</div>
             </div>
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
