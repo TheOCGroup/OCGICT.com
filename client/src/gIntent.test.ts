@@ -78,3 +78,32 @@ describe("general questions are answered, not introduced over", () => {
     expect(mao.replyText).toContain("$170,000");
   });
 });
+
+describe("the founder's exact phrases (2026-10-23 verification)", () => {
+  it("are answered as voice-meta questions, honestly", async () => {
+    const { routeGeneralIntent } = await import("../server/voice/gIntent");
+    expect(routeGeneralIntent("Hey, G, can you hear me?", { spanish: false })?.intent).toBe("voiceHearing");
+    expect(routeGeneralIntent("Hey, Gee, why don't I hear you respond back?", { spanish: false })?.intent).toBe("voiceNoAudio");
+    expect(routeGeneralIntent("Why does it take you so damn long to respond?", { spanish: false })?.intent).toBe("voiceSlow");
+    expect(routeGeneralIntent("¿Me escuchas?", { spanish: true })?.intent).toBe("voiceHearing");
+    expect(routeGeneralIntent("No te escucho nada", { spanish: true })?.intent).toBe("voiceNoAudio");
+    expect(routeGeneralIntent("¿Por qué tardas tanto en responder?", { spanish: true })?.intent).toBe("voiceSlow");
+    // A real timeline question must NOT be stolen by the meta rule.
+    expect(routeGeneralIntent("How long does the whole process take?", { spanish: false })?.intent).toBe("timeline");
+    expect(routeGeneralIntent("¿Cuánto tarda el proceso de venta?", { spanish: true })?.intent).toBe("timeline");
+  });
+
+  it("the clarifier never repeats: stage-2 offers the phone and the three routes", async () => {
+    const { generalFallback, clarifierAlreadyGiven } = await import("../server/voice/gIntent");
+    const hist = [
+      { role: "user", content: "blah" },
+      { role: "assistant", content: "Let me point you the right way: are you asking as a homeowner thinking about selling, as an investor, or about the company itself?" },
+    ];
+    expect(clarifierAlreadyGiven(hist)).toBe(true);
+    const second = generalFallback({ spanish: false, sellerContext: false, investorContext: false, introGiven: true, clarifierGiven: true });
+    expect(second).not.toContain("point you the right way");
+    expect(second).toContain("(720) 620-9929");
+    const secondEs = generalFallback({ spanish: true, sellerContext: false, investorContext: false, introGiven: true, clarifierGiven: true });
+    expect(secondEs).toContain("(720) 620-9929");
+  });
+});

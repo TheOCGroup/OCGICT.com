@@ -20,7 +20,8 @@ export type GeneralIntent =
   | "fees" | "areas" | "process" | "timeline" | "human"
   | "propertyTypes" | "howSelling" | "evaluation" | "priceExpectation"
   | "contact" | "appointment" | "company" | "team" | "thanks"
-  | "goodbye" | "sellerGeneric" | "investorGeneric";
+  | "goodbye" | "sellerGeneric" | "investorGeneric"
+  | "voiceHearing" | "voiceNoAudio" | "voiceSlow";
 
 const FILLERS = new Set([
   "exactly", "just", "really", "actually", "basically", "guys", "guy",
@@ -47,6 +48,24 @@ interface IntentRule {
 }
 
 const RULES: IntentRule[] = [
+  {
+    // The founder's exact failure phrases (2026-10-23): questions about
+    // the voice itself must be acknowledged honestly, never deflected
+    // to the generic clarifier.
+    intent: "voiceHearing",
+    phrases: ["can you hear", "do you hear", "are you there", "you there", "escuchas", "escucha", "oyes", "oye", "estás ahí", "estas ahi"],
+    words: ["hear"],
+  },
+  {
+    intent: "voiceNoAudio",
+    phrases: ["don t hear you", "can t hear you", "not hearing you", "hear you respond", "hear you back", "no sound", "no audio", "no te escucho", "no te oigo", "no escucho nada", "no oigo nada", "no se oye", "no se escucha"],
+    words: ["sound", "audio", "escucho", "oigo"],
+  },
+  {
+    intent: "voiceSlow",
+    phrases: ["take long", "takes long", "taking long", "long to respond", "long to answer", "damn long", "why the delay", "respond faster", "por qué tardas", "porque tardas", "cuánto tardas", "cuanto tardas"],
+    words: ["slow", "delay", "delayed", "tardas", "lento", "lenta"],
+  },
   {
     intent: "fees",
     phrases: ["how much does it cost", "how much do you charge", "do you charge", "any fees", "your fees", "what does it cost", "charge for", "cost to use", "cuánto cobran", "cuanto cobran", "cobran algo", "qué cobran", "que cobran", "cuánto cuesta", "cuanto cuesta"],
@@ -135,6 +154,18 @@ const RULES: IntentRule[] = [
 ];
 
 const REPLIES: Record<GeneralIntent, { en: string; es: string }> = {
+  voiceHearing: {
+    en: "Yes — I can hear you, and I'm right here. If my voice isn't coming through on your side, my replies always appear as text in this panel too, so we can keep going either way. What can I help you with?",
+    es: "Sí — te escucho y estoy aquí. Si mi voz no se oye de tu lado, mis respuestas siempre aparecen también como texto en este panel, así que podemos seguir de cualquier forma. ¿En qué te ayudo?",
+  },
+  voiceNoAudio: {
+    en: "You're right to flag that — sorry. My voice runs on your device, and the first spoken reply can be delayed or silent while the voice model downloads once. My words always appear as text here, so nothing is lost; if it keeps happening, check that the tab isn't muted and the volume is up.",
+    es: "Tienes razón en decirlo — perdón. Mi voz funciona en tu dispositivo, y la primera respuesta hablada puede tardar o no oírse mientras el modelo de voz se descarga una sola vez. Mis palabras siempre aparecen como texto aquí, así que no se pierde nada; si sigue pasando, revisa que la pestaña no esté silenciada y que el volumen esté alto.",
+  },
+  voiceSlow: {
+    en: "Fair question — sorry for the wait. On a new device, my first spoken reply waits on a one-time voice-model download; after that it stays cached and I respond much faster. My text replies are immediate, so we can keep moving here while the voice warms up.",
+    es: "Buena pregunta — perdón por la espera. En un dispositivo nuevo, mi primera respuesta hablada espera la descarga única del modelo de voz; después queda guardado y respondo mucho más rápido. Mis respuestas en texto son inmediatas, así que podemos seguir aquí mientras la voz se prepara.",
+  },
   fees: {
     en: "There's no charge and no obligation for a preliminary property review or a conversation with us. If you sell directly to us, there are no agent commissions or listing fees; if you list with an agent instead, a commission usually applies. Exact figures depend on the path you choose — would you like me to walk through how the two compare?",
     es: "No hay ningún cargo ni obligación por una revisión preliminar de la propiedad ni por conversar con nosotros. Si vende directamente con nosotros, no hay comisiones de agente ni gastos de listado; si vende con un agente, normalmente sí aplica una comisión. Las cifras exactas dependen del camino que elija. ¿Le gustaría que comparemos ambas opciones?",
@@ -232,6 +263,12 @@ export function routeGeneralIntent(
   return { intent: best.intent, reply: opts.spanish ? r.es : r.en };
 }
 
+/** Has a clarifying fallback already been given this chat? */
+export function clarifierAlreadyGiven(history: Array<{ role: string; content: string }>): boolean {
+  const joined = history.filter((h) => h.role === "assistant").map((h) => h.content).join("\n");
+  return /Let me point you the right way|Quiero orientarle bien/.test(joined);
+}
+
 /** Has G already introduced himself / described the company this chat? */
 export function introAlreadyGiven(history: Array<{ role: string; content: string }>): boolean {
   const joined = history.filter((h) => h.role === "assistant").map((h) => h.content).join("\n");
@@ -249,8 +286,9 @@ export function generalFallback(opts: {
   sellerContext: boolean;
   investorContext: boolean;
   introGiven: boolean;
+  clarifierGiven?: boolean;
 }): string {
-  const { spanish, sellerContext, investorContext, introGiven } = opts;
+  const { spanish, sellerContext, investorContext, introGiven, clarifierGiven } = opts;
   if (!introGiven) {
     return spanish
       ? "Soy G, la guía de IA de The OC Group. Puedo ayudarle a vender una casa, evaluar una inversión, entender reparaciones o financiamiento, y conocer nuestros servicios. ¿Qué le gustaría explorar?"
@@ -259,7 +297,13 @@ export function generalFallback(opts: {
   if (spanish) {
     if (sellerContext) return "Puedo profundizar en cualquier parte: cómo evaluamos una casa, cuáles son los pasos de una venta directa o qué costos tendría usted. ¿Qué le ayudaría más?";
     if (investorContext) return "Puedo profundizar en cualquier parte: cómo evaluamos una oportunidad, los costos de renovación o las opciones de financiamiento. ¿Qué le ayudaría más?";
+    if (clarifierGiven) return "Te lo hago fácil: puedes llamarnos o escribirnos al (720) 620-9929, o dime en pocas palabras — vender una casa, una propiedad de inversión, o una pregunta sobre la empresa — y seguimos desde ahí.";
     return "Quiero orientarle bien: ¿su pregunta es como propietario que piensa vender, como inversionista, o sobre la empresa en sí?";
+  }
+  if (clarifierGiven) {
+    return spanish
+      ? "Te lo hago fácil: puedes llamarnos o escribirnos al (720) 620-9929, o dime en pocas palabras — vender una casa, una propiedad de inversión, o una pregunta sobre la empresa — y seguimos desde ahí."
+      : "Let me make it easy: you can call or text us at (720) 620-9929, or just tell me in a few words — selling a house, an investment property, or a question about the company — and I'll take it from there.";
   }
   if (sellerContext) return "I can go deeper on any part of that — how we evaluate a home, what the steps of a direct sale look like, or what it costs you, which is nothing for a preliminary review. Which would help most?";
   if (investorContext) return "I can go deeper on any part of that — how we evaluate an opportunity, renovation costs and risks, or financing options. Which would help most?";

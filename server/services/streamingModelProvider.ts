@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
 import { analyzeSellerContext } from "../voice/sellerPolicy.js";
-import { routeGeneralIntent, generalFallback, introAlreadyGiven } from "../voice/gIntent.js";
+import { routeGeneralIntent, generalFallback, introAlreadyGiven, clarifierAlreadyGiven } from "../voice/gIntent.js";
 import { numberToWordsEN, numberToWordsES } from "../voice/gExpression.js";
 
 export interface StreamingChunk {
@@ -266,7 +266,7 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
         const gi = routeGeneralIntent(lastUserMsg, { spanish: true });
         content = gi
           ? gi.reply
-          : generalFallback({ spanish: true, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx) });
+          : generalFallback({ spanish: true, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx), clarifierGiven: clarifierAlreadyGiven(histForCtx) });
       }
       return {
         content,
@@ -401,7 +401,7 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       const gi = routeGeneralIntent(lastUserMsg, { spanish: false });
       content = gi
         ? gi.reply
-        : generalFallback({ spanish: false, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx) });
+        : generalFallback({ spanish: false, sellerContext, investorContext, introGiven: introAlreadyGiven(histForCtx), clarifierGiven: clarifierAlreadyGiven(histForCtx) });
     }
 
     return {
