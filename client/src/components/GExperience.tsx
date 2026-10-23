@@ -75,6 +75,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const browserSpeechRef = useRef<GBrowserSpeech | null>(null);
   const browserVoiceOn = browserVoiceFlagEnabled();
   const [browserVoiceState, setBrowserVoiceState] = useState<"idle" | "preparing" | "ready">("idle");
+  const browserReadyRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -301,6 +302,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       variantLabel: variant.label,
       styleName: variant.styleName,
       onReady: (info) => {
+        browserReadyRef.current = true;
         setBrowserVoiceState("ready");
         setVoiceDiag(`${info.variantLabel ?? "M1"} · ${info.providersUsed.includes("webgpu") ? "WebGPU" : "WASM"}`);
       },
@@ -379,27 +381,31 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       // has not begun speaking within the deadline, THIS reply goes to
       // the fallback cascade with an honest notice; the engine keeps
       // preparing in the background and takes over from the next reply.
-      const deadline = setTimeout(() => {
+      // The deadline applies only while the engine is NOT ready: once
+      // warm, synthesis is bounded by the worker-call timeouts, and a
+      // slow-but-working engine must not be cut off mid-synthesis.
+      const deadline = browserReadyRef.current ? null : setTimeout(() => {
         if (!started && !fellThrough) {
           browserSpeechRef.current?.stop();
           doFallThrough("preparing");
         }
-      }, 12000);
+      }, 15000);
+      const clearDeadline = () => { if (deadline) clearDeadline(); };
       void (async () => {
         const provider = await ensureBrowserSpeech();
-        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { clearTimeout(deadline); return; }
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) { clearDeadline(); return; }
         await provider.speak(spoken, { lang: spanishReply ? "es" : "en", emotion }, {
-          onStart: () => { started = true; clearTimeout(deadline); armBargeIn(); setVoiceStatus(speakingStatus()); },
+          onStart: () => { started = true; clearDeadline(); armBargeIn(); setVoiceStatus(speakingStatus()); },
           onEnd: () => {
-            clearTimeout(deadline);
+            clearDeadline();
             disarmBargeIn();
             if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
             setVoiceStatus("Listening for your reply");
             startListening();
           },
-          onError: () => { clearTimeout(deadline); doFallThrough("error"); },
+          onError: () => { clearDeadline(); doFallThrough("error"); },
         });
-      })().catch(() => { clearTimeout(deadline); doFallThrough("error"); });
+      })().catch(() => { clearDeadline(); doFallThrough("error"); });
       return;
     }
 

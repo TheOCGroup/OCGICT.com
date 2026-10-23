@@ -20,9 +20,9 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
     // deadline routes silent replies into the same cascade. The D1
     // property is unchanged: every failure class lands in fallThrough.
     expect(block).toContain('const fallThrough = (reason: "error" | "preparing" = "error") => {');
-    expect(block).toContain('onError: () => { clearTimeout(deadline); doFallThrough("error"); },');
-    expect(block).toContain('})().catch(() => { clearTimeout(deadline); doFallThrough("error"); });');
-    expect(block).toContain("const deadline = setTimeout(() => {");
+    expect(block).toContain('onError: () => { clearDeadline(); doFallThrough("error"); },');
+    expect(block).toContain('})().catch(() => { clearDeadline(); doFallThrough("error"); });');
+    expect(block).toContain("browserReadyRef.current ? null : setTimeout(() => {");
     expect(block).toContain('doFallThrough("preparing")');
   });
 });
