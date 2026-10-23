@@ -444,7 +444,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const speakWithBrowserVoice = (spoken: string, session: number, startNotice?: string) => {
     if (!voiceEnabledRef.current || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    void (async () => {
+    void (async () => { try {
     const speech = new SpeechSynthesisUtterance(spoken);
     // Pick the output language from G's actual reply, not the user's last language.
     // Otherwise an English reply can accidentally inherit a Spanish synthesizer.
@@ -500,7 +500,14 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       }
     };
     window.speechSynthesis.speak(speech);
-    })();
+    } catch {
+      // A platform quirk in the basic voice must never strand the
+      // session in silence: surface it and keep listening.
+      if (voiceEnabledRef.current && voiceSessionRef.current === session) {
+        setVoiceStatus("Speech playback unavailable. Listening for your reply.");
+        startListening();
+      }
+    } })();
   };
 
   const startListening = () => {
