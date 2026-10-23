@@ -94,7 +94,7 @@ export default async function handler(request: Request): Promise<Response> {
     });
   }
 
-  let payload: { text?: unknown; lang?: unknown; intent?: unknown; expressive?: unknown };
+  let payload: { text?: unknown; lang?: unknown; intent?: unknown; expressive?: unknown; emotion?: unknown };
   try {
     payload = await request.json();
   } catch {
@@ -139,7 +139,7 @@ export default async function handler(request: Request): Promise<Response> {
   // same fail-closed errors as the plain path, and the client falls back
   // to the labeled basic browser voice for that reply.
   if (payload.expressive === true) {
-    const plan = planDelivery(text, { lang, intent: payload.intent });
+    const plan = planDelivery(text, { lang, intent: payload.intent, emotion: payload.emotion });
     if (plan.segments.length === 0) {
       return new Response(JSON.stringify({ error: "Nothing to say." }), { status: 400, headers: jsonHeaders });
     }

@@ -1,6 +1,8 @@
 import { Readable } from "stream";
 import { ModelMessage, ModelToolDefinition, ModelCompletionOptions, ModelCompletionResponse, IModelProvider } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
+import { analyzeSellerContext } from "../voice/sellerPolicy.js";
+import { numberToWordsEN, numberToWordsES } from "../voice/gExpression.js";
 
 export interface StreamingChunk {
   type: "token" | "tool_call" | "done" | "error";
@@ -170,6 +172,14 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
     const sellerContext = /\b(sell|selling|homeowner|inherited|probate|my house|my property|estate|vender|venta|herencia|heredé|herede|mi casa|propietario)\b/i.test(priorConversation);
     const investorContext = /\b(invest|flip|rental|financing|lender|capital|buy and hold|invertir|inversión|inversion|financiamiento|renta)\b/i.test(priorConversation);
 
+    // Seller Trust Engine: emotional context, stated facts (corrections
+    // win), and conversation stage for this turn, in either language.
+    const histForCtx = options.messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(0, -1)
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    const sctx = analyzeSellerContext(histForCtx, lastUserMsg, { spanish: looksSpanish(lastUserMsg) || looksSpanish(priorConversation) });
+
     let content = "";
     let toolCalls: Array<{ name: string; arguments: Record<string, any> }> | undefined;
 
@@ -186,6 +196,39 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
       || (looksSpanish(priorConversation) && briefFollowup.split(/\s+/).filter(Boolean).length <= 5);
     const esCalcRequest = /(regla del 70|calcular|mao|70\s?%)/.test(lower);
     if (spanishTurn && !esCalcRequest) {
+      // Seller Trust Engine — Spanish policy turns (corrections,
+      // skepticism, comparison, evaluation, distress) are answered
+      // before the general Spanish rules so they are never flattened
+      // into a generic seller reply.
+      if (sctx.isSeller && sctx.primary === "frustrated") {
+        content = /\b(dejen de|no me llamen|no me escriban|no me interesa)\b/i.test(lower)
+          ? "Entendido, y lamento la molestia. No insistiré más aquí. Si algún día necesita información, nuestra página de contacto es la vía directa."
+          : "Lamento la frustración. Mantendré esto breve y responderé solo lo que me pregunte. ¿Qué le sería más útil ahora?";
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      if (sctx.isSeller && sctx.correction) {
+        const val = sctx.correction.field === "bedrooms" ? `${numberToWordsES(Number(sctx.correction.value))} recámaras` : "ese dato";
+        content = sctx.stage === "timeline"
+          ? `Entendido — ${val}, ya lo actualicé. ¿Cuándo espera vender la propiedad?`
+          : `Entendido — ${val}, ya lo actualicé. ¿Cómo describiría el estado de la propiedad?`;
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      if (sctx.isSeller && sctx.primary === "skeptical") {
+        content = "Es una pregunta justa, y no tiene que confiar solo en mi palabra. Así trabajamos: revisamos ventas comparables recientes y las reparaciones que la propiedad necesita, le explicamos cada cifra, y cualquier oferta sería por escrito y sin obligación. También puede compararla con vender de la manera tradicional antes de decidir. ¿Le ayudaría que le explique cómo evaluamos una propiedad?";
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      if (sctx.isSeller && sctx.primary === "comparing") {
+        content = "Vale la pena compararlo con honestidad. Vender con un agente puede lograr un precio más alto, sobre todo si la casa está en buen estado, pero suele implicar reparaciones, visitas, comisiones y esperar al comprador adecuado. Una venta directa evita las reparaciones y las visitas y puede cerrar más rápido, aunque el precio refleja esa comodidad. ¿Qué pesa más para usted: el precio más alto posible o una venta más sencilla y rápida?";
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      if (sctx.isSeller && sctx.primary === "curious") {
+        content = "Así evaluamos una propiedad. Revisamos las ventas comparables recientes cerca de la casa, las reparaciones que necesita y los costos reales de comprar, mantener y revender. Con eso obtenemos un rango preliminar; una oferta formal solo llega después de una revisión real de nuestro equipo, por escrito y sin obligación. ¿Prefiere empezar por el estado de la propiedad o por su ubicación?";
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
+      if (sctx.isSeller && sctx.primary === "stressed_finances") {
+        content = "Lamento que esté pasando por esto. No puedo prometerle un resultado, pero una venta directa tal como está a veces ayuda a detener los costos, y podemos explicarle los tiempos con honestidad. ¿Le ayudaría hablar de cómo podría verse una venta en su situación?";
+        return { content, provider: "OCG_LOCAL_ENGINE", model: "ocg-deterministic-v5", latencyMs: Date.now() - startTime };
+      }
       // Word boundaries matter: "revender" (resell / fix-and-flip) must
       // NOT match the seller verb "vender" — flip phrasing is investor
       // intent. Flip markers are tested as investor signals below.
@@ -259,6 +302,37 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
           arguments: { arv, rehab },
         },
       ];
+    } else if (sctx.isSeller && sctx.primary === "frustrated") {
+      // De-escalate, never defend. A stop request closes the conversation
+      // without a question; general frustration gets brevity + one ask.
+      content = /\b(stop|leave me alone|don'?t (call|contact|message)|not interested)\b/i.test(lower)
+        ? "Understood, and I'm sorry for the frustration. I won't push anything here. If you ever want information later, our Contact page is the direct route."
+        : "I'm sorry — I don't want to waste your time. I'll keep this brief and only answer what you ask. What would help most right now?";
+    } else if (sctx.isSeller && sctx.correction) {
+      // Natural correction: acknowledge the updated fact explicitly,
+      // then continue with the stage's single question.
+      const val = sctx.correction.field === "bedrooms"
+        ? `${numberToWordsEN(Number(sctx.correction.value))} bedrooms`
+        : sctx.correction.field === "timeline" ? "your updated timeline" : "that detail";
+      content = sctx.stage === "timeline"
+        ? `Got it — ${val}, updated. When are you hoping to sell?`
+        : sctx.stage === "evaluation"
+          ? `Got it — ${val}, updated. Would you like a quick walk-through of how we evaluate a property?`
+          : `Got it — ${val}, updated. How would you describe the home's condition?`;
+    } else if (sctx.isSeller && sctx.primary === "skeptical") {
+      content = "That's a fair question, and you shouldn't have to take my word for anything. Here's how it works: we review recent comparable sales and the repairs the property needs, we explain every number we use, and any offer would be in writing with no obligation. You're free to compare it with listing the traditional way before deciding anything. Would it help if I walked through how we evaluate a property?";
+    } else if (sctx.isSeller && sctx.primary === "comparing") {
+      content = "It's worth comparing honestly. Listing with an agent can bring a higher price, especially for a home in good condition, but it usually means repairs, showings, commissions, and waiting for the right buyer. A direct sale skips the repairs and showings and can close faster, though the price reflects that convenience. Which matters more for you — the highest possible price, or a simpler, faster sale?";
+    } else if (sctx.isSeller && sctx.primary === "curious") {
+      content = "Here's how we evaluate a property. We look at recent comparable sales near the home, the repairs it needs, and the real costs of buying, holding, and reselling. That gives us a preliminary range — a formal offer only comes after a real review by our team, in writing, with no obligation. Would you like to start with the property's condition, or its location?";
+    } else if (sctx.isSeller && sctx.primary === "stressed_finances") {
+      content = "I'm sorry you're dealing with that. I can't promise an outcome, but a direct as-is sale is sometimes one way to stop the costs from growing, and we can explain the timeline honestly. Would it help to talk through what a sale could look like in your situation?";
+    } else if (sctx.isSeller && sctx.primary === "attached") {
+      content = "It sounds like this home carries a lot of history. There's no rush here — we can talk through what selling directly would look like, and you can take all the time you need with the decision. What part of the process would you like to understand first?";
+    } else if (sctx.isSeller && sctx.primary === "hesitant") {
+      content = "That's completely fine — most people start by just exploring. There's no obligation here, and no timeline you have to meet. Would it help to compare selling as-is with making repairs first?";
+    } else if (sctx.isSeller && sctx.facts.bedrooms !== undefined && sctx.stage === "property" && !sctx.correction) {
+      content = `Got it — a ${sctx.facts.bedrooms}-bedroom home. How would you describe its condition: move-in ready, or does it need some work?`;
     } else if (lower.includes("all my cash") || lower.includes("why wouldn't i") || lower.includes("all cash into")) {
       content = `OCG advises preserving liquid cash as strategic contingency armor. Deploying senior lender debt for purchase and construction draws protects you against unexpected material/permit delays and satisfies lender interest reserves.`;
     } else if (lower.includes("dscr") || lower.includes("rental")) {

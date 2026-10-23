@@ -39,6 +39,7 @@ export interface WorkerConfig {
   providers?: string[];
   numThreads?: number;
   variantLabel?: string;
+  styleName?: string;
   onProgress?: (e: { phase: string; file: string; fileBytes: number; fileTotal?: number; loadedBytes: number }) => void;
   onReady?: (info: { providersUsed: string[]; variantLabel?: string }) => void;
 }
@@ -127,6 +128,7 @@ class WorkerSynth {
             cacheName: this.config.cacheName,
             providers: this.config.providers,
             numThreads: this.config.numThreads,
+            styleName: this.config.styleName,
           });
         }
         const r = await this.call({ type: "load" });
@@ -155,6 +157,7 @@ export function __setBrowserEngineForTests(engine: unknown, _style: unknown): vo
 export class GBrowserSpeech {
   private ctx: AudioContext | null = null;
   private current: AudioBufferSourceNode | null = null;
+  private outAnalyser: AnalyserNode | null = null;
   private generation = 0;
   private stopResolve: (() => void) | null = null;
 
@@ -187,7 +190,7 @@ export class GBrowserSpeech {
 
   async speak(
     text: string,
-    opts: { lang?: string; intent?: string },
+    opts: { lang?: string; intent?: string; emotion?: string },
     events: BrowserSpeechEvents,
   ): Promise<void> {
     const gen = ++this.generation;
@@ -198,7 +201,7 @@ export class GBrowserSpeech {
       return;
     }
     if (gen !== this.generation) return;
-    const plan = planDelivery(text, { lang: opts.lang ?? "en", intent: opts.intent });
+    const plan = planDelivery(text, { lang: opts.lang ?? "en", intent: opts.intent, emotion: opts.emotion });
     plan.segments = withOpenerSplit(plan.segments);
     if (!this.ctx) this.ctx = new AudioContext();
     if (this.ctx.state === "suspended") await this.ctx.resume().catch(() => {});
@@ -229,7 +232,16 @@ export class GBrowserSpeech {
       buffer.copyToChannel(result.wav as Float32Array, 0);
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(this.ctx.destination);
+      // Route playback through an analyser tap so the barge-in monitor
+      // knows how loud G himself is right now (echo guard input). The
+      // tap is an enhancement only: without it, connect directly.
+      if (!this.outAnalyser && typeof this.ctx.createAnalyser === "function") {
+        this.outAnalyser = this.ctx.createAnalyser();
+        this.outAnalyser.fftSize = 1024;
+        this.outAnalyser.connect(this.ctx.destination);
+      }
+      if (this.outAnalyser) source.connect(this.outAnalyser);
+      else source.connect(this.ctx.destination);
       this.current = source;
       if (!started) { started = true; events.onStart(); }
       const ended = new Promise<void>((resolve) => { source.onended = () => resolve(); });
@@ -246,6 +258,16 @@ export class GBrowserSpeech {
       }
     }
     if (gen === this.generation) events.onEnd();
+  }
+
+  /** Current playback RMS (0 when silent) — the barge-in echo guard. */
+  getOutputLevel(): number {
+    if (!this.outAnalyser || !this.current) return 0;
+    const buf = new Float32Array(this.outAnalyser.fftSize);
+    this.outAnalyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    return Math.sqrt(sum / buf.length);
   }
 
   /** Halt playback and cancel every queued segment, immediately. */

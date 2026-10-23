@@ -27,6 +27,7 @@ interface WorkerConfig {
   cacheName?: string;
   providers?: string[];
   numThreads?: number;
+  styleName?: string;
 }
 
 let config: WorkerConfig = {};
@@ -43,7 +44,7 @@ async function buildEngine(providers: string[]): Promise<void> {
     onProgress: (e) => (self as any).postMessage({ type: "progress", ...e }),
   });
   await engine.load();
-  style = await engine.loadStyle("M1");
+  style = await engine.loadStyle(config.styleName ?? "M1");
   providersUsed = providers;
 }
 
@@ -78,6 +79,7 @@ self.onmessage = async (ev: MessageEvent) => {
         cacheName: msg.cacheName,
         providers: msg.providers,
         numThreads: msg.numThreads,
+        styleName: msg.styleName,
       };
       if (msg.numThreads && msg.numThreads > 1) {
         try { (ort as any).env.wasm.numThreads = msg.numThreads; } catch { /* single-thread env */ }

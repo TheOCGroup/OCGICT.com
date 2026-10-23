@@ -19,6 +19,9 @@ export interface VoiceVariant {
   sizeMB: number;
   assetBase?: string;
   cacheName: string;
+  /** Supertonic voice style (timbre). M1 is the certified default;
+   *  M2 is the evaluated alternative selectable for comparison. */
+  styleName: string;
 }
 
 export const VOICE_VARIANTS: Record<VoiceVariant["key"], VoiceVariant> = {
@@ -27,6 +30,7 @@ export const VOICE_VARIANTS: Record<VoiceVariant["key"], VoiceVariant> = {
     label: "M1 full (398 MB)",
     sizeMB: 398,
     cacheName: "ocg-voice-assets-v1",
+    styleName: "M1",
   },
   balanced: {
     key: "balanced",
@@ -37,6 +41,7 @@ export const VOICE_VARIANTS: Record<VoiceVariant["key"], VoiceVariant> = {
     // package was not yet hosted) could cache the host's HTML
     // fallback page under v1 (QUINCEY N1) — v2 starts clean.
     cacheName: "ocg-voice-assets-balanced-v2",
+    styleName: "M1",
   },
 };
 
@@ -46,9 +51,17 @@ export function resolveVoiceVariant(
     typeof localStorage !== "undefined" ? localStorage : undefined,
 ): VoiceVariant {
   try {
-    const q = loc ? new URLSearchParams(loc.search).get("voiceVariant") : null;
+    const params = loc ? new URLSearchParams(loc.search) : null;
+    const q = params?.get("voiceVariant");
+    const style = params?.get("voiceStyle");
     const saved = store?.getItem("ocg-g-voice-variant");
-    if (q === "balanced" || saved === "balanced") return VOICE_VARIANTS.balanced;
+    const base = q === "balanced" || saved === "balanced" ? VOICE_VARIANTS.balanced : VOICE_VARIANTS.fp32;
+    // Style override is allowlisted to the styles shipped for
+    // evaluation (M1 default, M2 alternative). The label follows the
+    // style so the on-page diag line never misstates the voice.
+    if (style === "M2") {
+      return { ...base, styleName: "M2", label: base.label.replace(/^M1/, "M2") };
+    }
   } catch { /* fall through to default */ }
   return VOICE_VARIANTS.fp32;
 }
