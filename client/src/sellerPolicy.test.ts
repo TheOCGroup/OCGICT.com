@@ -47,6 +47,18 @@ describe("seller policy — emotional context", () => {
     expect(analyzeSellerContext([], "Estoy atrasado en los pagos de la casa", { spanish: true }).primary).toBe("stressed_finances");
   });
 
+  it("flags Spanish verb+clitic seller phrasings (QUINCEY D1 repro)", () => {
+    // "venderla/venderlo" carry the pronoun on the verb — a word-
+    // boundary "vender" token misses them and silently disabled the
+    // whole trust policy for the conversation.
+    expect(analyzeSellerContext([], "Quiero venderla", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Necesito venderla pronto", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Es una casa de cuatro recámaras y quiero venderla", { spanish: true }).isSeller).toBe(true);
+    expect(analyzeSellerContext([], "Quiero venderlo, es el terreno de mi papá", { spanish: true }).isSeller).toBe(true);
+    // Precision guard: "ventana" (window) must not trip the venta token.
+    expect(analyzeSellerContext([], "La ventana de la cocina está rota", { spanish: true }).isSeller).toBe(false);
+  });
+
   it("does not flag investor conversation as seller", () => {
     const ctx = analyzeSellerContext([], "I want to invest in a flip, what's the DSCR on a rental?");
     expect(ctx.isSeller).toBe(false);

@@ -113,7 +113,7 @@ const EMOTION_ORDER: SellerEmotion[] = [
 ];
 
 const SELLER_SIGNAL =
-  /\b(sell|selling|my house|my property|homeowner|inherited|probate|estate|vender|venta|mi casa|herencia|propietario|hered\w*)\b/i;
+  /\b(sell|selling|my house|my property|homeowner|inherited|probate|estate|vender(?:la|lo|las|los)?|venta|mi casa|mi propiedad|herencia|propietario|hered\w*)\b/i;
 
 const EVALUATION_EXPLAINED =
   /\b(comparable sales|we (evaluate|look at)|how we evaluate|ventas comparables|evaluamos|comps)\b/i;
