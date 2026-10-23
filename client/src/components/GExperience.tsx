@@ -9,7 +9,7 @@ import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig
 import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
 import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
 import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
-import { armFirstAudioDeadline } from "@/voice/browser/firstAudioGate";
+import { createGateRegistry, type GateRegistry } from "@/voice/browser/firstAudioGate";
 import { voiceTrace } from "@/voice/browser/voiceTrace";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
@@ -78,6 +78,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const browserVoiceOn = browserVoiceFlagEnabled();
   const [browserVoiceState, setBrowserVoiceState] = useState<"idle" | "preparing" | "ready">("idle");
   const browserReadyRef = useRef(false);
+  const gateRegistryRef = useRef<GateRegistry | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,6 +87,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   }, []);
 
   const stopAllSpeech = () => {
+    gateRegistryRef.current?.clearActive();
     disarmBargeIn();
     window.speechSynthesis?.cancel();
     activeSpeechRef.current = null;
@@ -379,23 +381,22 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         fellThrough = true;
         fallThrough(reason);
       };
-      // First-audio deadline (P0 repair): never leave the visitor in
-      // silence while the on-device voice downloads or starts. If G
-      // has not begun speaking within the deadline, THIS reply goes to
-      // the fallback cascade with an honest notice; the engine keeps
-      // preparing in the background and takes over from the next reply.
-      // The deadline applies only while the engine is NOT ready: once
-      // warm, synthesis is bounded by the worker-call timeouts, and a
-      // slow-but-working engine must not be cut off mid-synthesis.
-      // The deadline guards EVERY reply, cold or warm: a warm stall is
-      // a defect, not a download, so its budget is shorter. On fire,
-      // this reply falls through to the prompt fallback; the stale
-      // synthesis is flushed worker-side by stop().
-      const gate = armFirstAudioDeadline({
-        timeoutMs: browserReadyRef.current ? 10_000 : 15_000,
+      // First-audio deadline: never leave the visitor in silence.
+      // The deadline guards EVERY reply, cold or warm — a cold first
+      // reply may be waiting on the one-time model download (15 s),
+      // a warm stall is a defect, not a download (10 s). On fire, THIS
+      // reply goes to the prompt fallback with an honest notice; the
+      // engine keeps preparing for the next one, and the stale
+      // synthesis is flushed worker-side by stop(). Gates live in a
+      // registry: arming a new one clears the previous turn's, whose
+      // speak may have been superseded silently (QUINCEY L1).
+      if (!gateRegistryRef.current) gateRegistryRef.current = createGateRegistry();
+      const armedTimeoutMs = browserReadyRef.current ? 10_000 : 15_000;
+      const gate = gateRegistryRef.current.arm({
+        timeoutMs: armedTimeoutMs,
         onTimeout: () => {
           if (!started && !fellThrough) {
-            voiceTrace("deadlineFired", { ready: browserReadyRef.current });
+            voiceTrace("deadlineFired", { armedTimeoutMs });
             browserSpeechRef.current?.stop();
             doFallThrough("preparing");
           }

@@ -44,3 +44,34 @@ export function armFirstAudioDeadline(opts: {
     },
   };
 }
+
+/**
+ * Registry of the ONE live gate (QUINCEY L1, 2026-10-23).
+ *
+ * A superseded speak returns silently from the provider — its
+ * onEnd/onError never run — so its gate would otherwise stay armed
+ * and fire later, and its timeout handler stops the provider
+ * unconditionally: a dead turn's timer could cut the LIVE reply.
+ * Arming a new gate therefore clears the previous one first, and
+ * session teardown clears whatever is active.
+ */
+export interface GateRegistry {
+  arm(opts: { timeoutMs: number; onTimeout: () => void }): FirstAudioGate;
+  clearActive(): void;
+}
+
+export function createGateRegistry(): GateRegistry {
+  let active: FirstAudioGate | null = null;
+  return {
+    arm(opts) {
+      active?.clear();
+      const gate = armFirstAudioDeadline(opts);
+      active = gate;
+      return gate;
+    },
+    clearActive() {
+      active?.clear();
+      active = null;
+    },
+  };
+}

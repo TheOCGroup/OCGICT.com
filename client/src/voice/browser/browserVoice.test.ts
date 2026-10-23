@@ -22,7 +22,7 @@ describe("GExperience wiring — no failure class strands a reply (QUINCEY D1)",
     expect(block).toContain('const fallThrough = (reason: "error" | "preparing" = "error") => {');
     expect(block).toContain('onError: () => { gate.clear(); doFallThrough("error"); },');
     expect(block).toContain('})().catch(() => { gate.clear(); doFallThrough("error"); });');
-    expect(block).toContain("armFirstAudioDeadline({");
+    expect(block).toContain("gateRegistryRef.current.arm({");
     expect(block).toContain('doFallThrough("preparing")');
     expect(block).toContain("gate.markStarted()");
   });
@@ -55,8 +55,33 @@ describe("armFirstAudioDeadline — the gate executes correctly (QUINCEY P0 delt
     }
   });
 
-  it("the worker protocol skips stale generations, and the provider threads gen", async () => {
-    const fs = await import("node:fs");
+  it("registry: arming a new gate disarms the superseded turn's gate (QUINCEY L1)", async () => {
+    const { createGateRegistry } = await import("./firstAudioGate");
+    vi.useFakeTimers();
+    try {
+      const reg = createGateRegistry();
+      let firedA = 0; let firedB = 0;
+      // Turn A arms a 15 s gate, then is superseded pre-onStart: its
+      // provider speak returns silently, nothing clears its gate —
+      // except the registry, when turn B arms.
+      reg.arm({ timeoutMs: 15000, onTimeout: () => { firedA += 1; } });
+      vi.advanceTimersByTime(3000);
+      reg.arm({ timeoutMs: 10000, onTimeout: () => { firedB += 1; } });
+      vi.advanceTimersByTime(12000); // past A's deadline AND B's
+      expect(firedA).toBe(0); // the dead gate must never fire
+      expect(firedB).toBe(1); // the live gate fires on schedule
+      // Session teardown clears whatever is active.
+      let firedC = 0;
+      reg.arm({ timeoutMs: 10000, onTimeout: () => { firedC += 1; } });
+      reg.clearActive();
+      vi.advanceTimersByTime(20000);
+      expect(firedC).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the worker protocol skips stale generations, and the provider threads gen", async () => {    const fs = await import("node:fs");
     const worker = fs.readFileSync(new URL("./voiceWorker.ts", import.meta.url), "utf8");
     expect(worker).toContain('msg.type === "flush"');
     expect(worker).toContain("msg.gen < validGen");
