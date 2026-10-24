@@ -69,10 +69,12 @@ export default async function handler(request: Request, context?: { deploy?: { c
       async start(controller) {
         try {
           let full = "";
+          let usage: unknown;
           for await (const delta of streamGeminiTokens({
             history: body.history || [],
             message: body.message.trim(),
             apiKey,
+            onUsage: (u) => { usage = u; },
           })) {
             full += delta;
             controller.enqueue(sse({ t: delta }));
@@ -87,6 +89,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
             provider: "Gemini",
             model: POC_CHAT_MODEL,
             delivery: sctx.isSeller ? { emotion: sctx.primary, stage: sctx.stage } : undefined,
+            usage,
           }));
         } catch {
           controller.enqueue(sse({ error: "stream_failed" }));

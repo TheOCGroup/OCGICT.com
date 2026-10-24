@@ -21,6 +21,38 @@ export const POC_TTS_MODEL = "gemini-2.5-flash-preview-tts";
  * founder listening decision, not an engineering default. */
 export const POC_TTS_VOICE = "Charon";
 
+/** Male voice candidates for the founder's listening comparison (Gemini
+ * TTS prebuilt voices). The TTS endpoint accepts a voice ONLY from this
+ * allowlist; anything else falls back to POC_TTS_VOICE. */
+export const POC_VOICE_CANDIDATES = [
+  "Charon", // informative (current placeholder)
+  "Orus", // firm
+  "Iapetus", // clear
+  "Umbriel", // easy-going
+  "Achird", // friendly
+  "Sadaltager", // knowledgeable
+  "Algieba", // smooth
+  "Puck", // upbeat
+] as const;
+
+/** Token usage reported by Gemini on a streamed reply (present on the
+ * final SSE payloads). Used for measured — not estimated — cost review. */
+export interface PocUsage {
+  promptTokens: number;
+  responseTokens: number;
+  totalTokens: number;
+}
+
+export function usageFromGeminiJson(payload: any): PocUsage | null {
+  const u = payload?.usageMetadata;
+  if (!u || typeof u.totalTokenCount !== "number") return null;
+  return {
+    promptTokens: typeof u.promptTokenCount === "number" ? u.promptTokenCount : 0,
+    responseTokens: typeof u.candidatesTokenCount === "number" ? u.candidatesTokenCount : 0,
+    totalTokens: u.totalTokenCount,
+  };
+}
+
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Appended to G's system instruction on the streamed path only: replies
@@ -60,6 +92,8 @@ export function textDeltaFromGeminiJson(payload: any): string {
  */
 export class GeminiSseParser {
   private buffer = "";
+  /** Latest usageMetadata seen in the stream, if any. */
+  usage: PocUsage | null = null;
 
   push(chunk: string): string[] {
     this.buffer += chunk;
@@ -72,7 +106,10 @@ export class GeminiSseParser {
       const data = line.slice(5).trim();
       if (!data || data === "[DONE]") continue;
       try {
-        const delta = textDeltaFromGeminiJson(JSON.parse(data));
+        const parsed = JSON.parse(data);
+        const usage = usageFromGeminiJson(parsed);
+        if (usage) this.usage = usage;
+        const delta = textDeltaFromGeminiJson(parsed);
         if (delta) deltas.push(delta);
       } catch {
         /* a partial JSON line is held by the buffer split above; a
@@ -90,6 +127,8 @@ export async function* streamGeminiTokens(opts: {
   apiKey: string;
   model?: string;
   signal?: AbortSignal;
+  /** Called once at stream end with the provider-reported token usage. */
+  onUsage?: (usage: PocUsage) => void;
 }): AsyncGenerator<string> {
   const model = opts.model || process.env.GEMINI_MODEL || POC_CHAT_MODEL;
   const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
@@ -116,6 +155,9 @@ export async function* streamGeminiTokens(opts: {
     if (done) break;
     const deltas = parser.push(decoder.decode(value, { stream: true }));
     for (const d of deltas) yield d;
+  }
+  if (parser.usage && opts.onUsage) {
+    try { opts.onUsage(parser.usage); } catch { /* telemetry never breaks a reply */ }
   }
 }
 

@@ -7,6 +7,9 @@ import {
   GeminiSseParser,
   pcmToWav,
   textDeltaFromGeminiJson,
+  usageFromGeminiJson,
+  POC_VOICE_CANDIDATES,
+  POC_TTS_VOICE,
 } from "../../server/services/geminiStream";
 
 const sseEvent = (text: string) =>
@@ -36,6 +39,30 @@ describe("GeminiSseParser", () => {
   it("skips blank lines, keep-alives and DONE", () => {
     const p = new GeminiSseParser();
     expect(p.push("\n: keep-alive\ndata: [DONE]\n")).toEqual([]);
+  });
+});
+
+describe("usageFromGeminiJson", () => {
+  it("extracts token usage from a final stream payload", () => {
+    const u = usageFromGeminiJson({ usageMetadata: { promptTokenCount: 812, candidatesTokenCount: 41, totalTokenCount: 853 } });
+    expect(u).toEqual({ promptTokens: 812, responseTokens: 41, totalTokens: 853 });
+  });
+  it("returns null when usage metadata is absent", () => {
+    expect(usageFromGeminiJson({ candidates: [] })).toBeNull();
+    expect(usageFromGeminiJson(null)).toBeNull();
+  });
+  it("the parser captures usage while still yielding deltas", () => {
+    const p = new GeminiSseParser();
+    const deltas = p.push('data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"totalTokenCount":12}}\n\n');
+    expect(deltas).toEqual(["Hi"]);
+    expect(p.usage).toEqual({ promptTokens: 10, responseTokens: 2, totalTokens: 12 });
+  });
+});
+
+describe("POC voice candidates", () => {
+  it("the default voice is in the allowlist and all entries are non-empty", () => {
+    expect(POC_VOICE_CANDIDATES).toContain(POC_TTS_VOICE);
+    for (const v of POC_VOICE_CANDIDATES) expect(v.length).toBeGreaterThan(2);
   });
 });
 

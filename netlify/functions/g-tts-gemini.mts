@@ -12,7 +12,7 @@
  * is a founder listening decision.
  */
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
-import { synthesizeGeminiSpeech, POC_TTS_MODEL } from "../../server/services/geminiStream.js";
+import { synthesizeGeminiSpeech, POC_TTS_MODEL, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
 
 export const config = { path: "/api/g/tts-gemini" };
 
@@ -63,14 +63,19 @@ export default async function handler(request: Request, context?: { deploy?: { c
     return json(503, { error: "Voice metering is unavailable." });
   }
 
+  // Voice selection is allowlist-only (founder listening comparison);
+  // anything unrecognized falls back to the default candidate.
+  const requested = typeof body.voice === "string" ? body.voice : "";
+  const voice = (POC_VOICE_CANDIDATES as readonly string[]).includes(requested) ? requested : POC_TTS_VOICE;
   try {
-    const wav = await synthesizeGeminiSpeech(body.text.trim(), apiKey);
+    const wav = await synthesizeGeminiSpeech(body.text.trim(), apiKey, { voice });
     return new Response(wav, {
       status: 200,
       headers: {
         "Content-Type": "audio/wav",
         "Cache-Control": "no-store",
         "X-OCG-Tts-Model": POC_TTS_MODEL,
+        "X-OCG-Tts-Voice": voice,
       },
     });
   } catch {
