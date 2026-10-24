@@ -19,7 +19,11 @@ export const config = {
   // Platform-enforced per-IP limit (edge, instance-independent). The
   // in-memory limiter below is only a per-instance burst smoother; the
   // persistent daily budget is the authoritative spend control.
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 40 },
+  // aggregateBy uses the documented array form (Netlify docs,
+  // rate-limiting): the bare string "ip" used elsewhere in this repo is
+  // NOT the documented shape and may be silently inert — see
+  // RELEASE-PACKAGE.md §2.
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 40 },
 };
 
 const MAX_TEXT_CHARS = 600;
