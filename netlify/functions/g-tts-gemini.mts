@@ -78,7 +78,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
         "X-OCG-Tts-Voice": voice,
       },
     });
-  } catch (e: any) {
-    return json(503, { error: "Server voice synthesis failed.", diag: String(e?.message || e).slice(0, 300) });
+  } catch {
+    return json(503, { error: "Server voice synthesis failed." });
   }
 }
