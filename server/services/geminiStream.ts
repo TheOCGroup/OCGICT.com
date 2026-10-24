@@ -15,7 +15,7 @@
  */
 import { G_SYSTEM_INSTRUCTION } from "./gIntelligenceGateway.js";
 
-export const POC_CHAT_MODEL = "gemini-2.5-flash";
+export const POC_CHAT_MODEL = "gemini-3.8-flash";
 export const POC_TTS_MODEL = "gemini-2.5-flash-preview-tts";
 /** Placeholder voice for the POC only — production voice selection is a
  * founder listening decision, not an engineering default. */
@@ -91,7 +91,7 @@ export async function* streamGeminiTokens(opts: {
   model?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<string> {
-  const model = opts.model || POC_CHAT_MODEL;
+  const model = opts.model || process.env.GEMINI_MODEL || POC_CHAT_MODEL;
   const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
     method: "POST",
     signal: opts.signal,
