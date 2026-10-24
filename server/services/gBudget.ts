@@ -122,7 +122,22 @@ export async function netlifyBlobsBudgetStore(): Promise<BudgetStore> {
   // before. Any failure here propagates — callers fail closed.
   const lambdaEvent = (globalThis as any).__ocgLambdaEvent;
   if (lambdaEvent) {
-    try { blobs.connectLambda(lambdaEvent); } catch { /* getStore will surface the real error */ }
+    try {
+      // The library's connectLambda() maps url/token but not the
+      // uncached edge URL, which strong-consistency reads require.
+      // Set the complete context from the event payload directly.
+      const raw = JSON.parse(Buffer.from(String(lambdaEvent.blobs || ""), "base64").toString("utf8"));
+      blobs.setEnvironmentContext({
+        siteID: lambdaEvent.headers?.["x-nf-site-id"],
+        deployID: lambdaEvent.headers?.["x-nf-deploy-id"],
+        edgeURL: raw.url,
+        uncachedEdgeURL: raw.url_uncached,
+        primaryRegion: raw.primary_region,
+        token: raw.token,
+      });
+    } catch {
+      try { blobs.connectLambda(lambdaEvent); } catch { /* getStore will surface the real error */ }
+    }
   }
   const store = blobs.getStore({ name: "g-budget", consistency: "strong" });
   return {
