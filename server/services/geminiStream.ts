@@ -193,6 +193,55 @@ export function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
 }
 
 /**
+ * Extract the speech PCM from a Gemini TTS payload. The preview TTS model
+ * returns raw L16 PCM; the GA TTS models return a complete WAV container —
+ * RIFF header, fmt + data chunks, and a trailing C2PA metadata chunk.
+ * Treating that container as raw PCM plays the header as an onset click
+ * and the metadata bytes as a loud broadband burst at the end of every
+ * sentence (the founder-reported "static", 2026-10-24). When the payload
+ * is a WAV container, walk its chunks and return ONLY the data chunk,
+ * honoring the fmt sample rate and channel count. Anything unrecognized
+ * is returned unchanged (raw PCM — the historical behavior).
+ */
+export function extractSpeechPcm(
+  payload: Buffer,
+  mimeType: string,
+): { pcm: Buffer; sampleRate: number } {
+  const mimeRate = /rate=(\d+)/.exec(mimeType)?.[1];
+  const fallback = { pcm: payload, sampleRate: mimeRate ? Number(mimeRate) : 24000 };
+  const looksWav =
+    payload.length >= 44 &&
+    payload.toString("ascii", 0, 4) === "RIFF" &&
+    payload.toString("ascii", 8, 12) === "WAVE";
+  if (!looksWav && !/wav/i.test(mimeType)) return fallback;
+  try {
+    let sampleRate = fallback.sampleRate;
+    let offset = 12;
+    while (offset + 8 <= payload.length) {
+      const id = payload.toString("ascii", offset, offset + 4);
+      const size = payload.readUInt32LE(offset + 4);
+      const dataStart = offset + 8;
+      if (dataStart + size > payload.length) return fallback;
+      if (id === "fmt " && size >= 16) {
+        const audioFormat = payload.readUInt16LE(dataStart);
+        const channels = payload.readUInt16LE(dataStart + 2);
+        const rate = payload.readUInt32LE(dataStart + 4);
+        const bits = payload.readUInt16LE(dataStart + 14);
+        if (audioFormat !== 1 || channels !== 1 || bits !== 16) return fallback;
+        if (rate > 0) sampleRate = rate;
+      }
+      if (id === "data") {
+        return { pcm: payload.subarray(dataStart, dataStart + size), sampleRate };
+      }
+      offset = dataStart + size + (size % 2);
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Synthesize one sentence with Gemini TTS. Returns a WAV buffer.
  * The TTS model detects the text's language itself; the same voice is
  * used for English and Spanish in the POC.
@@ -227,7 +276,9 @@ export async function synthesizeGeminiSpeech(
   const data: any = await res.json();
   const inline = data?.candidates?.[0]?.content?.parts?.find((p: any) => p?.inlineData)?.inlineData;
   if (!inline?.data) throw new Error("Gemini TTS returned no audio data");
-  const rateMatch = /rate=(\d+)/.exec(String(inline.mimeType || ""));
-  const sampleRate = rateMatch ? Number(rateMatch[1]) : 24000;
-  return pcmToWav(Buffer.from(inline.data, "base64"), sampleRate);
+  const { pcm, sampleRate } = extractSpeechPcm(
+    Buffer.from(inline.data, "base64"),
+    String(inline.mimeType || ""),
+  );
+  return pcmToWav(pcm, sampleRate);
 }
