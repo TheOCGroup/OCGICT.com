@@ -14,7 +14,13 @@
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { synthesizeGeminiSpeech, effectiveTtsModel, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
 
-export const config = { path: "/api/g/tts-gemini" };
+export const config = {
+  path: "/api/g/tts-gemini",
+  // Platform-enforced per-IP limit (edge, instance-independent). The
+  // in-memory limiter below is only a per-instance burst smoother; the
+  // persistent daily budget is the authoritative spend control.
+  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 40 },
+};
 
 const MAX_TEXT_CHARS = 600;
 const RATE_LIMIT = 40;

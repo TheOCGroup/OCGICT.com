@@ -16,12 +16,14 @@
 import { G_SYSTEM_INSTRUCTION } from "./gIntelligenceGateway.js";
 
 export const POC_CHAT_MODEL = "gemini-3.8-flash";
-/** Default TTS model. NOTE: gemini-2.5-flash-preview-tts is a preview model
- * on Google's published retirement list (earliest shutdown Nov 17, 2026);
- * the GA successor is gemini-3.8-flash-tts, which carries the same prebuilt
- * voice library (incl. Achird). Deployments select the model with the
- * GEMINI_TTS_MODEL env var — see effectiveTtsModel(). */
-export const POC_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+/** Built-in TTS model: the GA gemini-3.8-flash-tts (founder-directed
+ * 2026-10-24). The previous default, gemini-2.5-flash-preview-tts, is on
+ * Google's published retirement list (earliest shutdown Nov 17, 2026).
+ * Deployments may still override with GEMINI_TTS_MODEL — see
+ * effectiveTtsModel(). Both models share the same prebuilt voice library
+ * (incl. Achird); they differ in response format (raw L16 vs WAV
+ * container), which extractSpeechPcm() normalizes. */
+export const POC_TTS_MODEL = "gemini-3.8-flash-tts";
 
 /** The TTS model this deployment actually calls: GEMINI_TTS_MODEL when set,
  * otherwise POC_TTS_MODEL. */

@@ -75,12 +75,13 @@ describe("POC voice candidates", () => {
 });
 
 describe("effectiveTtsModel", () => {
-  it("defaults to POC_TTS_MODEL and honors the GEMINI_TTS_MODEL override", () => {
+  it("defaults to the GA model and honors the GEMINI_TTS_MODEL override both ways", () => {
     const prev = process.env.GEMINI_TTS_MODEL;
     delete process.env.GEMINI_TTS_MODEL;
-    expect(effectiveTtsModel()).toBe(POC_TTS_MODEL);
-    process.env.GEMINI_TTS_MODEL = "gemini-3.8-flash-tts";
+    expect(POC_TTS_MODEL).toBe("gemini-3.8-flash-tts");
     expect(effectiveTtsModel()).toBe("gemini-3.8-flash-tts");
+    process.env.GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+    expect(effectiveTtsModel()).toBe("gemini-2.5-flash-preview-tts");
     process.env.GEMINI_TTS_MODEL = "  ";
     expect(effectiveTtsModel()).toBe(POC_TTS_MODEL);
     if (prev === undefined) delete process.env.GEMINI_TTS_MODEL;
@@ -182,5 +183,27 @@ describe("synthesizeGeminiSpeech payload handling", () => {
     const wav = await synthesizeGeminiSpeech("hello", "test-key");
     expect(wav.length).toBe(44 + speech.length);
     expect(wav.subarray(44).equals(speech)).toBe(true);
+  });
+});
+
+describe("extractSpeechPcm — real GA payload fixture", () => {
+  it("strips the container + C2PA chunk from a captured gemini-3.8-flash-tts response", async () => {
+    // Captured 2026-10-24 from the live POC endpoint (Achird, Spanish line)
+    // BEFORE the decoder fix: the raw Google payload — RIFF + fmt + data +
+    // a 6,064-byte C2PA chunk. The expected speech is the data chunk only:
+    // 328,320 bytes, sha256 pinned below.
+    const { readFileSync } = await import("node:fs");
+    const { createHash } = await import("node:crypto");
+    const b64 = readFileSync(new URL("./fixtures/ga-tts-payload-es.b64.txt", import.meta.url), "utf8");
+    const payload = Buffer.from(b64, "base64");
+    expect(payload.toString("ascii", 0, 4)).toBe("RIFF");
+    const out = extractSpeechPcm(payload, "audio/wav");
+    expect(out.sampleRate).toBe(24000);
+    expect(out.pcm.length).toBe(328320);
+    expect(createHash("sha256").update(out.pcm).digest("hex")).toBe(
+      "2016d37ae5ce629fbfbbc79fc4e3b81e64fa16c0d5bf875bbed410d021dabf88",
+    );
+    expect(out.pcm.includes(Buffer.from("C2PA", "ascii"))).toBe(false);
+    expect(out.pcm.includes(Buffer.from("RIFF", "ascii"))).toBe(false);
   });
 });
