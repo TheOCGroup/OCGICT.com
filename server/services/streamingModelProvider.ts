@@ -27,7 +27,7 @@ export class EnhancedGeminiProvider implements IStreamingModelProvider {
   private apiKey: string;
   private modelName: string;
 
-  constructor(apiKey: string, modelName = "gemini-2.5-flash") {
+  constructor(apiKey: string, modelName = "gemini-3.8-flash") {
     this.apiKey = apiKey;
     this.modelName = modelName;
   }
@@ -435,11 +435,11 @@ export class EnhancedLocalProvider implements IStreamingModelProvider {
  */
 export function getActiveStreamingModelProvider(): IStreamingModelProvider {
   if (process.env.GEMINI_AUTH_MODE === "vertex") {
-    return new EnhancedGeminiProvider("", process.env.GEMINI_MODEL || "gemini-2.5-flash");
+    return new EnhancedGeminiProvider("", process.env.GEMINI_MODEL || "gemini-3.8-flash");
   }
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && geminiKey.trim() !== "") {
-    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-1.5-flash");
+    return new EnhancedGeminiProvider(geminiKey, process.env.GEMINI_MODEL || "gemini-3.8-flash");
   }
 
   return new EnhancedLocalProvider();

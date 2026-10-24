@@ -114,8 +114,32 @@ export async function consumeBudget(
  * available; callers treat that as fail-closed for paid features.
  */
 export async function netlifyBlobsBudgetStore(): Promise<BudgetStore> {
-  const { getStore } = await import("@netlify/blobs");
-  const store = getStore({ name: "g-budget", consistency: "strong" });
+  const blobs = await import("@netlify/blobs");
+  // Lambda-compatibility deployments (digest-deployed functions behind a
+  // Lambda bridge) receive the Blobs context inside the invocation event,
+  // not the environment: connect it when the bridge stashed one. On the
+  // standard Netlify runtime no event is stashed and getStore works as
+  // before. Any failure here propagates — callers fail closed.
+  const lambdaEvent = (globalThis as any).__ocgLambdaEvent;
+  if (lambdaEvent) {
+    try {
+      // The library's connectLambda() maps url/token but not the
+      // uncached edge URL, which strong-consistency reads require.
+      // Set the complete context from the event payload directly.
+      const raw = JSON.parse(Buffer.from(String(lambdaEvent.blobs || ""), "base64").toString("utf8"));
+      blobs.setEnvironmentContext({
+        siteID: lambdaEvent.headers?.["x-nf-site-id"],
+        deployID: lambdaEvent.headers?.["x-nf-deploy-id"],
+        edgeURL: raw.url,
+        uncachedEdgeURL: raw.url_uncached,
+        primaryRegion: raw.primary_region,
+        token: raw.token,
+      });
+    } catch {
+      try { blobs.connectLambda(lambdaEvent); } catch { /* getStore will surface the real error */ }
+    }
+  }
+  const store = blobs.getStore({ name: "g-budget", consistency: "strong" });
   return {
     async get(key: string): Promise<number | null> {
       const value = await store.get(key, { type: "text" });
