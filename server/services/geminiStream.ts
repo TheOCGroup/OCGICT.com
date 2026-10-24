@@ -211,7 +211,8 @@ export async function synthesizeGeminiSpeech(
     }),
   });
   if (!res.ok) {
-    throw new Error(`Gemini TTS request failed (HTTP ${res.status})`);
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Gemini TTS request failed (HTTP ${res.status}): ${errBody.slice(0, 240)}`);
   }
   const data: any = await res.json();
   const inline = data?.candidates?.[0]?.content?.parts?.find((p: any) => p?.inlineData)?.inlineData;
