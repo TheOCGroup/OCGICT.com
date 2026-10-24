@@ -1,0 +1,79 @@
+/**
+ * G POC TTS — server-side neural speech for the architecture-reset proof of
+ * concept (Option C). Synthesizes ONE sentence per request with Gemini TTS
+ * and returns WAV, so the client can start playing the first sentence while
+ * the rest of the reply is still generating. No on-device model download,
+ * no dependence on the visitor's CPU.
+ *
+ * Gates mirror the rest of G: hosted contexts only (or the explicit chat
+ * enable flag), a configured Gemini key, and the persistent daily "tts"
+ * budget meter, fail-closed. The key is never exposed to the browser.
+ * The voice ("Charon") is a POC placeholder — production voice selection
+ * is a founder listening decision.
+ */
+import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { synthesizeGeminiSpeech, POC_TTS_MODEL } from "../../server/services/geminiStream.js";
+
+export const config = { path: "/api/g/tts-gemini" };
+
+const MAX_TEXT_CHARS = 600;
+const RATE_LIMIT = 40;
+const RATE_WINDOW_MS = 60_000;
+const hits = new Map<string, number[]>();
+
+function rateLimited(request: Request): boolean {
+  const ip = request.headers.get("x-nf-client-connection-ip") || "unknown";
+  const now = Date.now();
+  const recent = (hits.get(ip) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+  return recent.length > RATE_LIMIT;
+}
+
+function json(status: number, obj: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+}
+
+export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
+  if (request.method !== "POST") return json(405, { error: "Method not allowed." });
+  const hostedContext = context?.deploy?.context === "deploy-preview" || context?.deploy?.context === "production";
+  if (!hostedContext && process.env.OCG_G_CHAT_ENABLED !== "true") {
+    return json(503, { error: "G backend is not enabled in this environment." });
+  }
+  if (rateLimited(request)) return json(429, { error: "Too many requests." });
+
+  let body: any;
+  try { body = await request.json(); } catch { return json(400, { error: "Invalid JSON." }); }
+  if (!body || typeof body.text !== "string" || !body.text.trim() || body.text.length > MAX_TEXT_CHARS) {
+    return json(400, { error: "Invalid TTS request." });
+  }
+
+  const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+  if (!apiKey) return json(503, { error: "Server voice is not configured." });
+
+  // Fail closed on the persistent daily meter, same as every other G path.
+  try {
+    const store = await netlifyBlobsBudgetStore();
+    const decision = await consumeBudget(store, "tts", process.env);
+    if (!decision.allowed) return json(429, { error: "Daily voice budget reached." });
+  } catch {
+    return json(503, { error: "Voice metering is unavailable." });
+  }
+
+  try {
+    const wav = await synthesizeGeminiSpeech(body.text.trim(), apiKey);
+    return new Response(wav, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/wav",
+        "Cache-Control": "no-store",
+        "X-OCG-Tts-Model": POC_TTS_MODEL,
+      },
+    });
+  } catch {
+    return json(503, { error: "Server voice synthesis failed." });
+  }
+}

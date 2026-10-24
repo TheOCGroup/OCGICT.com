@@ -1,5 +1,8 @@
 import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { streamGeminiTokens, POC_CHAT_MODEL } from "../../server/services/geminiStream.js";
+import { analyzeSellerContext, guardSellerReply } from "../../server/voice/sellerPolicy.js";
+import { looksSpanish } from "../../server/services/streamingModelProvider.js";
 
 // A standalone Netlify function: it never starts the Express server.
 export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
@@ -13,7 +16,8 @@ export default async function handler(request: Request, context?: { deploy?: { c
     || (body.sessionId !== undefined && (typeof body.sessionId !== "string" || body.sessionId.length > 128))
     || (body.history !== undefined && (!Array.isArray(body.history) || body.history.length > 16
       || body.history.some((x: any) => !x || (x.role !== "user" && x.role !== "assistant")
-        || typeof x.content !== "string" || x.content.length > 4000)))) {
+        || typeof x.content !== "string" || x.content.length > 4000)))
+    || (body.stream !== undefined && typeof body.stream !== "boolean")) {
     return new Response(JSON.stringify({ error: "Invalid chat request." }), { status: 400, headers });
   }
   // Hosted Netlify contexts (deploy previews and production) serve G chat in
@@ -50,6 +54,50 @@ export default async function handler(request: Request, context?: { deploy?: { c
       // Meter unavailable: fail closed to the free local engine.
       budgetFallback = true;
     }
+  }
+
+  // POC (architecture reset, Option C): true token streaming. Only when the
+  // paid path is fully open (credentials + founder approval + budget) — the
+  // exact same gate as the non-streaming paid path above, including its
+  // budget consumption. Otherwise the request falls through to the normal
+  // JSON path and the client uses the certified behavior for this reply.
+  if (body.stream === true && !localOnly) {
+    const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    const encoder = new TextEncoder();
+    const sse = (obj: Record<string, unknown>) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          let full = "";
+          for await (const delta of streamGeminiTokens({
+            history: body.history || [],
+            message: body.message.trim(),
+            apiKey,
+          })) {
+            full += delta;
+            controller.enqueue(sse({ t: delta }));
+          }
+          const historyText = (body.history || []).map((h: any) => h.content).join(" ");
+          const sctx = analyzeSellerContext(body.history || [], body.message.trim(), {
+            spanish: looksSpanish(body.message) || looksSpanish(historyText),
+          });
+          controller.enqueue(sse({
+            done: true,
+            replyText: guardSellerReply(full, sctx),
+            provider: "Gemini",
+            model: POC_CHAT_MODEL,
+            delivery: sctx.isSeller ? { emotion: sctx.primary, stage: sctx.stage } : undefined,
+          }));
+        } catch {
+          controller.enqueue(sse({ error: "stream_failed" }));
+        }
+        controller.close();
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
+    });
   }
 
   try {

@@ -8,6 +8,9 @@ import { getActiveBookingProvider } from "@/lib/booking";
 import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig } from "@/voice/gRealtimeVoice";
 import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
 import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
+import { pocFlagEnabled } from "@/voice/poc/pocFlag";
+import { SentenceSegmenter } from "@/voice/poc/sentenceSplit";
+import { PocSpeechPlayer } from "@/voice/poc/pocSpeech";
 import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
 import { createGateRegistry, type GateRegistry } from "@/voice/browser/firstAudioGate";
 import { voiceTrace } from "@/voice/browser/voiceTrace";
@@ -76,6 +79,11 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   // OCG Voice Runtime (browser inference) — prototype, flag-gated only.
   const browserSpeechRef = useRef<GBrowserSpeech | null>(null);
   const browserVoiceOn = browserVoiceFlagEnabled();
+  // Architecture-reset POC (Option C): streamed model + server TTS,
+  // flag-gated only; when off, behavior is exactly the certified build.
+  const pocOn = pocFlagEnabled();
+  const pocPlayerRef = useRef<PocSpeechPlayer | null>(null);
+  const pocAbortRef = useRef<AbortController | null>(null);
   const [browserVoiceState, setBrowserVoiceState] = useState<"idle" | "preparing" | "ready">("idle");
   const browserReadyRef = useRef(false);
   const gateRegistryRef = useRef<GateRegistry | null>(null);
@@ -89,6 +97,8 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const stopAllSpeech = () => {
     gateRegistryRef.current?.clearActive();
     disarmBargeIn();
+    pocPlayerRef.current?.stop();
+    pocAbortRef.current?.abort();
     window.speechSynthesis?.cancel();
     activeSpeechRef.current = null;
     kokoroRef.current?.stop();
@@ -555,7 +565,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     recognition.lang = voiceLocaleRef.current;
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.onstart = () => { if (voiceSessionRef.current !== session) return; setListening(true); setVoiceStatus("Listening — speak now"); };
+    recognition.onstart = () => { if (voiceSessionRef.current !== session) return; setListening(true); setVoiceStatus(pocOn ? "Listening — speak now (streaming voice preview)" : "Listening — speak now"); };
     recognition.onend = () => {
       if (recognitionRef.current !== recognition || voiceSessionRef.current !== session) return;
       setListening(false);
@@ -605,6 +615,124 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     "Tell me how The OC Group can help me."
   ];
 
+  /**
+   * POC conversation path (architecture reset, Option C): stream the
+   * reply from the real model over SSE, render tokens as they arrive,
+   * and speak sentence by sentence through the server TTS player.
+   * Returns false when the stream never started (e.g. the paid gate is
+   * closed on this deploy) so the caller falls back to the certified
+   * JSON path with no visible difference.
+   */
+  const tryPocConversation = async (query: string): Promise<boolean> => {
+    const session = voiceSessionRef.current;
+    const wantSpeech = voiceEnabledRef.current && !rtRef.current?.isActive;
+    const controller = new AbortController();
+    pocAbortRef.current = controller;
+    let res: Response;
+    try {
+      voiceTrace("pocStreamStart", {});
+      res = await fetch("/api/g/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          sessionId,
+          message: query,
+          stream: true,
+          history: messages.slice(-16).map((m) => ({
+            role: m.sender === "user" ? "user" : "assistant",
+            content: m.text.slice(0, 4000),
+          })),
+        }),
+      });
+    } catch {
+      return false;
+    }
+    const contentType = res.headers.get("content-type") || "";
+    if (!res.ok || !res.body || !contentType.includes("text/event-stream")) {
+      return false;
+    }
+    const replyId = (Date.now() + 1).toString();
+    setMessages((prev) => [...prev, { id: replyId, sender: "g", text: "" }]);
+    const segmenter = new SentenceSegmenter();
+    let full = "";
+    let started = false;
+    let speechFailed = false;
+    let audioStarted = false;
+    const player = wantSpeech ? (pocPlayerRef.current ??= new PocSpeechPlayer()) : null;
+    if (player) {
+      player.begin({
+        onStart: () => {
+          audioStarted = true;
+          voiceTrace("pocFirstAudio", {});
+          if (voiceSessionRef.current === session) setVoiceStatus("G is speaking — tap Talk to interrupt");
+        },
+        onError: () => { speechFailed = true; },
+        onDrained: () => {
+          if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+          setVoiceStatus("Listening for your reply");
+          startListening();
+        },
+      });
+    }
+    const speakSentence = (s: string) => { if (player && !speechFailed) player.enqueue(s); };
+    try {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamDone = false;
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buffer.indexOf("\n\n")) >= 0) {
+          const rawEvent = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const dataLine = rawEvent.split("\n").find((l) => l.startsWith("data:"));
+          if (!dataLine) continue;
+          let ev: any;
+          try { ev = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+          if (typeof ev.t === "string") {
+            if (!started) { started = true; voiceTrace("pocFirstToken", {}); }
+            full += ev.t;
+            const snapshot = full;
+            setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, text: snapshot } : m)));
+            for (const seg of segmenter.push(ev.t)) speakSentence(seg);
+          } else if (ev.done) {
+            streamDone = true;
+            const finalText = typeof ev.replyText === "string" && ev.replyText.trim() ? ev.replyText : full;
+            if (finalText !== full) {
+              full = finalText;
+              setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, text: finalText } : m)));
+            }
+            const rest = segmenter.flush();
+            if (rest) speakSentence(rest);
+            player?.finish();
+          } else if (ev.error) {
+            if (!started) {
+              setMessages((prev) => prev.filter((m) => m.id !== replyId));
+              return false;
+            }
+            streamDone = true;
+          }
+        }
+      }
+    } catch {
+      if (!started) {
+        setMessages((prev) => prev.filter((m) => m.id !== replyId));
+        return false;
+      }
+    }
+    if (speechFailed && !audioStarted && full.trim()) {
+      // Server voice failed before any audio: the certified cascade
+      // speaks the reply instead, with its standard honest notice.
+      player?.stop();
+      speakReply(full);
+    }
+    return true;
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputVal;
     if (!query.trim() || query.length > 4000 || requestPendingRef.current) return;
@@ -621,6 +749,12 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     setIsTyping(true);
 
     try {
+      // POC (Option C): streamed conversation when the poc flag is on.
+      // Falls back to the certified path when the stream can't start.
+      if (pocOn) {
+        const handled = await tryPocConversation(query);
+        if (handled) return;
+      }
       // 1. Attempt Server-Side G Intelligence Gateway
       let replyText = "";
       let actionInvocation: IGActionInvocation | undefined;
