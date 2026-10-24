@@ -10,6 +10,8 @@ import {
   usageFromGeminiJson,
   POC_VOICE_CANDIDATES,
   POC_TTS_VOICE,
+  POC_TTS_MODEL,
+  effectiveTtsModel,
 } from "../../server/services/geminiStream";
 
 const sseEvent = (text: string) =>
@@ -63,6 +65,24 @@ describe("POC voice candidates", () => {
   it("the default voice is in the allowlist and all entries are non-empty", () => {
     expect(POC_VOICE_CANDIDATES).toContain(POC_TTS_VOICE);
     for (const v of POC_VOICE_CANDIDATES) expect(v.length).toBeGreaterThan(2);
+  });
+
+  it("the founder-selected default voice is Achird", () => {
+    expect(POC_TTS_VOICE).toBe("Achird");
+  });
+});
+
+describe("effectiveTtsModel", () => {
+  it("defaults to POC_TTS_MODEL and honors the GEMINI_TTS_MODEL override", () => {
+    const prev = process.env.GEMINI_TTS_MODEL;
+    delete process.env.GEMINI_TTS_MODEL;
+    expect(effectiveTtsModel()).toBe(POC_TTS_MODEL);
+    process.env.GEMINI_TTS_MODEL = "gemini-3.8-flash-tts";
+    expect(effectiveTtsModel()).toBe("gemini-3.8-flash-tts");
+    process.env.GEMINI_TTS_MODEL = "  ";
+    expect(effectiveTtsModel()).toBe(POC_TTS_MODEL);
+    if (prev === undefined) delete process.env.GEMINI_TTS_MODEL;
+    else process.env.GEMINI_TTS_MODEL = prev;
   });
 });
 

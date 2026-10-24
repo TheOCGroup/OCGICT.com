@@ -16,7 +16,18 @@
 import { G_SYSTEM_INSTRUCTION } from "./gIntelligenceGateway.js";
 
 export const POC_CHAT_MODEL = "gemini-3.8-flash";
+/** Default TTS model. NOTE: gemini-2.5-flash-preview-tts is a preview model
+ * on Google's published retirement list (earliest shutdown Nov 17, 2026);
+ * the GA successor is gemini-3.8-flash-tts, which carries the same prebuilt
+ * voice library (incl. Achird). Deployments select the model with the
+ * GEMINI_TTS_MODEL env var — see effectiveTtsModel(). */
 export const POC_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+
+/** The TTS model this deployment actually calls: GEMINI_TTS_MODEL when set,
+ * otherwise POC_TTS_MODEL. */
+export function effectiveTtsModel(): string {
+  return process.env.GEMINI_TTS_MODEL?.trim() || POC_TTS_MODEL;
+}
 /** G's voice, selected by the founder on 2026-10-24 from the six-voice
  * listening comparison (greeting / fees / Spanish lines). */
 export const POC_TTS_VOICE = "Achird";
@@ -191,7 +202,7 @@ export async function synthesizeGeminiSpeech(
   apiKey: string,
   opts: { voice?: string; signal?: AbortSignal } = {},
 ): Promise<Buffer> {
-  const res = await fetch(`${API_BASE}/${POC_TTS_MODEL}:generateContent`, {
+  const res = await fetch(`${API_BASE}/${effectiveTtsModel()}:generateContent`, {
     method: "POST",
     signal: opts.signal,
     headers: {

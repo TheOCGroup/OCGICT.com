@@ -12,7 +12,7 @@
  * 2026-10-24); callers may choose another allowlisted candidate.
  */
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
-import { synthesizeGeminiSpeech, POC_TTS_MODEL, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
+import { synthesizeGeminiSpeech, effectiveTtsModel, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
 
 export const config = { path: "/api/g/tts-gemini" };
 
@@ -74,7 +74,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
       headers: {
         "Content-Type": "audio/wav",
         "Cache-Control": "no-store",
-        "X-OCG-Tts-Model": POC_TTS_MODEL,
+        "X-OCG-Tts-Model": effectiveTtsModel(),
         "X-OCG-Tts-Voice": voice,
       },
     });
