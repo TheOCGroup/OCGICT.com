@@ -546,9 +546,11 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     }
     voiceSessionRef.current += 1;
     const session = voiceSessionRef.current;
-    activeSpeechRef.current = null;
-    window.speechSynthesis?.cancel();
-    kokoroRef.current?.stop();
+    // Interruption: starting to listen must stop whatever G is saying —
+    // including the POC streaming player and its in-flight stream. The
+    // manual stops that used to live here predated the POC player and
+    // silently left it talking over the visitor (found 2026-10-24).
+    stopAllSpeech();
     recognitionRef.current?.abort?.();
     voiceEnabledRef.current = true;
     void ensureBargeIn();
