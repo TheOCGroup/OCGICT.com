@@ -8,8 +8,8 @@
  * Gates mirror the rest of G: hosted contexts only (or the explicit chat
  * enable flag), a configured Gemini key, and the persistent daily "tts"
  * budget meter, fail-closed. The key is never exposed to the browser.
- * The voice ("Charon") is a POC placeholder — production voice selection
- * is a founder listening decision.
+ * The voice defaults to POC_TTS_VOICE (Achird — founder-selected
+ * 2026-10-24); callers may choose another allowlisted candidate.
  */
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { synthesizeGeminiSpeech, POC_TTS_MODEL, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";

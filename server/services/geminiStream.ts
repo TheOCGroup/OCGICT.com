@@ -17,19 +17,19 @@ import { G_SYSTEM_INSTRUCTION } from "./gIntelligenceGateway.js";
 
 export const POC_CHAT_MODEL = "gemini-3.8-flash";
 export const POC_TTS_MODEL = "gemini-2.5-flash-preview-tts";
-/** Placeholder voice for the POC only — production voice selection is a
- * founder listening decision, not an engineering default. */
-export const POC_TTS_VOICE = "Charon";
+/** G's voice, selected by the founder on 2026-10-24 from the six-voice
+ * listening comparison (greeting / fees / Spanish lines). */
+export const POC_TTS_VOICE = "Achird";
 
-/** Male voice candidates for the founder's listening comparison (Gemini
+/** Male voice candidates from the founder's listening comparison (Gemini
  * TTS prebuilt voices). The TTS endpoint accepts a voice ONLY from this
  * allowlist; anything else falls back to POC_TTS_VOICE. */
 export const POC_VOICE_CANDIDATES = [
-  "Charon", // informative (current placeholder)
+  "Charon", // informative
   "Orus", // firm
   "Iapetus", // clear
   "Umbriel", // easy-going
-  "Achird", // friendly
+  "Achird", // friendly — founder-selected default (2026-10-24)
   "Sadaltager", // knowledgeable
   "Algieba", // smooth
   "Puck", // upbeat
