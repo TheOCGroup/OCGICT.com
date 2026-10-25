@@ -1,5 +1,5 @@
 /**
- * TEMPORARY diagnostic for the isolated A/B site ONLY (experiment branch —
+ * TEMPORARY diagnostic v3 (bundle-refresh probe) for the isolated A/B site ONLY (experiment branch —
  * never merges). Reports whether the function env carries a key (length
  * only, never the value) and the sanitized Google-side outcome of one
  * minimal chat call and one minimal TTS call, so an auth failure can be
