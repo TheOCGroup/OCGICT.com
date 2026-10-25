@@ -12,10 +12,10 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-async function probe(url: string, apiKey: <redacted> body: unknown): Promise<{ status: number; googleErrorStatus: string | null; googleMessage: string | null }> {
+async function probe(url: string, gkey: string, body: unknown): Promise<{ status: number; googleErrorStatus: string | null; googleMessage: string | null }> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": gkey },
     body: JSON.stringify(body),
   });
   let googleErrorStatus: string | null = null;
@@ -37,20 +37,20 @@ export default async function handler(request: Request): Promise<Response> {
   if ((process.env.OCG_G_PAID_MODEL_APPROVED || "").trim().toLowerCase() !== "true") {
     return json(403, { error: "diag disabled" });
   }
-  const apiKey = <redacted>
+  const gkey = process.env.GEMINI_API_KEY;
   const base = "https://generativelanguage.googleapis.com/v1beta/models";
-  const out: Record<string, unknown> = { keyPresent: Boolean(apiKey), keyLength: apiKey ? apiKey.length : 0 };
-  if (!apiKey) return json(200, out);
+  const out: Record<string, unknown> = { keyPresent: Boolean(gkey), keyLength: gkey ? gkey.length : 0 };
+  if (!gkey) return json(200, out);
   try {
     const store = await netlifyBlobsBudgetStore();
     await consumeBudget(store, "chat", process.env);
     await consumeBudget(store, "tts", process.env);
   } catch { /* metering must not block diagnosis on the experiment site */ }
-  out.chat = await probe(`${base}/gemini-3.8-flash:generateContent`, apiKey, {
+  out.chat = await probe(`${base}/gemini-3.8-flash:generateContent`, gkey, {
     contents: [{ parts: [{ text: "Reply with the single word: ready" }] }],
     generationConfig: { maxOutputTokens: 8 },
   });
-  out.tts = await probe(`${base}/gemini-3.8-flash-tts:generateContent`, apiKey, {
+  out.tts = await probe(`${base}/gemini-3.8-flash-tts:generateContent`, gkey, {
     contents: [{ parts: [{ text: "Ready." }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
