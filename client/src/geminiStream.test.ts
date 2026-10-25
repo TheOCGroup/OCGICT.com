@@ -14,6 +14,8 @@ import {
   effectiveTtsModel,
   extractSpeechPcm,
   synthesizeGeminiSpeech,
+  streamGeminiTokens,
+  thinkingConfigFromEnv,
 } from "../../server/services/geminiStream";
 
 const sseEvent = (text: string) =>
@@ -205,5 +207,47 @@ describe("extractSpeechPcm — real GA payload fixture", () => {
     );
     expect(out.pcm.includes(Buffer.from("C2PA", "ascii"))).toBe(false);
     expect(out.pcm.includes(Buffer.from("RIFF", "ascii"))).toBe(false);
+  });
+});
+
+describe("thinkingConfigFromEnv (A/B knob)", () => {
+  it("is undefined when unset or invalid — the control build's request shape", () => {
+    expect(thinkingConfigFromEnv({})).toBeUndefined();
+    expect(thinkingConfigFromEnv({ OCG_G_THINKING_LEVEL: "" })).toBeUndefined();
+    expect(thinkingConfigFromEnv({ OCG_G_THINKING_LEVEL: "banana" })).toBeUndefined();
+  });
+  it("maps valid levels, tolerating case and whitespace", () => {
+    expect(thinkingConfigFromEnv({ OCG_G_THINKING_LEVEL: "low" })).toEqual({ thinkingLevel: "low" });
+    expect(thinkingConfigFromEnv({ OCG_G_THINKING_LEVEL: " Minimal " })).toEqual({ thinkingLevel: "minimal" });
+    expect(thinkingConfigFromEnv({ OCG_G_THINKING_LEVEL: "HIGH" })).toEqual({ thinkingLevel: "high" });
+  });
+});
+
+describe("streamGeminiTokens thinking knob", () => {
+  afterEach(() => { vi.unstubAllGlobals(); delete process.env.OCG_G_THINKING_LEVEL; });
+
+  async function captureBody(level: string | undefined): Promise<any> {
+    if (level === undefined) delete process.env.OCG_G_THINKING_LEVEL;
+    else process.env.OCG_G_THINKING_LEVEL = level;
+    let body: any = null;
+    const sse = 'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]}}]}\r\n\r\n';
+    vi.stubGlobal("fetch", async (_url: string, init: any) => {
+      body = JSON.parse(init.body);
+      return { ok: true, body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(sse)); c.close(); } }) };
+    });
+    const deltas: string[] = [];
+    for await (const d of streamGeminiTokens({ history: [], message: "hello", apiKey: "k" })) deltas.push(d);
+    expect(deltas.join("")).toContain("Hi");
+    return body;
+  }
+
+  it("omits thinkingConfig entirely when the knob is unset (control-identical)", async () => {
+    const body = await captureBody(undefined);
+    expect(body.generationConfig).toEqual({ temperature: 0.35, maxOutputTokens: 640 });
+  });
+  it("adds thinkingConfig only when a valid level is set", async () => {
+    const body = await captureBody("low");
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
+    expect(body.generationConfig.temperature).toBe(0.35);
   });
 });

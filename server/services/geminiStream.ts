@@ -133,6 +133,23 @@ export class GeminiSseParser {
   }
 }
 
+/**
+ * Optional thinking bound for the STREAMING (voice) path only, from the
+ * OCG_G_THINKING_LEVEL env var ("minimal" | "low" | "medium" | "high").
+ * Unset or invalid → undefined, and the request body is byte-identical
+ * to the certified control build. A/B experiment 2026-10-25: bounding
+ * thinking targets time-to-first-token, the dominant voice latency term.
+ */
+export function thinkingConfigFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): { thinkingLevel: string } | undefined {
+  const level = env.OCG_G_THINKING_LEVEL?.trim().toLowerCase();
+  if (level === "minimal" || level === "low" || level === "medium" || level === "high") {
+    return { thinkingLevel: level };
+  }
+  return undefined;
+}
+
 /** Stream a conversational reply from Gemini, yielding true token deltas. */
 export async function* streamGeminiTokens(opts: {
   history: PocHistoryItem[];
@@ -144,6 +161,7 @@ export async function* streamGeminiTokens(opts: {
   onUsage?: (usage: PocUsage) => void;
 }): AsyncGenerator<string> {
   const model = opts.model || process.env.GEMINI_MODEL || POC_CHAT_MODEL;
+  const thinking = thinkingConfigFromEnv();
   const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
     method: "POST",
     signal: opts.signal,
@@ -154,7 +172,11 @@ export async function* streamGeminiTokens(opts: {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: G_SYSTEM_INSTRUCTION + POC_VOICE_ADDENDUM }] },
       contents: contentsFor(opts.history, opts.message),
-      generationConfig: { temperature: 0.35, maxOutputTokens: 640 },
+      generationConfig: {
+        temperature: 0.35,
+        maxOutputTokens: 640,
+        ...(thinking ? { thinkingConfig: thinking } : {}),
+      },
     }),
   });
   if (!res.ok || !res.body) {
