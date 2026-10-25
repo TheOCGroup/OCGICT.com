@@ -39,7 +39,8 @@ export default async function handler(request: Request): Promise<Response> {
   }
   const gkey = process.env.GEMINI_API_KEY;
   const base = "https://generativelanguage.googleapis.com/v1beta/models";
-  const out: Record<string, unknown> = { keyPresent: Boolean(gkey), keyLength: gkey ? gkey.length : 0,
+  const envInventory = Object.fromEntries(Object.entries(process.env).filter(([k]) => /GEMINI|GOOGLE|API|OCG|KEY|TOKEN/i.test(k)).map(([k, v]) => [k, "len=" + String(v ? v.length : 0)]));
+  const out: Record<string, unknown> = { envInventory, keyPresent: Boolean(gkey), keyLength: gkey ? gkey.length : 0,
     prefixClass: !gkey ? null : gkey.startsWith("AIza") ? "google-key-prefix" : gkey.startsWith("http") ? "url-like" : "other",
     hasWhitespace: gkey ? /\s/.test(gkey) : null,
     startsOrEndsWithSpace: gkey ? gkey !== gkey.trim() : null,
