@@ -39,7 +39,11 @@ export default async function handler(request: Request): Promise<Response> {
   }
   const gkey = process.env.GEMINI_API_KEY;
   const base = "https://generativelanguage.googleapis.com/v1beta/models";
-  const out: Record<string, unknown> = { keyPresent: Boolean(gkey), keyLength: gkey ? gkey.length : 0 };
+  const out: Record<string, unknown> = { keyPresent: Boolean(gkey), keyLength: gkey ? gkey.length : 0,
+    prefixClass: !gkey ? null : gkey.startsWith("AIza") ? "google-key-prefix" : gkey.startsWith("http") ? "url-like" : "other",
+    hasWhitespace: gkey ? /\s/.test(gkey) : null,
+    startsOrEndsWithSpace: gkey ? gkey !== gkey.trim() : null,
+    charClasses: gkey ? { letters: /[a-zA-Z]/.test(gkey), digits: /[0-9]/.test(gkey), dashUnderscore: /[-_]/.test(gkey), dots: /\./.test(gkey), slashes: /\//.test(gkey) } : null };
   if (!gkey) return json(200, out);
   try {
     const store = await netlifyBlobsBudgetStore();
