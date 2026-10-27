@@ -59,3 +59,32 @@ describe("G realtime voice module contract", () => {
     expect(voiceModule).toContain("this.cancelled");
   });
 });
+
+describe("G Kokoro speech integration contract", () => {
+  const experience = code;
+  const kokoroModule = readFileSync(new URL("../voice/gKokoroSpeech.ts", import.meta.url), "utf8");
+  it("probes the server gate and speaks through /api/g/tts, never directly to the service", () => {
+    expect(kokoroModule).toContain("/api/g/tts");
+    expect(kokoroModule).not.toContain("OCG_KOKORO_TTS_KEY");
+    expect(experience).toContain("GKokoroSpeech");
+    expect(experience).toContain("kokoroAvailable");
+  });
+  it("labels the shared-voice path in plain visitor language, distinctly from the basic fallback", () => {
+    // TED ruling (2026-10-21): the engine's name never appears on the
+    // visitor surface; the mode is "OCG voice (preview)".
+    expect(experience).toContain("OCG voice (preview)");
+    expect(experience).toContain("OCG voice ready (preview)");
+    expect(experience).toContain("Basic browser voice");
+    expect(experience).not.toContain("Kokoro voice ready");
+    expect(experience).not.toContain("<strong>Kokoro voice:</strong>");
+    expect(experience).not.toContain("(self-hosted, in evaluation)");
+  });
+  it("never swaps engines silently and never leaves dead air unexplained", () => {
+    expect(experience).toContain("That reply used the basic browser voice");
+    expect(experience).toContain("G is about to speak…");
+  });
+  it("stops Kokoro playback on every interrupt path (stop, typing, listening)", () => {
+    expect(experience).toContain("stopAllSpeech");
+    expect(kokoroModule).toContain("revokeObjectURL");
+  });
+});

@@ -32,7 +32,7 @@ export interface BudgetStore {
   atomicIncrement?(key: string, limit: number): Promise<{ used: number; allowed: boolean } | null>;
 }
 
-export type BudgetKind = "chat" | "voice";
+export type BudgetKind = "chat" | "voice" | "tts";
 
 export interface BudgetDecision {
   allowed: boolean;
@@ -44,16 +44,19 @@ export interface BudgetDecision {
 const DEFAULTS: Record<BudgetKind, number> = {
   chat: 500, // paid chat model requests per day
   voice: 25, // realtime voice sessions per day
+  tts: 300, // Kokoro synthesis requests per day (compute guard, self-hosted)
 };
 
 const HARD_CEILINGS: Record<BudgetKind, number> = {
   chat: 5000,
   voice: 200,
+  tts: 5000,
 };
 
 const ENV_KEYS: Record<BudgetKind, string> = {
   chat: "OCG_G_CHAT_DAILY_LIMIT",
   voice: "OCG_G_VOICE_DAILY_LIMIT",
+  tts: "OCG_G_TTS_DAILY_LIMIT",
 };
 
 export function dailyLimit(kind: BudgetKind, env: Record<string, string | undefined>): number {
