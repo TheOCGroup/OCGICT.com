@@ -31,7 +31,7 @@ import { consumeBudget } from '../../server/services/gBudget';
 import { consumeRateLimit } from '../../server/services/gRateLimit';
 import { platformBudgetStore, registerBudgetStoreFactory, hasRegisteredStoreFactory, storeBackend, leadBackend } from '../../server/services/gPlatform';
 import { parseFormSubmission, persistLeadToFirestore } from '../../server/services/gLeadStore';
-import { trustedClientIp, hasRoute, ROUTE_PATHS } from '../../server/cloudrunRoutes';
+import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath } from '../../server/cloudrunRoutes';
 
 // An optimistic-concurrency Firestore double: transactions snapshot doc
 // versions at read time and abort (then retry) when a staged doc changed
@@ -191,6 +191,27 @@ describe('Cloud Run harness helpers', () => {
     }
     expect(ROUTE_PATHS).toHaveLength(9);
     expect(hasRoute('/api/nope')).toBe(false);
+  });
+});
+
+describe('static file path hardening', () => {
+  const root = '/srv/public';
+  it('serves ordinary files and the index', () => {
+    expect(staticFilePath(root, '/')).toBe('/srv/public/index.html');
+    expect(staticFilePath(root, '/assets/app.js')).toBe('/srv/public/assets/app.js');
+    expect(staticFilePath(root, '//double//slash.css')).toBe('/srv/public/double/slash.css');
+  });
+  it('rejects traversal in every encoding', () => {
+    expect(staticFilePath(root, '/../../etc/passwd')).toBeNull();
+    expect(staticFilePath(root, '/assets/../../secret')).toBeNull();
+    expect(staticFilePath(root, '/%2e%2e/%2e%2e/secret')).toBeNull();
+    expect(staticFilePath(root, '/assets/%2E%2E/config')).toBeNull();
+    expect(staticFilePath(root, '/%E0%A4%A')).toBeNull();
+  });
+  it('cannot be escaped through a sibling prefix', () => {
+    expect(staticFilePath(root, '/../public-evil/evil.js')).toBeNull();
+    // A legitimate in-root path that merely resembles the prefix is fine.
+    expect(staticFilePath(root, '/public-evil.js')).toBe('/srv/public/public-evil.js');
   });
 });
 
