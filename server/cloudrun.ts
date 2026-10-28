@@ -70,6 +70,7 @@ const MIME: Record<string, string> = {
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon",
   ".woff": "font/woff", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
   ".map": "application/json", ".wav": "audio/wav", ".mp3": "audio/mpeg",
+  ".xml": "application/xml; charset=utf-8", ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
