@@ -1,1 +1,8 @@
-node_modules\ndist\n.git\n.netlify\n*.md\n!cloudrun/README.md\n
+.git
+node_modules
+dist
+.env
+.env.*
+gha-creds-*.json
+.manus-logs
+.netlify
