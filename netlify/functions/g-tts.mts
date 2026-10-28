@@ -22,7 +22,12 @@ import { engineForEnv, gVoiceProfile, rolloutEnabled, voiceForEngineLanguage } f
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
 import { stitchWavs } from "../../server/voice/wavStitch.js";
 
-export const config = { path: "/api/g/tts" };
+export const config = {
+  path: "/api/g/tts",
+  // Platform per-IP limit matching the in-memory RATE_LIMIT below (the
+  // in-memory map is per-instance only; this is the edge declaration).
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 20 },
+};
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const MAX_TEXT_CHARS = 1200;
