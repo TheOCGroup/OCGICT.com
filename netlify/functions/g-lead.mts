@@ -1,4 +1,6 @@
 import { jsonError, jsonHeaders, readGuardedJson, submitNetlifyForm, trimmedString } from "./_forms.js";
+import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
+import { netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 
 /**
  * POST /api/g/lead — G conversation follow-up intake.
@@ -9,8 +11,24 @@ import { jsonError, jsonHeaders, readGuardedJson, submitNetlifyForm, trimmedStri
  * the Netlify dashboard, and covered by the form's email notification.
  * Success is reported only after Netlify accepts the submission.
  */
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
   if (request.method !== "POST") return jsonError(405, "Method not allowed.");
+  // Shared-store rate limit before any intake work: atomic across
+  // instances, platform-IP identity. Fail-closed with an honest message —
+  // a refused submission is never reported as recorded.
+  if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
+    try {
+      const rl = await consumeRateLimit(await netlifyBlobsBudgetStore(), "lead", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+      if (!rl.allowed) {
+        return new Response(JSON.stringify({ error: "Too many requests. Please try again shortly." }), {
+          status: 429,
+          headers: { ...jsonHeaders, "Retry-After": String(rl.retryAfterSeconds) },
+        });
+      }
+    } catch {
+      return jsonError(503, "We could not save your request. Nothing was recorded; please try again or email The OC Group.");
+    }
+  }
   const parsed = await readGuardedJson(request);
   if ("error" in parsed) return parsed.error;
   const body = parsed.body;
