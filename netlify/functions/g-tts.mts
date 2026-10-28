@@ -16,7 +16,8 @@
  * falls back to labeled basic browser speech when this endpoint is not
  * available. The service key is never exposed to the browser.
  */
-import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { checkBudget, consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { planDelivery } from "../../server/voice/gExpression.js";
 import { engineForEnv, gVoiceProfile, rolloutEnabled, voiceForEngineLanguage } from "../../server/voice/gProfile.js";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
@@ -57,7 +58,7 @@ export default async function handler(request: Request, context?: { ip?: string;
     // arbiter (same pattern as the realtime voice-session status).
     if (g.open) {
       try {
-        const store = await netlifyBlobsBudgetStore();
+        const store = await platformBudgetStore();
         const budget = await checkBudget(store, "tts", env);
         if (!budget.allowed) {
           return new Response(
@@ -85,7 +86,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   if (rateLimitActive(context, env)) {
     let ttsRate: Awaited<ReturnType<typeof consumeRateLimit>>;
     try {
-      ttsRate = await consumeRateLimit(await netlifyBlobsBudgetStore(), "ttsLocal", clientIdFromRequest(request, context), env);
+      ttsRate = await consumeRateLimit(await platformBudgetStore(), "ttsLocal", clientIdFromRequest(request, context), env);
     } catch {
       return new Response(JSON.stringify({ error: "Voice is temporarily unavailable." }), { status: 503, headers: jsonHeaders });
     }
@@ -117,7 +118,7 @@ export default async function handler(request: Request, context?: { ip?: string;
 
   // Meter before synthesis; fail closed when the meter is unavailable.
   try {
-    const store = await netlifyBlobsBudgetStore();
+    const store = await platformBudgetStore();
     const budget = await consumeBudget(store, "tts", env);
     if (!budget.allowed) {
       return new Response(
