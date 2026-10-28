@@ -1,19 +1,23 @@
 # G — Cloud Run fallback image (temporary host; Netlify remains primary).
-# Build: pnpm run build:cloudrun (vite client build + esbuild harness bundle).
-FROM node:22-bookworm-slim AS build
+# Modeled on the repo's validated image: same Node version, same pnpm, and
+# the patches/ directory copied BEFORE install (the lockfile's
+# patchedDependencies require it — install fails without it).
+FROM node:24-alpine AS builder
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global pnpm@10.4.1
 COPY package.json pnpm-lock.yaml ./
+COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm run build:cloudrun
+RUN pnpm prune --prod
 
-FROM node:22-bookworm-slim
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-COPY --from=build /app/dist ./dist
+ENV PORT=8080
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
 EXPOSE 8080
 CMD ["node", "dist/cloudrun.js"]
