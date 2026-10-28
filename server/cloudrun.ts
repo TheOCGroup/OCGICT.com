@@ -14,7 +14,7 @@ import sellerLookup from "../netlify/functions/seller-lookup.mts";
 import sellerOffer from "../netlify/functions/seller-offer.mts";
 import sellerSuggestions from "../netlify/functions/seller-suggestions.mts";
 import { registerBudgetStoreFactory, storeBackend, leadBackend } from "./services/gPlatform.js";
-import { ROUTE_PATHS, trustedClientIp } from "./cloudrunRoutes.js";
+import { ROUTE_PATHS, trustedClientIp, staticFilePath } from "./cloudrunRoutes.js";
 import { getGFirestore } from "./services/gFirestore.js";
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, persistLeadToFirestore } from "./services/gLeadStore.js";
@@ -97,9 +97,8 @@ async function writeResponse(res: ServerResponse, response: Response): Promise<v
 }
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string): Promise<boolean> {
-  const rel = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  const filePath = path.join(STATIC_DIR, rel);
-  if (!filePath.startsWith(STATIC_DIR)) return false;
+  const filePath = staticFilePath(STATIC_DIR, pathname);
+  if (!filePath) return false;
   const info = await stat(filePath).catch(() => null);
   if (info?.isFile()) {
     res.statusCode = 200;
