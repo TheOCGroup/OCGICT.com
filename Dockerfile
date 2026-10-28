@@ -1,20 +1,19 @@
-# Use the same Node version and frozen dependency graph as staging validation.
-FROM node:24-alpine AS builder
+# G — Cloud Run fallback image (temporary host; Netlify remains primary).
+# Build: pnpm run build:cloudrun (vite client build + esbuild harness bundle).
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
-RUN npm install --global pnpm@10.4.1
+RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-COPY patches ./patches
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm run check && pnpm run build
-RUN pnpm prune --prod
+RUN pnpm run build:cloudrun
 
-FROM node:24-alpine AS runner
+FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=8080
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+COPY --from=build /app/dist ./dist
 EXPOSE 8080
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/cloudrun.js"]
