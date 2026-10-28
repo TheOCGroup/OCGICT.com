@@ -11,7 +11,8 @@
  * The voice defaults to POC_TTS_VOICE (Achird — founder-selected
  * 2026-10-24); callers may choose another allowlisted candidate.
  */
-import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { synthesizeGeminiSpeech, effectiveTtsModel, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
 import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 
@@ -45,7 +46,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // atomic across instances, platform-IP identity, fail-closed.
   if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
     try {
-      const rl = await consumeRateLimit(await netlifyBlobsBudgetStore(), "tts", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+      const rl = await consumeRateLimit(await platformBudgetStore(), "tts", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
       if (!rl.allowed) {
         return new Response(JSON.stringify({ error: "Too many requests." }), {
           status: 429,
@@ -68,7 +69,7 @@ export default async function handler(request: Request, context?: { ip?: string;
 
   // Fail closed on the persistent daily meter, same as every other G path.
   try {
-    const store = await netlifyBlobsBudgetStore();
+    const store = await platformBudgetStore();
     const decision = await consumeBudget(store, "tts", process.env);
     if (!decision.allowed) return json(429, { error: "Daily voice budget reached." });
   } catch {
