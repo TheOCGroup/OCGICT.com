@@ -7,6 +7,8 @@ import { persistStrategyBrief } from "@/lib/persistence";
 import { getActiveBookingProvider } from "@/lib/booking";
 import { GRealtimeVoice, fetchVoiceConfig, type GRealtimeState, type VoiceConfig } from "@/voice/gRealtimeVoice";
 import { GKokoroSpeech } from "@/voice/gKokoroSpeech";
+import { browserVoiceFlagEnabled } from "@/voice/browser/browserVoiceFlag";
+import type { GBrowserSpeech } from "@/voice/browser/gBrowserSpeech";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../../shared/contracts";
 
 interface Message {
@@ -37,6 +39,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const [voiceNotice, setVoiceNotice] = useState<boolean>(false);
   const [listening, setListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('Voice is off');
+  const [voiceDiag, setVoiceDiag] = useState('');
   const recognitionRef = useRef<any>(null);
   const voiceEnabledRef = useRef(false);
   const activeSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -68,6 +71,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   // failure falls back per-reply to the labeled basic browser voice.
   const [kokoroAvailable, setKokoroAvailable] = useState(false);
   const kokoroRef = useRef<GKokoroSpeech | null>(null);
+  // OCG Voice Runtime (browser inference) — prototype, flag-gated only.
+  const browserSpeechRef = useRef<GBrowserSpeech | null>(null);
+  const browserVoiceOn = browserVoiceFlagEnabled();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,6 +85,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     window.speechSynthesis?.cancel();
     activeSpeechRef.current = null;
     kokoroRef.current?.stop();
+    browserSpeechRef.current?.stop();
   };
   const rtActive = rtState === "connecting" || rtState === "listening" || rtState === "thinking" || rtState === "speaking";
 
@@ -232,6 +239,88 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
     const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const spoken = sentences.slice(0, 3).join(" ").trim().slice(0, 500);
     const spanishReply = /[\u00e1\u00e9\u00ed\u00f3\u00fa\u00f1\u00bf\u00a1]|\b(?:hola|gracias|usted|propiedad|inversi\u00f3n|necesita|ayudarle|quieres|puedo|podemos|buenos|buenas|vender|comprar)\b/i.test(spoken);
+
+    // OCG Voice Runtime prototype: on-device Supertonic M1, only when
+    // the explicit browserVoice flag is on. Any failure falls through to
+    // the normal cascade below (server voice, then basic browser voice).
+    if (browserVoiceOn) {
+      setVoiceStatus("G is about to speak…");
+      // Fall through for this reply only — the server/basic paths take
+      // it from here, with the standard notice. Used by BOTH the
+      // provider's onError and any failure around it (chunk load,
+      // construction) so no failure class can strand the reply.
+      const fallThrough = () => {
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        if (kokoroAvailable) {
+          if (!kokoroRef.current) kokoroRef.current = new GKokoroSpeech();
+          void kokoroRef.current.speak(spoken, spanishReply ? "es" : "en", {
+            onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+            onEnd: () => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              setVoiceStatus("Listening for your reply");
+              startListening();
+            },
+            onError: () => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+            },
+          }, { expressive: true });
+        } else {
+          speakWithBrowserVoice(spoken, session, "That reply used the basic browser voice — the main voice had a hiccup");
+        }
+      };
+      void (async () => {
+        // Dynamic import: the inference library ships only to visitors
+        // who enable the prototype flag, never in the default bundle.
+        if (!browserSpeechRef.current) {
+          const mod = await import("@/voice/browser/gBrowserSpeech");
+          const prof = await import("@/voice/browser/deviceProfile");
+          const vv = await import("@/voice/browser/voiceVariant");
+          const variant = vv.resolveVoiceVariant();
+          const profile = prof.selectDeviceProfile({
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            deviceMemoryGB: (navigator as unknown as { deviceMemory?: number }).deviceMemory,
+            mobileUserAgent: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent),
+            crossOriginIsolated: (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true,
+            webgpuAdapter: await prof.probeWebGPU(),
+          });
+          let lastShownMB = -1;
+          browserSpeechRef.current = new mod.GBrowserSpeech({
+            providers: profile.providers,
+            numThreads: profile.numThreads,
+            assetBase: variant.assetBase,
+            cacheName: variant.cacheName,
+            variantLabel: variant.label,
+            onReady: (info) => {
+              setVoiceDiag(`${info.variantLabel ?? "M1"} · ${info.providersUsed.includes("webgpu") ? "WebGPU" : "WASM"}`);
+            },
+            onProgress: (e) => {
+              if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+              if (e.phase === "init") {
+                setVoiceStatus(`Preparing G's voice… (${variant.label})`);
+                return;
+              }
+              const mb = Math.floor(e.loadedBytes / 1_000_000);
+              if (mb !== lastShownMB) {
+                lastShownMB = mb;
+                setVoiceStatus(`Downloading G's voice model — ${variant.label} · ${mb} MB received (one-time)`);
+              }
+            },
+          });
+        }
+        if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+        await browserSpeechRef.current.speak(spoken, { lang: spanishReply ? "es" : "en" }, {
+          onStart: () => setVoiceStatus("G is speaking — tap Talk to interrupt"),
+          onEnd: () => {
+            if (!voiceEnabledRef.current || voiceSessionRef.current !== session) return;
+            setVoiceStatus("Listening for your reply");
+            startListening();
+          },
+          onError: fallThrough,
+        });
+      })().catch(() => { fallThrough(); });
+      return;
+    }
 
     // Preferred spoken path: OCG's own Kokoro voice service, when the
     // server has it enabled. Any failure falls back to the basic browser
@@ -718,6 +807,9 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             )}
 
             <div role="status" aria-live="polite" className="mt-2 text-xs text-blue-300">{rtStatusText() ?? voiceStatus}</div>
+            {browserVoiceOn && voiceDiag && (
+              <div className="mt-1 text-[11px] text-blue-200/60">Voice engine: {voiceDiag} · on-device</div>
+            )}
             {/* Conversation activity */}
             <div ref={chatScrollContainerRef} className="flex-1 overflow-y-auto py-5 space-y-4 pr-2">
               {messages.map((m) => (
