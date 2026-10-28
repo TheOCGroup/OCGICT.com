@@ -117,5 +117,5 @@ export default async function handler(request: Request, context?: { deploy?: { c
 export const config = {
   path: "/api/g/chat",
   method: "POST",
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 30 },
+  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 3 },
 };
