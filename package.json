@@ -10,7 +10,8 @@
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:cloudrun": "vite build && esbuild server/cloudrun.ts --bundle --platform=node --packages=external --format=esm --outdir=dist"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -48,6 +49,7 @@
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
+    "firebase-admin": "^14.5.0",
     "framer-motion": "^12.23.22",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.453.0",
