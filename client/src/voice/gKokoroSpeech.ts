@@ -25,6 +25,8 @@ export interface KokoroSpeakOptions {
    */
   expressive?: boolean;
   intent?: string;
+  /** Seller emotional context from the gateway; paces delivery. */
+  emotion?: string;
 }
 
 export class GKokoroSpeech {
@@ -63,6 +65,7 @@ export class GKokoroSpeech {
           lang,
           ...(opts?.expressive ? { expressive: true } : {}),
           ...(opts?.intent ? { intent: opts.intent } : {}),
+          ...(opts?.emotion ? { emotion: opts.emotion } : {}),
         }),
         signal: controller.signal,
       });

@@ -17,6 +17,7 @@
  * It is NOT wired into production behavior by default.
  */
 import { planDelivery } from "../../../../server/voice/gExpression";
+import { voiceTrace } from "./voiceTrace";
 
 
 export interface BrowserSpeechEvents {
@@ -39,6 +40,7 @@ export interface WorkerConfig {
   providers?: string[];
   numThreads?: number;
   variantLabel?: string;
+  styleName?: string;
   onProgress?: (e: { phase: string; file: string; fileBytes: number; fileTotal?: number; loadedBytes: number }) => void;
   onReady?: (info: { providersUsed: string[]; variantLabel?: string }) => void;
 }
@@ -111,7 +113,19 @@ class WorkerSynth {
     const w = this.spawn();
     const id = ++this.seq;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // P0 repair: a worker call must never hang forever. A hung ORT
+      // init previously stranded a reply in silence indefinitely.
+      // Budgets are generous (downloads emit progress and legitimately
+      // take minutes on slow links only for load; synthesis is fast).
+      const budgetMs = msg.type === "synthesize" ? 120_000 : 300_000;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`worker ${String(msg.type)} timed out`));
+      }, budgetMs);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
       w.postMessage({ id, ...msg });
     });
   }
@@ -127,6 +141,7 @@ class WorkerSynth {
             cacheName: this.config.cacheName,
             providers: this.config.providers,
             numThreads: this.config.numThreads,
+            styleName: this.config.styleName,
           });
         }
         const r = await this.call({ type: "load" });
@@ -138,8 +153,15 @@ class WorkerSynth {
     return this.readyPromise;
   }
 
-  async synthesize(text: string, opts: { lang: string; speed: number }): Promise<SynthResult> {
-    const r = await this.call({ type: "synthesize", text, lang: opts.lang, speed: opts.speed });
+  /** Advance the worker's valid generation; older queued jobs skip. */
+  flush(gen: number): void {
+    if (!this.worker) return;
+    this.worker.postMessage({ type: "flush", gen });
+  }
+
+  async synthesize(text: string, opts: { lang: string; speed: number; gen: number }): Promise<SynthResult> {
+    const r = await this.call({ type: "synthesize", text, lang: opts.lang, speed: opts.speed, gen: opts.gen });
+    if (r.type === "skipped") throw new Error("synthesis skipped (stale generation)");
     return { wav: r.wav as Float32Array, durationSeconds: r.durationSeconds, synthMs: r.synthMs };
   }
 }
@@ -155,6 +177,7 @@ export function __setBrowserEngineForTests(engine: unknown, _style: unknown): vo
 export class GBrowserSpeech {
   private ctx: AudioContext | null = null;
   private current: AudioBufferSourceNode | null = null;
+  private outAnalyser: AnalyserNode | null = null;
   private generation = 0;
   private stopResolve: (() => void) | null = null;
 
@@ -176,9 +199,9 @@ export class GBrowserSpeech {
     return !!testEngine || !!sharedWorker;
   }
 
-  private async synth(text: string, lang: string, speed: number): Promise<SynthResult> {
+  private async synth(text: string, lang: string, speed: number, gen = 0): Promise<SynthResult> {
     if (testEngine) return testEngine.synthesize(text, {}, { lang, speed });
-    return sharedWorker.synthesize(text, { lang, speed });
+    return sharedWorker.synthesize(text, { lang, speed, gen });
   }
 
   private get sampleRate(): number {
@@ -187,18 +210,22 @@ export class GBrowserSpeech {
 
   async speak(
     text: string,
-    opts: { lang?: string; intent?: string },
+    opts: { lang?: string; intent?: string; emotion?: string },
     events: BrowserSpeechEvents,
   ): Promise<void> {
     const gen = ++this.generation;
+    if (!testEngine) sharedWorker.flush(gen);
+    voiceTrace("speakCall", { gen, chars: text.length });
     try {
+      voiceTrace("prepareStart", { gen });
       await this.prepare();
+      voiceTrace("prepareReady", { gen });
     } catch (err) {
       if (gen === this.generation) events.onError(`browser voice unavailable: ${String(err).slice(0, 120)}`);
       return;
     }
     if (gen !== this.generation) return;
-    const plan = planDelivery(text, { lang: opts.lang ?? "en", intent: opts.intent });
+    const plan = planDelivery(text, { lang: opts.lang ?? "en", intent: opts.intent, emotion: opts.emotion });
     plan.segments = withOpenerSplit(plan.segments);
     if (!this.ctx) this.ctx = new AudioContext();
     if (this.ctx.state === "suspended") await this.ctx.resume().catch(() => {});
@@ -213,7 +240,9 @@ export class GBrowserSpeech {
       if (gen !== this.generation) return;
       let result;
       try {
-        result = await (prefetched ?? this.synth(segment.text, plan.lang, segment.speed));
+        voiceTrace("segSynthStart", { gen, i });
+        result = await (prefetched ?? this.synth(segment.text, plan.lang, segment.speed, gen));
+        voiceTrace("segSynthEnd", { gen, i, synthMs: result.synthMs });
       } catch (err) {
         if (gen === this.generation) events.onError(`browser synthesis failed: ${String(err).slice(0, 120)}`);
         return;
@@ -222,16 +251,25 @@ export class GBrowserSpeech {
       if (gen !== this.generation) return;
       const next = plan.segments[i + 1];
       if (next) {
-        prefetched = this.synth(next.text, plan.lang, next.speed);
+        prefetched = this.synth(next.text, plan.lang, next.speed, gen);
         prefetched.catch(() => { /* surfaced when its turn comes */ });
       }
       const buffer = this.ctx.createBuffer(1, result.wav.length, this.sampleRate);
       buffer.copyToChannel(result.wav as Float32Array, 0);
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(this.ctx.destination);
+      // Route playback through an analyser tap so the barge-in monitor
+      // knows how loud G himself is right now (echo guard input). The
+      // tap is an enhancement only: without it, connect directly.
+      if (!this.outAnalyser && typeof this.ctx.createAnalyser === "function") {
+        this.outAnalyser = this.ctx.createAnalyser();
+        this.outAnalyser.fftSize = 1024;
+        this.outAnalyser.connect(this.ctx.destination);
+      }
+      if (this.outAnalyser) source.connect(this.outAnalyser);
+      else source.connect(this.ctx.destination);
       this.current = source;
-      if (!started) { started = true; events.onStart(); }
+      if (!started) { started = true; voiceTrace("playbackStart", { gen, i }); events.onStart(); }
       const ended = new Promise<void>((resolve) => { source.onended = () => resolve(); });
       // Race playback against stop(): stop() nulls onended (so a late
       // end event can't fire onEnd), which would otherwise leave this
@@ -248,9 +286,20 @@ export class GBrowserSpeech {
     if (gen === this.generation) events.onEnd();
   }
 
+  /** Current playback RMS (0 when silent) — the barge-in echo guard. */
+  getOutputLevel(): number {
+    if (!this.outAnalyser || !this.current) return 0;
+    const buf = new Float32Array(this.outAnalyser.fftSize);
+    this.outAnalyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    return Math.sqrt(sum / buf.length);
+  }
+
   /** Halt playback and cancel every queued segment, immediately. */
   stop(): void {
     this.generation += 1;
+    if (!testEngine) sharedWorker.flush(this.generation);
     if (this.stopResolve) { this.stopResolve(); this.stopResolve = null; }
     if (this.current) {
       try { this.current.onended = null; this.current.stop(); } catch { /* already stopped */ }

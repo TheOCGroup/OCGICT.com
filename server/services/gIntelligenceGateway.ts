@@ -1,8 +1,9 @@
 import { getActiveModelProvider, ModelMessage, ModelToolDefinition } from "./modelProvider.js";
 import { OcgObservability } from "./observability.js";
-import { EnhancedLocalProvider } from "./streamingModelProvider.js";
+import { EnhancedLocalProvider, looksSpanish } from "./streamingModelProvider.js";
 import { GAbuseGuard } from "./gAbuseGuard.js";
 import { IOCGStrategyBrief, IGActionInvocation } from "../../shared/contracts.js";
+import { analyzeSellerContext, guardSellerReply, SellerEmotion } from "../voice/sellerPolicy.js";
 
 export interface GChatRequest {
   sessionId: string;
@@ -20,6 +21,13 @@ export interface GChatResponse {
   provider: string;
   model: string;
   latencyMs: number;
+  /**
+   * Seller Trust Engine delivery context (additive). When the visitor
+   * is in a seller conversation, the client's speech layer uses the
+   * emotional context to pace delivery (slower and softer for
+   * sensitive contexts, efficient for motivated sellers).
+   */
+  delivery?: { emotion: SellerEmotion; stage: string };
 }
 
 const G_SYSTEM_INSTRUCTION = `You are G, the approachable, highly capable virtual guide for The OC Group, a Wichita-based real estate acquisition, renovation, and investment advisory business. You serve three audiences equally well: homeowners/sellers, investors and capital partners, and curious visitors exploring what OCG does.
@@ -40,7 +48,9 @@ TOOLS: Only call an available tool when a concrete action is warranted. Calculat
 
 VOICE-FIRST BEHAVIOR: Use short, natural spoken turns, usually one or two sentences. Answer the actual question before asking one relevant question. Do not use corporate-sounding sales scripts, filler praise, repeated introductions, or multi-part interrogations. If interrupted or corrected, acknowledge the new information and continue without restarting. If a visitor says a short answer like soon, tomorrow, yes, no, or an address, resolve it against the last question and conversation history. Match the language naturally, including Spanish, and do not force English translations. Avoid voice-hostile formatting and acronyms when a spoken response is expected. Never imply you are human.
 
-Avoid internal agent names, imaginary internal statuses, and unsupported claims of 24/7 live human support.`;
+Avoid internal agent names, imaginary internal statuses, and unsupported claims of 24/7 live human support.
+
+SELLER TRUST POLICY (applies whenever a homeowner is exploring a sale; it overrides any conflicting style impulse): Ask ONE question at a time. Acknowledge feelings plainly without claiming to know exactly how the person feels ("That makes sense" is fine; "I know exactly how you feel" is not). Never promise a price, an offer, or a timeline outcome; a formal offer only ever follows a real review by the team, in writing. Never manufacture urgency or use a seller's stress, grief, debts, or attachment to their home as leverage. When asked how OCG evaluates, explain honestly: recent comparable sales, needed repairs, and the real costs of buying, holding, and reselling produce a preliminary range — not an offer. When a seller compares listing with an agent, present both sides fairly: listing can bring a higher price for a home in good condition with time to wait; a direct sale trades some price for speed, certainty, and selling as-is with no showings or commissions. If a seller corrects a detail, acknowledge the corrected value explicitly and continue — never restart. If a seller is frustrated or asks you to stop, de-escalate without defending, and respect the stop. Next steps are always invitations, never pressure: requesting a preliminary offer or speaking with the acquisition team is voluntary at every point.`;
 
 export class GIntelligenceGateway {
   private static rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -181,14 +191,25 @@ export class GIntelligenceGateway {
     // A verified, explicit intake workflow must provide the underlying facts first.
     const brief: IOCGStrategyBrief | undefined = undefined;
 
+    // 6. Seller Trust Engine: enforce the trust guardrails on ANY
+    // provider's reply (one question at a time; no pressure or price
+    // promises survive) and attach the emotional delivery context so
+    // the speech layer can pace this reply appropriately.
+    const historyText = (req.history || []).map((h) => h.content).join(" ");
+    const sctx = analyzeSellerContext(req.history || [], req.message, {
+      spanish: looksSpanish(req.message) || looksSpanish(historyText),
+    });
+    const replyText = guardSellerReply(completion.content, sctx);
+
     return {
       sessionId,
-      replyText: completion.content,
+      replyText,
       action,
       strategyBrief: brief,
       provider: completion.provider,
       model: completion.model,
       latencyMs: Date.now() - startTime,
+      delivery: sctx.isSeller ? { emotion: sctx.primary, stage: sctx.stage } : undefined,
     };
   }
 

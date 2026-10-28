@@ -388,17 +388,42 @@ function splitSentences(text: string): string[] {
 
 export function planDelivery(
   text: string,
-  opts: { lang?: string; intent?: unknown } = {},
+  opts: { lang?: string; intent?: unknown; emotion?: unknown } = {},
 ): DeliveryPlan {
   const lang: "en" | "es" = (opts.lang ?? "en").toLowerCase().startsWith("es") ? "es" : "en";
-  const intent = classifyIntent(text, opts.intent);
+  let intent = classifyIntent(text, opts.intent);
   const spoken = normalizeSpokenText(text, lang);
-  const style = STYLES[intent];
-  const sentences = splitSentences(spoken);
+  let sentences = splitSentences(spoken);
+
+  // Emotional-context delivery (Seller Trust Engine, Phase 4): the
+  // gateway's seller policy maps the seller's emotional context to a
+  // delivery adjustment. Sensitive contexts slow down, breathe more,
+  // and speak fewer sentences; motivated sellers get efficient pacing.
+  // Quality knobs (voice, model) never change — only pacing.
+  let speedScale = 1;
+  let pauseScale = 1;
+  const emotion = typeof opts.emotion === "string" ? opts.emotion : "";
+  if (emotion) {
+    if (
+      ["inherited", "stressed_finances", "stressed_repairs", "attached", "hesitant", "frustrated"].includes(emotion)
+    ) {
+      speedScale = 0.95;
+      pauseScale = 1.3;
+      if (intent === "statement" || intent === "explanation") intent = "sensitive";
+      sentences = sentences.slice(0, 2);
+    } else if (emotion === "urgent" || emotion === "motivated") {
+      pauseScale = 0.9;
+      sentences = sentences.slice(0, 2);
+    } else if (emotion === "skeptical" || emotion === "comparing" || emotion === "curious") {
+      speedScale = emotion === "skeptical" ? 0.97 : 0.99;
+      pauseScale = emotion === "skeptical" ? 1.1 : 1.05;
+    }
+  }
+  const effStyle = STYLES[intent];
   const segments: SpeechSegment[] = sentences.map((s, i) => ({
     text: s,
-    speed: i === 0 && style.firstSpeed !== undefined ? style.firstSpeed : style.speed,
-    pauseAfterMs: i === sentences.length - 1 ? 0 : style.pauseMs,
+    speed: (i === 0 && effStyle.firstSpeed !== undefined ? effStyle.firstSpeed : effStyle.speed) * speedScale,
+    pauseAfterMs: i === sentences.length - 1 ? 0 : Math.round(effStyle.pauseMs * pauseScale),
   }));
   return { intent, lang, segments, spokenText: segments.map((s) => s.text).join(" ") };
 }
