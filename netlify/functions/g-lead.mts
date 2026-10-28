@@ -1,6 +1,6 @@
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { jsonError, jsonHeaders, readGuardedJson, submitNetlifyForm, trimmedString } from "./_forms.js";
 import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
-import { netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 
 /**
  * POST /api/g/lead — G conversation follow-up intake.
@@ -18,7 +18,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // a refused submission is never reported as recorded.
   if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
     try {
-      const rl = await consumeRateLimit(await netlifyBlobsBudgetStore(), "lead", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+      const rl = await consumeRateLimit(await platformBudgetStore(), "lead", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
       if (!rl.allowed) {
         return new Response(JSON.stringify({ error: "Too many requests. Please try again shortly." }), {
           status: 429,
