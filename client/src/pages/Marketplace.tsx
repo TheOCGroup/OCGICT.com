@@ -3,11 +3,11 @@
    Fetches live listings from Supabase marketplace_listings table
    Admin-managed via /admin panel
    ============================================================ */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 
 
-import { supabase, MarketplaceListing } from "@/lib/supabase";
+import type { MarketplaceListing } from "@/lib/supabase";
 import { ArrowRight, SlidersHorizontal, X, ChevronRight, MapPin, Bed, Bath, Square, Tag, FileText, Send, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,7 +38,7 @@ const STRATEGIES = ["All", "Fix & Flip", "BRRRR", "Buy & Hold", "Creative Financ
 
 export default function Marketplace() {
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [strategy, setStrategy] = useState("All");
   const [maxPrice, setMaxPrice] = useState(300000);
   const [minArv, setMinArv] = useState(0);
@@ -47,12 +47,11 @@ export default function Marketplace() {
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [inquiryListing, setInquiryListing] = useState<MarketplaceListing | null>(null);
 
-  useEffect(() => {
-    supabase.getListings(true)
-      .then(setListings)
-      .catch(() => toast.error("Failed to load listings."))
-      .finally(() => setLoading(false));
-  }, []);
+  // Listings are not fetched: the original Supabase project behind
+  // @/lib/supabase was deleted (host NXDOMAIN, data unrecoverable —
+  // see Phase 2A investigation, 2026-10-29). The page renders its
+  // designed empty state with zero network requests until the
+  // Firestore-backed listings successor lands. No fabricated data.
 
   const filtered = listings.filter((d) => {
     if (strategy !== "All" && d.strategy !== strategy) return false;
