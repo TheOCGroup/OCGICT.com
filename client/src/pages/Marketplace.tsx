@@ -520,7 +520,7 @@ export default function Marketplace() {
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Phone *</label>
-                  <input required type="tel" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="720.620.9929" />
+                  <input required type="tel" name="submitter_phone" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="720.620.9929" />
                 </div>
               </div>
               <div>
@@ -548,7 +548,7 @@ export default function Marketplace() {
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Strategy Fit</label>
-                  <select className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
+                  <select name="strategy" className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
                     <option value="flip">Fix & Flip</option>
                     <option value="brrrr">BRRRR</option>
                     <option value="rental">Buy & Hold</option>
