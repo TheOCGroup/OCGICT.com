@@ -24,6 +24,18 @@ export function hasRoute(pathname: string): boolean {
   return (ROUTE_PATHS as readonly string[]).includes(pathname);
 }
 
+/** Health endpoints the fallback host answers directly, before static
+ *  serving. "/health" is the externally reachable path on Cloud Run:
+ *  Google Front End reserves the exact path "/healthz" on run.app
+ *  domains and answers it with its own 404 before the request reaches
+ *  the container (QUINCEY live finding, staging certification
+ *  2026-10-29). "/healthz" is kept for hosts without that reservation. */
+export const HEALTH_PATHS = ["/health", "/healthz"] as const;
+
+export function isHealthPath(pathname: string): boolean {
+  return (HEALTH_PATHS as readonly string[]).includes(pathname);
+}
+
 /** The platform-trusted client IP on Cloud Run: the LAST X-Forwarded-For
  *  entry (appended by Google's front end). Earlier entries are
  *  client-supplied and never trusted. Falls back to the socket peer. */

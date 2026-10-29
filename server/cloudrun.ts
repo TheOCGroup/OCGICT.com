@@ -14,7 +14,7 @@ import sellerLookup from "../netlify/functions/seller-lookup.mts";
 import sellerOffer from "../netlify/functions/seller-offer.mts";
 import sellerSuggestions from "../netlify/functions/seller-suggestions.mts";
 import { registerBudgetStoreFactory, storeBackend, leadBackend } from "./services/gPlatform.js";
-import { ROUTE_PATHS, trustedClientIp, staticFilePath } from "./cloudrunRoutes.js";
+import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath } from "./cloudrunRoutes.js";
 import { getGFirestore } from "./services/gFirestore.js";
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, persistLeadToFirestore } from "./services/gLeadStore.js";
@@ -117,7 +117,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const { pathname } = url;
   const env = process.env as Record<string, string | undefined>;
 
-  if (req.method === "GET" && pathname === "/healthz") {
+  if (req.method === "GET" && isHealthPath(pathname)) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", service: "ocg-g-cloudrun" }));
     return;
