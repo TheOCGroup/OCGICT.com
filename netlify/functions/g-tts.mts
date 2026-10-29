@@ -16,31 +16,25 @@
  * falls back to labeled basic browser speech when this endpoint is not
  * available. The service key is never exposed to the browser.
  */
-import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { checkBudget, consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { planDelivery } from "../../server/voice/gExpression.js";
 import { engineForEnv, gVoiceProfile, rolloutEnabled, voiceForEngineLanguage } from "../../server/voice/gProfile.js";
 import { KokoroHttpProvider } from "../../server/voice/voiceProvider.js";
 import { stitchWavs } from "../../server/voice/wavStitch.js";
+import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 
-export const config = { path: "/api/g/tts" };
+export const config = {
+  path: "/api/g/tts",
+  // Platform per-IP declaration; the authoritative enforcement is the
+  // shared-store application limiter in the handler (gRateLimit).
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 20 },
+};
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const MAX_TEXT_CHARS = 1200;
 /** Spoken-form expansion (numbers -> words) may lengthen text; cap the plan, not just the raw reply. */
 const MAX_SPOKEN_CHARS = 2400;
-const RATE_LIMIT = 20;
-const RATE_WINDOW_MS = 60_000;
-const hits = new Map<string, number[]>();
-
-function rateLimited(request: Request): boolean {
-  const ip = request.headers.get("x-nf-client-connection-ip") || "unknown";
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > RATE_LIMIT;
-}
-
 function gate(env: Record<string, string | undefined>) {
   const profile = gVoiceProfile();
   if (!rolloutEnabled(profile, env)) {
@@ -53,7 +47,7 @@ function gate(env: Record<string, string | undefined>) {
   return { open: true as const, profile, provider };
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
   const env = process.env as Record<string, string | undefined>;
   const g = gate(env);
 
@@ -64,7 +58,7 @@ export default async function handler(request: Request): Promise<Response> {
     // arbiter (same pattern as the realtime voice-session status).
     if (g.open) {
       try {
-        const store = await netlifyBlobsBudgetStore();
+        const store = await platformBudgetStore();
         const budget = await checkBudget(store, "tts", env);
         if (!budget.allowed) {
           return new Response(
@@ -87,11 +81,21 @@ export default async function handler(request: Request): Promise<Response> {
   if (!g.open) {
     return new Response(JSON.stringify({ error: g.reason }), { status: 503, headers: jsonHeaders });
   }
-  if (rateLimited(request)) {
-    return new Response(JSON.stringify({ error: "Too many voice requests. Please wait a moment." }), {
-      status: 429,
-      headers: jsonHeaders,
-    });
+  // Shared-store rate limit (replaces the per-instance in-memory map):
+  // atomic across instances, platform-IP identity, fail-closed.
+  if (rateLimitActive(context, env)) {
+    let ttsRate: Awaited<ReturnType<typeof consumeRateLimit>>;
+    try {
+      ttsRate = await consumeRateLimit(await platformBudgetStore(), "ttsLocal", clientIdFromRequest(request, context), env);
+    } catch {
+      return new Response(JSON.stringify({ error: "Voice is temporarily unavailable." }), { status: 503, headers: jsonHeaders });
+    }
+    if (!ttsRate.allowed) {
+      return new Response(JSON.stringify({ error: "Too many voice requests. Please wait a moment." }), {
+        status: 429,
+        headers: { ...jsonHeaders, "Retry-After": String(ttsRate.retryAfterSeconds) },
+      });
+    }
   }
 
   let payload: { text?: unknown; lang?: unknown; intent?: unknown; expressive?: unknown; emotion?: unknown };
@@ -114,7 +118,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   // Meter before synthesis; fail closed when the meter is unavailable.
   try {
-    const store = await netlifyBlobsBudgetStore();
+    const store = await platformBudgetStore();
     const budget = await consumeBudget(store, "tts", env);
     if (!budget.allowed) {
       return new Response(

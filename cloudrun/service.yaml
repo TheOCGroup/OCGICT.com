@@ -1,0 +1,36 @@
+# Cloud Run service spec for the G fallback (staging). Applied with
+# `gcloud run services replace cloudrun/service.yaml` once the first image
+# exists; the image line is the only field to update per revision.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ocg-g-fallback
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      containerConcurrency: 40
+      serviceAccountName: ocg-g-fallback@ocg-voice-acceptance.iam.gserviceaccount.com
+      containers:
+        - image: REGION-docker.pkg.dev/ocg-voice-acceptance/cloud-run-source-deploy/ocg-g-fallback
+          ports:
+            - containerPort: 8080
+          env:
+            - name: OCG_STORE_BACKEND
+              value: firestore
+            - name: OCG_LEAD_BACKEND
+              value: firestore
+            - name: OCG_G_PAID_MODEL_APPROVED
+              value: "true"
+            - name: OCG_G_CHAT_ENABLED
+              value: "true"
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ocg-g-gemini-api-key
+                  key: latest

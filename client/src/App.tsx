@@ -13,6 +13,7 @@ import { AdminAuthProvider, useAdminAuth } from "./contexts/AdminAuthContext";
 import { Home } from "./pages/Home";
 import About from "./pages/About";
 import Services from "./pages/Services";
+import Invest from "./pages/Invest";
 import HowItWorks from "./pages/HowItWorks";
 import Marketplace from "./pages/Marketplace";
 import LenderNetwork from "./pages/LenderNetwork";
@@ -43,7 +44,7 @@ function Router() {
       <Route path="/g">{() => <GExperience />}</Route>
       <Route path="/about" component={About} />
       <Route path="/services" component={Services} />
-      <Route path="/invest" component={Services} />
+      <Route path="/invest" component={Invest} />
       <Route path="/strategies" component={Services} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/how-ocg-works" component={HowItWorks} />
@@ -66,9 +67,31 @@ function Router() {
   );
 }
 
+const PAGE_TITLES: Record<string, string> = {
+  "/": "The OC Group — Real Estate Investment, Acquisition & Consulting | Wichita, KS",
+  "/g": "Talk to G — The OC Group Assistant",
+  "/about": "About — The OC Group | Wichita, KS",
+  "/services": "Services — The OC Group",
+  "/invest": "Invest — The OC Group",
+  "/strategies": "Investment Strategies — The OC Group",
+  "/how-it-works": "How It Works — The OC Group",
+  "/how-ocg-works": "How It Works — The OC Group",
+  "/marketplace": "Marketplace — The OC Group",
+  "/lender-network": "Lender Network — The OC Group",
+  "/case-studies": "Case Studies — The OC Group",
+  "/contact": "Contact — The OC Group",
+  "/submit-deal": "Submit a Deal — The OC Group",
+  "/sell": "Sell Your Property — The OC Group | Wichita, KS",
+  "/privacy": "Privacy Policy — The OC Group",
+  "/terms": "Terms — The OC Group",
+};
+
 function PublicChrome() {
   const [location] = useLocation();
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [location]);
+  useEffect(() => {
+    document.title = PAGE_TITLES[location] ?? "The OC Group | Wichita, KS";
+  }, [location]);
   if (location.startsWith("/admin")) return <Router />;
   return (
     <div className="min-h-screen bg-[#070A0F] text-slate-100">

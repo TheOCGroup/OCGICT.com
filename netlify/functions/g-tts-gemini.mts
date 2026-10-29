@@ -11,8 +11,10 @@
  * The voice defaults to POC_TTS_VOICE (Achird — founder-selected
  * 2026-10-24); callers may choose another allowlisted candidate.
  */
-import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { synthesizeGeminiSpeech, effectiveTtsModel, POC_TTS_VOICE, POC_VOICE_CANDIDATES } from "../../server/services/geminiStream.js";
+import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 
 export const config = {
   path: "/api/g/tts-gemini",
@@ -27,19 +29,6 @@ export const config = {
 };
 
 const MAX_TEXT_CHARS = 600;
-const RATE_LIMIT = 40;
-const RATE_WINDOW_MS = 60_000;
-const hits = new Map<string, number[]>();
-
-function rateLimited(request: Request): boolean {
-  const ip = request.headers.get("x-nf-client-connection-ip") || "unknown";
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > RATE_LIMIT;
-}
-
 function json(status: number, obj: Record<string, unknown>): Response {
   return new Response(JSON.stringify(obj), {
     status,
@@ -47,13 +36,27 @@ function json(status: number, obj: Record<string, unknown>): Response {
   });
 }
 
-export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
+export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
   if (request.method !== "POST") return json(405, { error: "Method not allowed." });
   const hostedContext = context?.deploy?.context === "deploy-preview" || context?.deploy?.context === "production";
   if (!hostedContext && process.env.OCG_G_CHAT_ENABLED !== "true") {
     return json(503, { error: "G backend is not enabled in this environment." });
   }
-  if (rateLimited(request)) return json(429, { error: "Too many requests." });
+  // Shared-store rate limit (replaces the per-instance in-memory map):
+  // atomic across instances, platform-IP identity, fail-closed.
+  if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
+    try {
+      const rl = await consumeRateLimit(await platformBudgetStore(), "tts", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+      if (!rl.allowed) {
+        return new Response(JSON.stringify({ error: "Too many requests." }), {
+          status: 429,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": String(rl.retryAfterSeconds) },
+        });
+      }
+    } catch {
+      return json(503, { error: "Voice metering is unavailable." });
+    }
+  }
 
   let body: any;
   try { body = await request.json(); } catch { return json(400, { error: "Invalid JSON." }); }
@@ -66,7 +69,7 @@ export default async function handler(request: Request, context?: { deploy?: { c
 
   // Fail closed on the persistent daily meter, same as every other G path.
   try {
-    const store = await netlifyBlobsBudgetStore();
+    const store = await platformBudgetStore();
     const decision = await consumeBudget(store, "tts", process.env);
     if (!decision.allowed) return json(429, { error: "Daily voice budget reached." });
   } catch {
