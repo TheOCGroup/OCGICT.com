@@ -31,7 +31,7 @@ import { consumeBudget } from '../../server/services/gBudget';
 import { consumeRateLimit } from '../../server/services/gRateLimit';
 import { platformBudgetStore, registerBudgetStoreFactory, hasRegisteredStoreFactory, storeBackend, leadBackend } from '../../server/services/gPlatform';
 import { parseFormSubmission, persistLeadToFirestore } from '../../server/services/gLeadStore';
-import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath, isHealthPath, HEALTH_PATHS } from '../../server/cloudrunRoutes';
+import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath, isHealthPath, HEALTH_PATHS, SECURITY_HEADERS } from '../../server/cloudrunRoutes';
 
 // An optimistic-concurrency Firestore double: transactions snapshot doc
 // versions at read time and abort (then retry) when a staged doc changed
@@ -204,6 +204,58 @@ describe('Cloud Run harness helpers', () => {
     expect(isHealthPath('/Health')).toBe(false);
     expect(isHealthPath('/health/')).toBe(false);
     expect(isHealthPath('/api/health')).toBe(false);
+  });
+});
+
+describe('security response headers', () => {
+  const byName = new Map<string, string>(SECURITY_HEADERS.map(([k, v]) => [k.toLowerCase(), v]));
+
+  it('sets the six required headers', () => {
+    expect(byName.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains');
+    expect(byName.get('x-content-type-options')).toBe('nosniff');
+    expect(byName.get('x-frame-options')).toBe('DENY');
+    expect(byName.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(byName.get('permissions-policy')).toBe('microphone=(self), camera=(), geolocation=(), payment=(), usb=()');
+    expect(byName.has('content-security-policy')).toBe(true);
+  });
+
+  it('CSP locks down scripts, objects, framing, and base/form targets', () => {
+    const csp = byName.get('content-security-policy')!;
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("script-src 'self'");
+    // No unsafe-inline / unsafe-eval anywhere in script-src.
+    const scriptSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src'))!;
+    const scriptTokens = scriptSrc.split(/\s+/);
+    expect(scriptTokens).not.toContain("'unsafe-inline'");
+    // 'wasm-unsafe-eval' (ONNX Runtime Web) is allowed; JS eval is not.
+    expect(scriptTokens).not.toContain("'unsafe-eval'");
+    expect(scriptTokens).toContain("'wasm-unsafe-eval'");
+    expect(scriptSrc).not.toContain('*');
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("form-action 'self'");
+  });
+
+  it('CSP still allows everything the shipped client actually uses', () => {
+    const csp = byName.get('content-security-policy')!;
+    // Same-origin APIs: chat SSE, TTS, lead + seller endpoints.
+    expect(csp).toContain("connect-src 'self'");
+    // The one Supabase project host the admin client references —
+    // pinned exactly, no wildcard.
+    expect(csp).toContain('https://lsaerludzkxjewqgbvkg.supabase.co');
+    // Supertonic on-device voice engine model downloads.
+    expect(csp).toContain('https://huggingface.co');
+    expect(csp).toContain('https://*.cdn.hf.co');
+    // Images: CloudFront asset host + Wikimedia Commons (+ its upload host).
+    expect(csp).toContain('https://d2xsxph8kpxj0f.cloudfront.net');
+    expect(csp).toContain('https://commons.wikimedia.org');
+    expect(csp).toContain('https://upload.wikimedia.org');
+    // Google Fonts stylesheet + font files.
+    expect(csp).toContain('https://fonts.googleapis.com');
+    expect(csp).toContain('https://fonts.gstatic.com');
+    // TTS playback through blob: object URLs.
+    expect(csp).toContain("media-src 'self' blob: data:");
   });
 });
 

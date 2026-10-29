@@ -36,6 +36,47 @@ export function isHealthPath(pathname: string): boolean {
   return (HEALTH_PATHS as readonly string[]).includes(pathname);
 }
 
+/**
+ * Security response headers applied by the Cloud Run harness to EVERY
+ * response (health, API, static, SPA fallback, errors). Policy notes:
+ * - script-src has NO 'unsafe-inline': the app ships only external module
+ *   scripts plus a non-executable JSON-LD block.
+ * - style-src keeps 'unsafe-inline' for React inline style attributes.
+ * - style-src / font-src allow Google Fonts (the site loads Cormorant
+ *   Garamond + Inter from fonts.googleapis.com / fonts.gstatic.com).
+ * - img-src allows the two image CDNs the client actually uses
+ *   (CloudFront asset host + Wikimedia Commons landmark photos, which
+ *   redirect to upload.wikimedia.org).
+ * - connect-src allows the one Supabase project host the admin client
+ *   code references (pinned exactly, no wildcard) and the Hugging Face
+ *   hosts the opt-in Supertonic on-device voice engine downloads its
+ *   ONNX models from (huggingface.co + its CDN, *.cdn.hf.co — the
+ *   redirect target QUINCEY measured live for every .onnx asset).
+ * - script-src adds 'wasm-unsafe-eval' ONLY so ONNX Runtime Web can
+ *   compile its WebAssembly; JavaScript eval stays forbidden.
+ * - media-src allows blob: so fetched TTS WAVs can play via object URLs.
+ * - Permissions-Policy keeps microphone on self (G voice input) and
+ *   disables camera / geolocation / payment / usb.
+ * The dormant components/Map.tsx (Google Maps via a Forge proxy) is not
+ * imported by any page; if it is ever wired in, this policy must gain
+ * the Maps allowances in the same change.
+ */
+export const SECURITY_HEADERS = [
+  ["Strict-Transport-Security", "max-age=31536000; includeSubDomains"],
+  [
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "img-src 'self' data: https://d2xsxph8kpxj0f.cloudfront.net https://commons.wikimedia.org https://upload.wikimedia.org; " +
+      "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://lsaerludzkxjewqgbvkg.supabase.co https://huggingface.co https://*.cdn.hf.co; " +
+      "media-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; " +
+      "base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+  ],
+  ["X-Content-Type-Options", "nosniff"],
+  ["X-Frame-Options", "DENY"],
+  ["Referrer-Policy", "strict-origin-when-cross-origin"],
+  ["Permissions-Policy", "microphone=(self), camera=(), geolocation=(), payment=(), usb=()"],
+] as const;
+
 /** The platform-trusted client IP on Cloud Run: the LAST X-Forwarded-For
  *  entry (appended by Google's front end). Earlier entries are
  *  client-supplied and never trusted. Falls back to the socket peer. */
