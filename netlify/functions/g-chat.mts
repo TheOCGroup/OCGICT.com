@@ -1,5 +1,6 @@
 import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
-import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { streamGeminiTokens, POC_CHAT_MODEL } from "../../server/services/geminiStream.js";
 import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 import { analyzeSellerContext, guardSellerReply } from "../../server/voice/sellerPolicy.js";
@@ -35,7 +36,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
     let chatRate: Awaited<ReturnType<typeof consumeRateLimit>>;
     try {
-      chatRate = await consumeRateLimit(await netlifyBlobsBudgetStore(), "chat", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+      chatRate = await consumeRateLimit(await platformBudgetStore(), "chat", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
     } catch {
       return new Response(JSON.stringify({ error: "G is temporarily unavailable." }), { status: 503, headers });
     }
@@ -64,7 +65,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   let budgetFallback = false;
   if (paidApproved) {
     try {
-      const store = await netlifyBlobsBudgetStore();
+      const store = await platformBudgetStore();
       const decision = await consumeBudget(store, "chat", process.env);
       if (decision.allowed) {
         localOnly = false;

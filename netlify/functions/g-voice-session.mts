@@ -1,4 +1,5 @@
-import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
+import { checkBudget, consumeBudget } from "../../server/services/gBudget.js";
+import { platformBudgetStore } from "../../server/services/gPlatform.js";
 import { jsonError, jsonHeaders } from "./_forms.js";
 import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 
@@ -40,7 +41,7 @@ export default async function handler(request: Request, context?: { ip?: string;
       // reported as available. If the meter cannot be read here, leave the
       // config answer in place — POST remains the fail-closed arbiter.
       try {
-        const store = await netlifyBlobsBudgetStore();
+        const store = await platformBudgetStore();
         const budget = await checkBudget(store, "voice", env);
         if (!budget.allowed) {
           enabled = false;
@@ -68,7 +69,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // callers consume no budget. Atomic across instances, fail-closed.
   if (rateLimitActive(context, env)) {
     try {
-      const rl = await consumeRateLimit(await netlifyBlobsBudgetStore(), "voice", clientIdFromRequest(request, context), env);
+      const rl = await consumeRateLimit(await platformBudgetStore(), "voice", clientIdFromRequest(request, context), env);
       if (!rl.allowed) {
         return new Response(JSON.stringify({ error: "Too many requests. Please try again shortly." }), {
           status: 429,
@@ -84,7 +85,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // it. If the meter itself is unavailable, paid voice fails closed.
   let decision;
   try {
-    const store = await netlifyBlobsBudgetStore();
+    const store = await platformBudgetStore();
     decision = await consumeBudget(store, "voice", env);
   } catch {
     return jsonError(503, "Voice is temporarily unavailable. Text chat is ready.");
