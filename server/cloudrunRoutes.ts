@@ -50,7 +50,8 @@ export function isHealthPath(pathname: string): boolean {
  * - connect-src allows the one Supabase project host the admin client
  *   code references (pinned exactly, no wildcard) and the Hugging Face
  *   hosts the opt-in Supertonic on-device voice engine downloads its
- *   ONNX models from (huggingface.co + its LFS redirect hosts).
+ *   ONNX models from (huggingface.co + its CDN, *.cdn.hf.co — the
+ *   redirect target QUINCEY measured live for every .onnx asset).
  * - script-src adds 'wasm-unsafe-eval' ONLY so ONNX Runtime Web can
  *   compile its WebAssembly; JavaScript eval stays forbidden.
  * - media-src allows blob: so fetched TTS WAVs can play via object URLs.
@@ -66,7 +67,7 @@ export const SECURITY_HEADERS = [
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: https://d2xsxph8kpxj0f.cloudfront.net https://commons.wikimedia.org https://upload.wikimedia.org; " +
-      "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://lsaerludzkxjewqgbvkg.supabase.co https://huggingface.co https://cdn-lfs.huggingface.co https://cas-bridge.xethub.hf.co; " +
+      "font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://lsaerludzkxjewqgbvkg.supabase.co https://huggingface.co https://*.cdn.hf.co; " +
       "media-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; " +
       "base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
   ],

@@ -246,8 +246,7 @@ describe('security response headers', () => {
     expect(csp).toContain('https://lsaerludzkxjewqgbvkg.supabase.co');
     // Supertonic on-device voice engine model downloads.
     expect(csp).toContain('https://huggingface.co');
-    expect(csp).toContain('https://cdn-lfs.huggingface.co');
-    expect(csp).toContain('https://cas-bridge.xethub.hf.co');
+    expect(csp).toContain('https://*.cdn.hf.co');
     // Images: CloudFront asset host + Wikimedia Commons (+ its upload host).
     expect(csp).toContain('https://d2xsxph8kpxj0f.cloudfront.net');
     expect(csp).toContain('https://commons.wikimedia.org');
