@@ -225,8 +225,11 @@ describe('security response headers', () => {
     expect(csp).toContain("script-src 'self'");
     // No unsafe-inline / unsafe-eval anywhere in script-src.
     const scriptSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('script-src'))!;
-    expect(scriptSrc).not.toContain('unsafe-inline');
-    expect(scriptSrc).not.toContain('unsafe-eval');
+    const scriptTokens = scriptSrc.split(/\s+/);
+    expect(scriptTokens).not.toContain("'unsafe-inline'");
+    // 'wasm-unsafe-eval' (ONNX Runtime Web) is allowed; JS eval is not.
+    expect(scriptTokens).not.toContain("'unsafe-eval'");
+    expect(scriptTokens).toContain("'wasm-unsafe-eval'");
     expect(scriptSrc).not.toContain('*');
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
@@ -238,8 +241,13 @@ describe('security response headers', () => {
     const csp = byName.get('content-security-policy')!;
     // Same-origin APIs: chat SSE, TTS, lead + seller endpoints.
     expect(csp).toContain("connect-src 'self'");
-    // Supabase client (admin / marketplace code) stays reachable.
-    expect(csp).toContain('https://*.supabase.co');
+    // The one Supabase project host the admin client references —
+    // pinned exactly, no wildcard.
+    expect(csp).toContain('https://lsaerludzkxjewqgbvkg.supabase.co');
+    // Supertonic on-device voice engine model downloads.
+    expect(csp).toContain('https://huggingface.co');
+    expect(csp).toContain('https://cdn-lfs.huggingface.co');
+    expect(csp).toContain('https://cas-bridge.xethub.hf.co');
     // Images: CloudFront asset host + Wikimedia Commons (+ its upload host).
     expect(csp).toContain('https://d2xsxph8kpxj0f.cloudfront.net');
     expect(csp).toContain('https://commons.wikimedia.org');
