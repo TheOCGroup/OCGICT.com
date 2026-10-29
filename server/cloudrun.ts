@@ -14,7 +14,7 @@ import sellerLookup from "../netlify/functions/seller-lookup.mts";
 import sellerOffer from "../netlify/functions/seller-offer.mts";
 import sellerSuggestions from "../netlify/functions/seller-suggestions.mts";
 import { registerBudgetStoreFactory, storeBackend, leadBackend } from "./services/gPlatform.js";
-import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath } from "./cloudrunRoutes.js";
+import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath, SECURITY_HEADERS } from "./cloudrunRoutes.js";
 import { getGFirestore } from "./services/gFirestore.js";
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, persistLeadToFirestore } from "./services/gLeadStore.js";
@@ -113,6 +113,10 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: 
 }
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Security headers go on every response this host produces (health,
+  // API handlers, form intake, static files, SPA fallback, and errors).
+  // Set before any branch writes its own headers; writeHead merges.
+  for (const [name, value] of SECURITY_HEADERS) res.setHeader(name, value);
   const url = new URL(req.url || "/", "http://localhost");
   const { pathname } = url;
   const env = process.env as Record<string, string | undefined>;
