@@ -31,7 +31,7 @@ import { consumeBudget } from '../../server/services/gBudget';
 import { consumeRateLimit } from '../../server/services/gRateLimit';
 import { platformBudgetStore, registerBudgetStoreFactory, hasRegisteredStoreFactory, storeBackend, leadBackend } from '../../server/services/gPlatform';
 import { parseFormSubmission, persistLeadToFirestore } from '../../server/services/gLeadStore';
-import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath } from '../../server/cloudrunRoutes';
+import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath, isHealthPath, HEALTH_PATHS } from '../../server/cloudrunRoutes';
 
 // An optimistic-concurrency Firestore double: transactions snapshot doc
 // versions at read time and abort (then retry) when a staged doc changed
@@ -191,6 +191,19 @@ describe('Cloud Run harness helpers', () => {
     }
     expect(ROUTE_PATHS).toHaveLength(9);
     expect(hasRoute('/api/nope')).toBe(false);
+  });
+
+  it('health paths: /health and /healthz only (exact match)', () => {
+    // /health is the externally reachable health path on Cloud Run —
+    // Google Front End reserves the exact /healthz path on run.app
+    // domains (QUINCEY live finding, 2026-10-29).
+    expect([...HEALTH_PATHS]).toEqual(['/health', '/healthz']);
+    expect(isHealthPath('/health')).toBe(true);
+    expect(isHealthPath('/healthz')).toBe(true);
+    expect(isHealthPath('/healthz2')).toBe(false);
+    expect(isHealthPath('/Health')).toBe(false);
+    expect(isHealthPath('/health/')).toBe(false);
+    expect(isHealthPath('/api/health')).toBe(false);
   });
 });
 

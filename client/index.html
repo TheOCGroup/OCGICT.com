@@ -18,15 +18,42 @@
     <meta name="twitter:description" content="Acquire intelligently. Transform strategically. Build lasting value in Wichita real estate." />
     <meta name="twitter:image" content="https://www.ocgict.com/images/hero/wichita_hero_street.jpg" />
     <link rel="canonical" href="https://www.ocgict.com/" />
+    <meta name="theme-color" content="#070A0F" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "RealEstateAgent",
+          "@id": "https://www.ocgict.com/#org",
+          "name": "The OC Group",
+          "url": "https://www.ocgict.com/",
+          "slogan": "Acquire intelligently. Transform strategically. Build lasting value.",
+          "description": "Wichita, Kansas real estate investment, acquisition, renovation strategy, and consulting company.",
+          "areaServed": { "@type": "City", "name": "Wichita", "containedInPlace": { "@type": "State", "name": "Kansas" } },
+          "address": { "@type": "PostalAddress", "addressLocality": "Wichita", "addressRegion": "KS", "addressCountry": "US" }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://www.ocgict.com/#site",
+          "url": "https://www.ocgict.com/",
+          "name": "The OC Group",
+          "publisher": { "@id": "https://www.ocgict.com/#org" },
+          "inLanguage": ["en", "es"]
+        }
+      ]
+    }
+    </script>
     <link rel="icon" type="image/png" href="/images/brand/ocg_primary_logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <!-- Netlify build-time form detection: rendered React forms and Netlify
-         functions submit to these exact names. Lead records live in Netlify
-         Forms (durable, team-visible) — never in browser or process memory. -->
+    <!-- Form contract: the rendered React forms submit urlencoded posts to
+         "/" under these exact names. The hosting layer persists every
+         submission durably (Firestore on the Cloud Run host; the forms
+         service on the legacy host) — never in browser or process memory. -->
     <form name="ocg-contact" data-netlify="true" netlify-honeypot="bot-field" hidden>
       <input name="form-name" value="ocg-contact" />
       <input name="bot-field" />
