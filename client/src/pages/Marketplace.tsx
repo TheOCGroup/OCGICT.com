@@ -1,13 +1,15 @@
 /* ============================================================
    INVESTOR MARKETPLACE PAGE — Dark Luxury "Investment Grade" Design
-   Fetches live listings from Supabase marketplace_listings table
-   Admin-managed via /admin panel
+   Listings backend (former Supabase project) was deleted; the page
+   renders its designed coming-soon state with no fetch until the
+   Firestore-backed listings successor lands (Phase 2A, 2026-10-29).
+   Deal submissions post to the site's Firestore lead intake.
    ============================================================ */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 
 
-import { supabase, MarketplaceListing } from "@/lib/supabase";
+import type { MarketplaceListing } from "@/lib/supabase";
 import { ArrowRight, SlidersHorizontal, X, ChevronRight, MapPin, Bed, Bath, Square, Tag, FileText, Send, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,7 +40,7 @@ const STRATEGIES = ["All", "Fix & Flip", "BRRRR", "Buy & Hold", "Creative Financ
 
 export default function Marketplace() {
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [strategy, setStrategy] = useState("All");
   const [maxPrice, setMaxPrice] = useState(300000);
   const [minArv, setMinArv] = useState(0);
@@ -47,12 +49,11 @@ export default function Marketplace() {
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [inquiryListing, setInquiryListing] = useState<MarketplaceListing | null>(null);
 
-  useEffect(() => {
-    supabase.getListings(true)
-      .then(setListings)
-      .catch(() => toast.error("Failed to load listings."))
-      .finally(() => setLoading(false));
-  }, []);
+  // Listings are not fetched: the original Supabase project behind
+  // @/lib/supabase was deleted (host NXDOMAIN, data unrecoverable —
+  // see Phase 2A investigation, 2026-10-29). The page renders its
+  // designed empty state with zero network requests until the
+  // Firestore-backed listings successor lands. No fabricated data.
 
   const filtered = listings.filter((d) => {
     if (strategy !== "All" && d.strategy !== strategy) return false;
@@ -68,10 +69,25 @@ export default function Marketplace() {
     setInquiryListing(null);
   };
 
-  const handleDealSubmit = (e: React.FormEvent) => {
+  const handleDealSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Deal submitted for review! We'll evaluate and respond within 48 hours.");
-    setShowSubmitForm(false);
+    // Persist through the site's own lead intake (harness -> Firestore
+    // g-leads), like the Contact and /submit-deal forms. Success is
+    // shown only on a confirmed OK — never on an unrecorded submit.
+    const fields = new URLSearchParams({ "form-name": "ocg-marketplace-deal" });
+    new FormData(e.currentTarget as HTMLFormElement).forEach((v, k) => fields.set(k, String(v)));
+    try {
+      const res = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: fields.toString(),
+      });
+      if (!res.ok) throw new Error(`Submission failed (${res.status})`);
+      toast.success("Deal submitted for review! We'll evaluate and respond within 48 hours.");
+      setShowSubmitForm(false);
+    } catch {
+      toast.error("Submission failed — please try again or contact us directly.");
+    }
   };
 
   return (
@@ -454,11 +470,11 @@ export default function Marketplace() {
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Phone</label>
-                <input type="tel" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="720.620.9929" />
+                <input type="tel" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="submitter_phone" placeholder="720.620.9929" />
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Investor Type</label>
-                <select className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
+                <select name="strategy" className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
                   <option value="active">Active Investor</option>
                   <option value="new">New Investor</option>
                   <option value="capital">Capital Partner / Lender</option>
@@ -500,39 +516,39 @@ export default function Marketplace() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Your Name *</label>
-                  <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="Your name" />
+                  <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="submitter_name" placeholder="Your name" />
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Phone *</label>
-                  <input required type="tel" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="720.620.9929" />
+                  <input required type="tel" name="submitter_phone" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="720.620.9929" />
                 </div>
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Email *</label>
-                <input required type="email" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="your@email.com" />
+                <input required type="email" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="submitter_email" placeholder="your@email.com" />
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Property Address *</label>
-                <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="123 Main St, Wichita, KS" />
+                <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="property_address" placeholder="123 Main St, Wichita, KS" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Asking Price *</label>
-                  <input required type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="85000" />
+                  <input required type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="asking_price" placeholder="85000" />
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Your Est. ARV</label>
-                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="150000" />
+                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="arv" placeholder="150000" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Est. Rehab</label>
-                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="40000" />
+                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" name="rehab_estimate" placeholder="40000" />
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Strategy Fit</label>
-                  <select className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
+                  <select name="strategy" className="w-full bg-[#1a1a1a] border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#3B3BFF]/50 transition-colors">
                     <option value="flip">Fix & Flip</option>
                     <option value="brrrr">BRRRR</option>
                     <option value="rental">Buy & Hold</option>
@@ -543,7 +559,7 @@ export default function Marketplace() {
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Property Description / Notes</label>
-                <textarea rows={3} className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors resize-none" placeholder="Condition, motivation, timeline, any unique factors..." />
+                <textarea rows={3} className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors resize-none" name="notes" placeholder="Condition, motivation, timeline, any unique factors..." />
               </div>
               <button type="submit" className="btn-gold justify-center mt-2">
                 Submit for Review <Send size={15} />
