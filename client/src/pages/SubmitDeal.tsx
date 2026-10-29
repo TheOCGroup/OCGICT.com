@@ -9,23 +9,24 @@ import {
   Wrench, Bed, Bath, Ruler, Calendar, ArrowRight, ShieldCheck, HeartHandshake, AlertCircle, Bot
 } from "lucide-react";
 
-const SUPABASE_URL = "https://lsaerludzkxjewqgbvkg.supabase.co";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWVybHVkemt4amV3cWdidmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxOTMwNzEsImV4cCI6MjA5MTc2OTA3MX0.k0PmsyeAQ-hq8aTn_AVoyzsx-cbYdmfQzHKhIMp_s1U";
-
+// Deal submissions are stored through the site's own lead pipeline
+// (the Cloud Run harness form intake -> Firestore g-leads), the same
+// path the Contact and Sell forms use. This form previously posted to
+// a Supabase project that has been deleted (host NXDOMAIN — Phase 2A
+// investigation, 2026-10-29), which silently lost seller submissions.
 async function submitDeal(data: Record<string, unknown>) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/deal_submissions`, {
+  const fields = new URLSearchParams({ "form-name": "ocg-deal-submission" });
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== null && value !== undefined) fields.set(key, String(value));
+  }
+  const res = await fetch("/", {
     method: "POST",
-    headers: {
-      apikey: ANON_KEY,
-      Authorization: `Bearer ${ANON_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify(data),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: fields.toString(),
   });
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(err);
+    throw new Error(err || `Submission failed (${res.status})`);
   }
 }
 
