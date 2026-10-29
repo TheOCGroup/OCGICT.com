@@ -1,11 +1,12 @@
 import { GIntelligenceGateway } from "../../server/services/gIntelligenceGateway.js";
 import { consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { streamGeminiTokens, POC_CHAT_MODEL } from "../../server/services/geminiStream.js";
+import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 import { analyzeSellerContext, guardSellerReply } from "../../server/voice/sellerPolicy.js";
 import { looksSpanish } from "../../server/services/streamingModelProvider.js";
 
 // A standalone Netlify function: it never starts the Express server.
-export default async function handler(request: Request, context?: { deploy?: { context?: string } }): Promise<Response> {
+export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
   if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed." }), { status: 405, headers });
   if (Number(request.headers.get("content-length") || 0) > 20000) return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
@@ -26,6 +27,26 @@ export default async function handler(request: Request, context?: { deploy?: { c
   if (!hostedContext && process.env.OCG_G_CHAT_ENABLED !== "true") {
     return new Response(JSON.stringify({ error: "G backend is not enabled in this environment." }), { status: 503, headers });
   }
+  // Application rate limit — the authoritative layer (the platform
+  // declaration in config is defense-in-depth). Shared Blobs store, atomic
+  // across instances, keyed by the platform-provided client IP, enforced
+  // before any budget is consumed. Fail-closed: if the limiter store is
+  // unavailable, chat refuses rather than serving unlimited traffic.
+  if (rateLimitActive(context, process.env as Record<string, string | undefined>)) {
+    let chatRate: Awaited<ReturnType<typeof consumeRateLimit>>;
+    try {
+      chatRate = await consumeRateLimit(await netlifyBlobsBudgetStore(), "chat", clientIdFromRequest(request, context), process.env as Record<string, string | undefined>);
+    } catch {
+      return new Response(JSON.stringify({ error: "G is temporarily unavailable." }), { status: 503, headers });
+    }
+    if (!chatRate.allowed) {
+      return new Response(JSON.stringify({ error: "Too many messages." }), {
+        status: 429,
+        headers: { ...headers, "Retry-After": String(chatRate.retryAfterSeconds) },
+      });
+    }
+  }
+
   // Guard against oversized history even when the body has no Content-Length.
   if (JSON.stringify(body).length > 20000) {
     return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });

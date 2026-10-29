@@ -1,4 +1,36 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// The handler's hosted-context controls (daily budget + application rate
+// limiter) are backed by Netlify Blobs. These smoke tests invoke hosted
+// contexts, so the Blobs module is stubbed with a faithful in-memory
+// store (ETag compare-and-swap semantics included). The product behavior
+// asserted below is unchanged.
+vi.mock('@netlify/blobs', () => {
+  const data = new Map<string, string>();
+  const etags = new Map<string, number>();
+  const store = {
+    async get(key: string) { return data.has(key) ? data.get(key)! : null; },
+    async getWithMetadata(key: string) {
+      if (!data.has(key)) return null;
+      return { data: data.get(key)!, etag: String(etags.get(key) ?? 0), metadata: {} };
+    },
+    async set(key: string, value: string, opts?: { onlyIfMatch?: string; onlyIfNew?: boolean }) {
+      if (opts?.onlyIfNew && data.has(key)) {
+        const err: any = new Error('Precondition Failed'); err.status = 412; throw err;
+      }
+      if (opts?.onlyIfMatch && String(etags.get(key) ?? 0) !== opts.onlyIfMatch) {
+        const err: any = new Error('Precondition Failed'); err.status = 412; throw err;
+      }
+      data.set(key, value);
+      etags.set(key, (etags.get(key) ?? 0) + 1);
+    },
+  };
+  return {
+    getStore: () => store,
+    setEnvironmentContext: () => {},
+    connectLambda: () => {},
+  };
+});
 import handler from '../../netlify/functions/g-chat';
 describe('G local-only handler smoke', () => {
   it('allows local greeting only for a preview and never production with chat off', async () => {

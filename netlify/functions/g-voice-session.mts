@@ -1,5 +1,6 @@
 import { checkBudget, consumeBudget, netlifyBlobsBudgetStore } from "../../server/services/gBudget.js";
 import { jsonError, jsonHeaders } from "./_forms.js";
+import { consumeRateLimit, clientIdFromRequest, rateLimitActive } from "../../server/services/gRateLimit.js";
 
 /**
  * G realtime voice (Vapi Web) — configuration and session issuance.
@@ -27,7 +28,7 @@ function voiceGate(env: Record<string, string | undefined>): { open: boolean; re
   return { open: true };
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
   const env = process.env as Record<string, string | undefined>;
   const gate = voiceGate(env);
 
@@ -62,6 +63,22 @@ export default async function handler(request: Request): Promise<Response> {
 
   if (request.method !== "POST") return jsonError(405, "Method not allowed.");
   if (!gate.open) return jsonError(503, gate.reason || "Realtime voice is unavailable.");
+
+  // Shared-store rate limit, enforced before the daily budget so limited
+  // callers consume no budget. Atomic across instances, fail-closed.
+  if (rateLimitActive(context, env)) {
+    try {
+      const rl = await consumeRateLimit(await netlifyBlobsBudgetStore(), "voice", clientIdFromRequest(request, context), env);
+      if (!rl.allowed) {
+        return new Response(JSON.stringify({ error: "Too many requests. Please try again shortly." }), {
+          status: 429,
+          headers: { ...jsonHeaders, "Retry-After": String(rl.retryAfterSeconds) },
+        });
+      }
+    } catch {
+      return jsonError(503, "Voice is temporarily unavailable. Text chat is ready.");
+    }
+  }
 
   // Persistent budget gate: a session is issued only if today's meter admits
   // it. If the meter itself is unavailable, paid voice fails closed.
