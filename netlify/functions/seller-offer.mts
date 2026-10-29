@@ -35,5 +35,5 @@ export default async function handler(request: Request): Promise<Response> {
 export const config = {
   path: "/api/seller/preliminary-offer",
   method: "POST",
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 10 },
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 10 },
 };

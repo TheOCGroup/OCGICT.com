@@ -78,5 +78,5 @@ export default async function handler(request: Request): Promise<Response> {
 export const config = {
   path: "/api/seller/address-suggestions",
   method: "GET",
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 30 },
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 30 },
 };

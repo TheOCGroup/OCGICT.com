@@ -26,5 +26,5 @@ export default async function handler(request: Request): Promise<Response> {
 export const config = {
   path: "/api/seller/property-lookup",
   method: "POST",
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 20 },
+  rateLimit: { action: "rate_limit", aggregateBy: ["ip", "domain"], windowSize: 60, windowLimit: 20 },
 };
