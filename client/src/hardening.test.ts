@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   adminAuthConfig,
@@ -234,6 +236,21 @@ describe("marketplace listings (§8 Firestore successor)", () => {
 
     const post = await listingsHandler(new Request("https://example.test/api/marketplace/listings", { method: "POST" }));
     expect(post.status).toBe(405);
+  });
+});
+
+/* ── QUINCEY F-1 regression pin (delta, 2026-11-01) ──────────────────── */
+
+describe("marketplace honesty (QUINCEY F-1)", () => {
+  it("no click-only success claim remains anywhere on the page", () => {
+    const src = readFileSync(join(process.cwd(), "client/src/pages/Marketplace.tsx"), "utf8");
+    // The listing-card package button previously toasted a submitted
+    // claim with no request behind it. It now opens the inquiry modal;
+    // the claim string must never come back.
+    expect(src).not.toContain("Full deal package request submitted");
+    // Both card actions open the modal with an explicit intent instead.
+    expect(src).toContain('setInquiryIntent("full-package")');
+    expect(src).toContain('setInquiryIntent("inquiry")');
   });
 });
 

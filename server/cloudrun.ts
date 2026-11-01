@@ -225,7 +225,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // Rate limit before any store write, keyed on the trusted client IP
       // (last X-Forwarded-For entry). Fail-closed: a limiter/store error
       // refuses the submission honestly instead of recording unboundedly.
-      if (storeBackend(env) === "firestore") {
+      // Gated on EITHER backend being Firestore (QUINCEY LOW F-2): the
+      // gate follows the lead path it protects, so a future config where
+      // only the lead backend is Firestore cannot silently skip limiting.
+      if (storeBackend(env) === "firestore" || leadBackend(env) === "firestore") {
         try {
           const clientId = trustedClientIp(req.headers["x-forwarded-for"], req.socket.remoteAddress);
           const rl = await consumeRateLimit(await platformBudgetStore(), "lead", clientId, env);

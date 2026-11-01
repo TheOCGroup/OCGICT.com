@@ -51,6 +51,7 @@ export default function Marketplace() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [inquiryListing, setInquiryListing] = useState<MarketplaceListing | null>(null);
+  const [inquiryIntent, setInquiryIntent] = useState<"inquiry" | "full-package">("inquiry");
 
   // Listings load from the site's own listings endpoint (Firestore
   // successor). Any failure or empty result leaves the designed empty
@@ -94,6 +95,11 @@ export default function Marketplace() {
     // now shown only on a confirmed OK from the intake.
     const fields = new URLSearchParams({ "form-name": "ocg-marketplace-inquiry" });
     new FormData(e.currentTarget as HTMLFormElement).forEach((v, k) => fields.set(k, String(v)));
+    // FormData does not include the clicked submit button, so the intent
+    // is taken from the submitter (falling back to how the modal was
+    // opened) and set explicitly.
+    const submitter = (e.nativeEvent as SubmitEvent)?.submitter as HTMLButtonElement | null;
+    fields.set("intent", submitter?.value || inquiryIntent);
     fields.set("listing_title", inquiryListing.title);
     fields.set("listing_address", `${inquiryListing.address}, ${inquiryListing.city}, ${inquiryListing.state} ${inquiryListing.zip}`);
     if (inquiryListing.id) fields.set("listing_id", String(inquiryListing.id));
@@ -442,14 +448,14 @@ export default function Marketplace() {
                         {/* Actions */}
                         <div className="flex gap-2 mt-auto">
                           <button
-                            onClick={() => setInquiryListing(listing)}
+                            onClick={() => { setInquiryIntent("inquiry"); setInquiryListing(listing); }}
                             className="btn-gold text-xs py-2 flex-1 justify-center"
                             disabled={listing.status === "Sold" || listing.status === "Under Contract"}
                           >
                             Inquire <ChevronRight size={13} />
                           </button>
                           <button
-                            onClick={() => toast.info("Full deal package request submitted. We'll send it within 24 hours.")}
+                            onClick={() => { setInquiryIntent("full-package"); setInquiryListing(listing); }}
                             className="btn-ghost-gold text-xs py-2 px-3 flex items-center gap-1"
                             title="Request Full Deal Package"
                           >
