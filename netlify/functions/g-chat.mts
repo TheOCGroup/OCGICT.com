@@ -97,6 +97,12 @@ export default async function handler(request: Request, context?: { ip?: string;
             message: body.message.trim(),
             apiKey,
             onUsage: (u) => { usage = u; },
+            onTruncation: (reason) => {
+              // Provider cut the reply short (token ceiling). Server log
+              // only — no visitor content — so the rate is visible in
+              // production logs instead of passing as a silent defect.
+              console.warn(`[g-chat] provider truncation finishReason=${reason}`);
+            },
           })) {
             full += delta;
             controller.enqueue(sse({ t: delta }));

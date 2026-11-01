@@ -23,6 +23,7 @@ const EXPECTED_LIMITS: Record<string, number> = {
   "seller-lookup.mts": 20,
   "seller-offer.mts": 10,
   "seller-suggestions.mts": 30,
+  "marketplace-listings.mts": 120,
 };
 
 function source(file: string): string {

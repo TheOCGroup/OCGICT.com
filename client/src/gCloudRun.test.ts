@@ -186,10 +186,11 @@ describe('Cloud Run harness helpers', () => {
 
   it('routes cover the full certified API surface', () => {
     for (const p of ['/api/g/chat', '/api/g/lead', '/api/g/tts-gemini', '/api/g/tts', '/api/g/voice/session',
-      '/api/seller/action', '/api/seller/property-lookup', '/api/seller/preliminary-offer', '/api/seller/address-suggestions']) {
+      '/api/seller/action', '/api/seller/property-lookup', '/api/seller/preliminary-offer', '/api/seller/address-suggestions',
+      '/api/marketplace/listings']) {
       expect(hasRoute(p), p).toBe(true);
     }
-    expect(ROUTE_PATHS).toHaveLength(9);
+    expect(ROUTE_PATHS).toHaveLength(10);
     expect(hasRoute('/api/nope')).toBe(false);
   });
 
