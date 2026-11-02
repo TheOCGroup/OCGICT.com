@@ -1,11 +1,14 @@
 /* ============================================================
    INVESTOR MARKETPLACE PAGE — Dark Luxury "Investment Grade" Design
-   Listings backend (former Supabase project) was deleted; the page
-   renders its designed coming-soon state with no fetch until the
-   Firestore-backed listings successor lands (Phase 2A, 2026-10-29).
-   Deal submissions post to the site's Firestore lead intake.
+   Listings come from the Firestore-backed successor endpoint
+   (GET /api/marketplace/listings, Phase E 2026-11-01) after the
+   former Supabase project was deleted. Until the founder's team
+   publishes the first listing document, the endpoint answers an
+   honest empty list and the page renders its designed empty state.
+   Deal submissions and listing inquiries post to the site's
+   Firestore lead intake; success is shown only on a confirmed OK.
    ============================================================ */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
 
@@ -48,12 +51,32 @@ export default function Marketplace() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [inquiryListing, setInquiryListing] = useState<MarketplaceListing | null>(null);
+  const [inquiryIntent, setInquiryIntent] = useState<"inquiry" | "full-package">("inquiry");
 
-  // Listings are not fetched: the original Supabase project behind
-  // @/lib/supabase was deleted (host NXDOMAIN, data unrecoverable —
-  // see Phase 2A investigation, 2026-10-29). The page renders its
-  // designed empty state with zero network requests until the
-  // Firestore-backed listings successor lands. No fabricated data.
+  // Listings load from the site's own listings endpoint (Firestore
+  // successor). Any failure or empty result leaves the designed empty
+  // state — the page never fabricates properties.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/marketplace/listings");
+        if (!res.ok) throw new Error(`Listings failed (${res.status})`);
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && Array.isArray(data?.listings)) {
+          setListings(data.listings as MarketplaceListing[]);
+        }
+      } catch {
+        /* empty state stands; a listings outage must not break the page */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filtered = listings.filter((d) => {
     if (strategy !== "All" && d.strategy !== strategy) return false;
@@ -63,10 +86,35 @@ export default function Marketplace() {
     return true;
   });
 
-  const handleInquirySubmit = (e: React.FormEvent) => {
+  const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Inquiry submitted! We'll be in touch within 24 hours.");
-    setInquiryListing(null);
+    if (!inquiryListing) return;
+    // Persist through the site's lead intake (harness -> Firestore
+    // g-leads), like the deal submission below. The previous handler
+    // showed a success toast without recording anything; success is
+    // now shown only on a confirmed OK from the intake.
+    const fields = new URLSearchParams({ "form-name": "ocg-marketplace-inquiry" });
+    new FormData(e.currentTarget as HTMLFormElement).forEach((v, k) => fields.set(k, String(v)));
+    // FormData does not include the clicked submit button, so the intent
+    // is taken from the submitter (falling back to how the modal was
+    // opened) and set explicitly.
+    const submitter = (e.nativeEvent as SubmitEvent)?.submitter as HTMLButtonElement | null;
+    fields.set("intent", submitter?.value || inquiryIntent);
+    fields.set("listing_title", inquiryListing.title);
+    fields.set("listing_address", `${inquiryListing.address}, ${inquiryListing.city}, ${inquiryListing.state} ${inquiryListing.zip}`);
+    if (inquiryListing.id) fields.set("listing_id", String(inquiryListing.id));
+    try {
+      const res = await fetch("/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: fields.toString(),
+      });
+      if (!res.ok) throw new Error(`Submission failed (${res.status})`);
+      toast.success("Inquiry submitted! We'll be in touch within 24 hours.");
+      setInquiryListing(null);
+    } catch {
+      toast.error("Inquiry could not be recorded — please try again or contact us directly.");
+    }
   };
 
   const handleDealSubmit = async (e: React.FormEvent) => {
@@ -400,14 +448,14 @@ export default function Marketplace() {
                         {/* Actions */}
                         <div className="flex gap-2 mt-auto">
                           <button
-                            onClick={() => setInquiryListing(listing)}
+                            onClick={() => { setInquiryIntent("inquiry"); setInquiryListing(listing); }}
                             className="btn-gold text-xs py-2 flex-1 justify-center"
                             disabled={listing.status === "Sold" || listing.status === "Under Contract"}
                           >
                             Inquire <ChevronRight size={13} />
                           </button>
                           <button
-                            onClick={() => toast.info("Full deal package request submitted. We'll send it within 24 hours.")}
+                            onClick={() => { setInquiryIntent("full-package"); setInquiryListing(listing); }}
                             className="btn-ghost-gold text-xs py-2 px-3 flex items-center gap-1"
                             title="Request Full Deal Package"
                           >
@@ -457,16 +505,16 @@ export default function Marketplace() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">First Name *</label>
-                  <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="John" />
+                  <input required name="first_name" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="John" />
                 </div>
                 <div>
                   <label className="text-white/50 text-xs mb-1.5 block">Last Name *</label>
-                  <input required className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="Smith" />
+                  <input required name="last_name" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="Smith" />
                 </div>
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Email *</label>
-                <input required type="email" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="john@email.com" />
+                <input required type="email" name="email" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors" placeholder="john@email.com" />
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Phone</label>
@@ -483,13 +531,13 @@ export default function Marketplace() {
               </div>
               <div>
                 <label className="text-white/50 text-xs mb-1.5 block">Message</label>
-                <textarea rows={3} className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors resize-none" placeholder="Tell us about your interest in this deal..." />
+                <textarea rows={3} name="message" className="w-full bg-white/5 border border-white/10 rounded-sm px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-[#3B3BFF]/50 transition-colors resize-none" placeholder="Tell us about your interest in this deal..." />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" className="btn-gold flex-1 justify-center">
+                <button type="submit" name="intent" value="inquiry" className="btn-gold flex-1 justify-center">
                   Submit Inquiry <ArrowRight size={15} />
                 </button>
-                <button type="button" onClick={() => toast.info("Full deal package request submitted.")} className="btn-ghost-gold text-xs px-4 flex items-center gap-1.5">
+                <button type="submit" name="intent" value="full-package" className="btn-ghost-gold text-xs px-4 flex items-center gap-1.5">
                   <FileText size={14} /> Full Package
                 </button>
               </div>

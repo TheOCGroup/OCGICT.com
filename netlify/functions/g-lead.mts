@@ -59,6 +59,11 @@ export default async function handler(request: Request, context?: { ip?: string;
       address,
       summary,
       reference,
+      // Consent was enforced above (submission is impossible without it);
+      // persist it so the stored lead record itself carries the proof —
+      // the 2026-11-01 Firestore read-back found records with no consent
+      // field even though consent had been checked.
+      consent: "true",
       source: "G conversation",
     });
   } catch {

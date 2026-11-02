@@ -18,7 +18,62 @@ export const ROUTE_PATHS = [
   "/api/seller/property-lookup",
   "/api/seller/preliminary-offer",
   "/api/seller/address-suggestions",
+  "/api/marketplace/listings",
 ] as const;
+
+/**
+ * Client-side page routes the SPA actually defines (client/src/App.tsx),
+ * used to answer an honest status for unknown paths: a known page route
+ * gets the SPA shell with 200; an unknown non-file path gets the same
+ * shell (the client renders its NotFound page) with a real 404 status,
+ * so search engines and monitors stop treating every typo as a page.
+ * Prefix entries end with "/" and match sub-paths (admin detail routes).
+ */
+export const PAGE_PATHS = [
+  "/",
+  "/g",
+  "/about",
+  "/services",
+  "/invest",
+  "/strategies",
+  "/how-it-works",
+  "/how-ocg-works",
+  "/marketplace",
+  "/lender-network",
+  "/case-studies",
+  "/contact",
+  "/submit-deal",
+  "/sell",
+  "/privacy",
+  "/terms",
+  "/404",
+  "/admin/",
+  "/admin",
+] as const;
+
+export function isKnownPagePath(pathname: string): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  return (PAGE_PATHS as readonly string[]).some((p) => {
+    const base = p.length > 1 ? p.replace(/\/+$/, "") : p;
+    if (normalized === base) return true;
+    // Prefix entries ("/admin/") match sub-paths; "/" alone never does.
+    return p.length > 1 && p.endsWith("/") && normalized.startsWith(p);
+  });
+}
+
+/**
+ * Cache policy for static responses (P0 §9, 2026-11-01 — assets previously
+ * shipped with no Cache-Control at all):
+ *  - content-hashed build assets under /assets/ are immutable;
+ *  - HTML (including the SPA shell) is never cached, so a deployment is
+ *    visible immediately and a rollback is never masked by a stale shell;
+ *  - other static files (images, robots, sitemap) get a short cache.
+ */
+export function cacheControlFor(pathname: string): string {
+  if (pathname.startsWith("/assets/")) return "public, max-age=31536000, immutable";
+  if (pathname.endsWith(".html") || pathname === "/" || !pathname.includes(".")) return "no-cache";
+  return "public, max-age=3600";
+}
 
 export function hasRoute(pathname: string): boolean {
   return (ROUTE_PATHS as readonly string[]).includes(pathname);

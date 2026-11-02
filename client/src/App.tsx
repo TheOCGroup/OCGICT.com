@@ -30,10 +30,10 @@ import AdminSubmissions from "./pages/admin/AdminSubmissions";
 import { useEffect } from "react";
 
 function AdminGuard({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated } = useAdminAuth();
+  const { isAuthenticated, checking } = useAdminAuth();
   const [, navigate] = useLocation();
-  useEffect(() => { if (!isAuthenticated) navigate("/admin/login"); }, [isAuthenticated, navigate]);
-  if (!isAuthenticated) return null;
+  useEffect(() => { if (!checking && !isAuthenticated) navigate("/admin/login"); }, [checking, isAuthenticated, navigate]);
+  if (checking || !isAuthenticated) return null;
   return <Component />;
 }
 

@@ -107,6 +107,28 @@ export class GeminiSseParser {
   private buffer = "";
   /** Latest usageMetadata seen in the stream, if any. */
   usage: PocUsage | null = null;
+  /** finishReason of the last candidate payload seen, if any (e.g. STOP,
+   *  MAX_TOKENS). MAX_TOKENS means the provider cut the reply short. */
+  finishReason: string | null = null;
+
+  private handleLine(line: string): string | null {
+    if (!line.startsWith("data:")) return null;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return null;
+    try {
+      const parsed = JSON.parse(data);
+      const usage = usageFromGeminiJson(parsed);
+      if (usage) this.usage = usage;
+      const reason = parsed?.candidates?.[0]?.finishReason;
+      if (typeof reason === "string" && reason) this.finishReason = reason;
+      const delta = textDeltaFromGeminiJson(parsed);
+      return delta || null;
+    } catch {
+      /* a partial JSON line is held by the buffer split in push(); a
+         malformed complete line is skipped, never fatal */
+      return null;
+    }
+  }
 
   push(chunk: string): string[] {
     this.buffer += chunk;
@@ -115,21 +137,26 @@ export class GeminiSseParser {
     while ((idx = this.buffer.indexOf("\n")) >= 0) {
       const line = this.buffer.slice(0, idx).trim();
       this.buffer = this.buffer.slice(idx + 1);
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      try {
-        const parsed = JSON.parse(data);
-        const usage = usageFromGeminiJson(parsed);
-        if (usage) this.usage = usage;
-        const delta = textDeltaFromGeminiJson(parsed);
-        if (delta) deltas.push(delta);
-      } catch {
-        /* a partial JSON line is held by the buffer split above; a
-           malformed complete line is skipped, never fatal */
-      }
+      const delta = this.handleLine(line);
+      if (delta) deltas.push(delta);
     }
     return deltas;
+  }
+
+  /**
+   * Process whatever remains in the buffer at end-of-stream. Gemini does
+   * not guarantee the final SSE payload ends with a newline; without this
+   * flush the last payload — often the closing words of the reply — was
+   * silently dropped, which surfaced live as replies ending mid-sentence
+   * (QUINCEY P0 finding, 2026-11-01: 1 of 3 Spanish samples truncated).
+   * Call exactly once after the final push().
+   */
+  flush(): string[] {
+    const rest = this.buffer.trim();
+    this.buffer = "";
+    if (!rest) return [];
+    const delta = this.handleLine(rest);
+    return delta ? [delta] : [];
   }
 }
 
@@ -142,6 +169,10 @@ export async function* streamGeminiTokens(opts: {
   signal?: AbortSignal;
   /** Called once at stream end with the provider-reported token usage. */
   onUsage?: (usage: PocUsage) => void;
+  /** Called once at stream end when the provider cut the reply short
+   *  (finishReason MAX_TOKENS), so the caller can log/meter it instead of
+   *  the truncation passing silently. */
+  onTruncation?: (finishReason: string) => void;
 }): AsyncGenerator<string> {
   const model = opts.model || process.env.GEMINI_MODEL || POC_CHAT_MODEL;
   const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
@@ -168,6 +199,15 @@ export async function* streamGeminiTokens(opts: {
     if (done) break;
     const deltas = parser.push(decoder.decode(value, { stream: true }));
     for (const d of deltas) yield d;
+  }
+  // End-of-stream: flush the decoder tail and any final SSE payload that
+  // arrived without a trailing newline, so the reply's last words are
+  // never dropped (see GeminiSseParser.flush).
+  const tail = decoder.decode();
+  if (tail) for (const d of parser.push(tail)) yield d;
+  for (const d of parser.flush()) yield d;
+  if (parser.finishReason === "MAX_TOKENS" && opts.onTruncation) {
+    try { opts.onTruncation(parser.finishReason); } catch { /* telemetry never breaks a reply */ }
   }
   if (parser.usage && opts.onUsage) {
     try { opts.onUsage(parser.usage); } catch { /* telemetry never breaks a reply */ }

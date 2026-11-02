@@ -1,6 +1,7 @@
 /* ============================================================
    ADMIN LOGIN PAGE — OC Group
-   Simple password-based authentication for admin panel access
+   Server-side authentication for admin panel access: the password
+   is verified by the server and never compared in this bundle.
    ============================================================ */
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -15,20 +16,18 @@ export default function AdminLogin() {
   const { login } = useAdminAuth();
   const [, navigate] = useLocation();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setTimeout(() => {
-      const success = login(password);
-      if (success) {
-        navigate("/admin");
-      } else {
-        setError("Incorrect password. Please try again.");
-        setPassword("");
-      }
-      setLoading(false);
-    }, 400);
+    const result = await login(password);
+    if (result.ok) {
+      navigate("/admin");
+    } else {
+      setError(result.error || "Incorrect password. Please try again.");
+      setPassword("");
+    }
+    setLoading(false);
   };
 
   return (

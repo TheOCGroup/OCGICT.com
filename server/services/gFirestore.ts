@@ -31,11 +31,24 @@ export interface FirestoreCounterDb {
 /** The narrow Firestore surface the lead store depends on. */
 export interface FirestoreLeadDb {
   addLead(record: Record<string, unknown>): Promise<void>;
+  /** Create a lead document under a caller-chosen id, returning false
+   *  (without overwriting) when the id already exists. Powers the form
+   *  intake's duplicate protection for reference-bearing submissions. */
+  createLeadWithId?(id: string, record: Record<string, unknown>): Promise<boolean>;
+}
+
+/** The narrow Firestore surface the Marketplace listings read path uses. */
+export interface FirestoreListingDb {
+  /** Raw documents from the `marketplace-listings` collection. Filtering
+   *  and field validation happen in server/services/gListings.ts so the
+   *  policy is unit-testable without a database. */
+  listListingDocs(): Promise<Array<{ id: string; data: Record<string, unknown> }>>;
 }
 
 export interface GFirestore {
   counters: FirestoreCounterDb;
   leads: FirestoreLeadDb;
+  listings: FirestoreListingDb;
 }
 
 let cached: Promise<GFirestore> | null = null;
@@ -62,6 +75,26 @@ async function init(): Promise<GFirestore> {
           ...record,
           receivedAt: fsMod.FieldValue.serverTimestamp(),
         });
+      },
+      createLeadWithId: async (id: string, record: Record<string, unknown>) => {
+        try {
+          await db.collection("g-leads").doc(id).create({
+            ...record,
+            receivedAt: fsMod.FieldValue.serverTimestamp(),
+          });
+          return true;
+        } catch (err) {
+          // Firestore ALREADY_EXISTS (gRPC code 6): a duplicate submission,
+          // not a failure — the original record stands.
+          if ((err as { code?: number })?.code === 6) return false;
+          throw err;
+        }
+      },
+    },
+    listings: {
+      listListingDocs: async () => {
+        const snap = await db.collection("marketplace-listings").get();
+        return snap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, unknown> }));
       },
     },
   };
