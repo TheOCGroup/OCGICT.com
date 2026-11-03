@@ -8,6 +8,7 @@ import { looksSpanish } from "../../server/services/streamingModelProvider.js";
 
 // A standalone Netlify function: it never starts the Express server.
 export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
+  const chatStart = performance.now();
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
   if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed." }), { status: 405, headers });
   if (Number(request.headers.get("content-length") || 0) > 20000) return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
@@ -85,6 +86,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // JSON path and the client uses the certified behavior for this reply.
   if (body.stream === true && !localOnly) {
     const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    const preflightMs = Math.round(performance.now() - chatStart);
     const encoder = new TextEncoder();
     const sse = (obj: Record<string, unknown>) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
     const stream = new ReadableStream({
@@ -92,6 +94,7 @@ export default async function handler(request: Request, context?: { ip?: string;
         try {
           let full = "";
           let usage: unknown;
+          let firstTokenSeen = false;
           for await (const delta of streamGeminiTokens({
             history: body.history || [],
             message: body.message.trim(),
@@ -104,6 +107,10 @@ export default async function handler(request: Request, context?: { ip?: string;
               console.warn(`[g-chat] provider truncation finishReason=${reason}`);
             },
           })) {
+            if (!firstTokenSeen && delta.length > 0) {
+              firstTokenSeen = true;
+              console.info(`[g-chat-perf] preflight_ms=${preflightMs} model_first_token_ms=${Math.round(performance.now() - chatStart - preflightMs)}`);
+            }
             full += delta;
             controller.enqueue(sse({ t: delta }));
           }
