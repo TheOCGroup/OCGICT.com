@@ -119,7 +119,9 @@ export default async function handler(request: Request, context?: { ip?: string;
           const sctx = analyzeSellerContext(body.history || [], body.message.trim(), {
             spanish: looksSpanish(body.message) || looksSpanish(historyText),
           });
+          const modelCompleteMs = Math.round(performance.now() - chatStart - preflightMs);
           const safeReply = guardSellerReply(full, sctx);
+          console.info(`[g-chat-perf] model_complete_ms=${modelCompleteMs} guarded_response_ms=${Math.round(performance.now() - chatStart)}`);
           // Until incremental policy enforcement is proven, deliver the
           // guarded answer atomically. This intentionally trades TTFT for safety.
           controller.enqueue(sse({ t: safeReply }));
