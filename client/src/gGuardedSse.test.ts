@@ -42,6 +42,29 @@ describe("G guarded SSE delivery", () => {
       else process.env.OCG_G_PAID_MODEL_APPROVED = priorApproval;
     }
   });
+  it("handles an empty provider stream without leaking or fabricating raw text", async () => {
+    const priorKey = process.env.GEMINI_API_KEY;
+    const priorApproval = process.env.OCG_G_PAID_MODEL_APPROVED;
+    try {
+      process.env.GEMINI_API_KEY = "mock-key";
+      process.env.OCG_G_PAID_MODEL_APPROVED = "true";
+      vi.mocked(streamGeminiTokens).mockImplementation(async function* () {});
+      const response = await invoke();
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain("Approved answer.");
+      expect(body).not.toContain("RAW_");
+    } finally {
+      vi.mocked(streamGeminiTokens).mockImplementation(async function* () {
+        yield "RAW_PART_ONE";
+        yield "RAW_PART_TWO";
+      });
+      if (priorKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = priorKey;
+      if (priorApproval === undefined) delete process.env.OCG_G_PAID_MODEL_APPROVED;
+      else process.env.OCG_G_PAID_MODEL_APPROVED = priorApproval;
+    }
+  });
   it("fails closed when the provider throws before a guarded answer exists", async () => {
     const priorKey = process.env.GEMINI_API_KEY;
     const priorApproval = process.env.OCG_G_PAID_MODEL_APPROVED;
