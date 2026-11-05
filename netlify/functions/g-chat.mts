@@ -111,16 +111,21 @@ export default async function handler(request: Request, context?: { ip?: string;
               firstTokenSeen = true;
               console.info(`[g-chat-perf] preflight_ms=${preflightMs} model_first_token_ms=${Math.round(performance.now() - chatStart - preflightMs)}`);
             }
+            // Do not expose raw model deltas: the seller-policy guard must run
+            // before any text reaches the browser or speech queue.
             full += delta;
-            controller.enqueue(sse({ t: delta }));
           }
           const historyText = (body.history || []).map((h: any) => h.content).join(" ");
           const sctx = analyzeSellerContext(body.history || [], body.message.trim(), {
             spanish: looksSpanish(body.message) || looksSpanish(historyText),
           });
+          const safeReply = guardSellerReply(full, sctx);
+          // Until incremental policy enforcement is proven, deliver the
+          // guarded answer atomically. This intentionally trades TTFT for safety.
+          controller.enqueue(sse({ t: safeReply }));
           controller.enqueue(sse({
             done: true,
-            replyText: guardSellerReply(full, sctx),
+            replyText: safeReply,
             provider: "Gemini",
             model: POC_CHAT_MODEL,
             delivery: sctx.isSeller ? { emotion: sctx.primary, stage: sctx.stage } : undefined,

@@ -20,4 +20,13 @@ describe("Netlify G paid-model release safeguards", () => {
   it("limits requests with missing content length", () => {
     expect(handler).toContain('JSON.stringify(body).length > 20000');
   });
+  it("never exposes raw model deltas before the seller guard", () => {
+    const streamBranch = handler.slice(handler.indexOf('if (body.stream === true && !localOnly)'));
+    const guarded = streamBranch.indexOf('const safeReply = guardSellerReply(full, sctx)');
+    const sent = streamBranch.indexOf('controller.enqueue(sse({ t: safeReply }))');
+    expect(guarded).toBeGreaterThan(0);
+    expect(sent).toBeGreaterThan(guarded);
+    expect(streamBranch).not.toContain('controller.enqueue(sse({ t: delta }))');
+    expect(streamBranch).toContain('replyText: safeReply');
+  });
 });
