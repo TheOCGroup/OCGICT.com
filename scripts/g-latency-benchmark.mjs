@@ -22,6 +22,15 @@ for (const [i, message] of prompts.entries()) {
     });
     const headersMs = Math.round(performance.now() - start);
     if (!response.ok || !response.body) throw new Error('HTTP ' + response.status);
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      const data = await response.json();
+      const completeMs = Math.round(performance.now() - start);
+      const result = { scenario: i + 1, status: response.status, mode: 'json-fallback', headersMs, firstTokenMs: null, completeMs, chars: typeof data.replyText === 'string' ? data.replyText.length : 0 };
+      samples.push(result);
+      console.log(JSON.stringify(result));
+      continue;
+    }
     let firstTokenMs = null;
     let answer = '';
     let pending = '';
@@ -43,7 +52,7 @@ for (const [i, message] of prompts.entries()) {
         if (parsed.error) throw new Error('SSE error');
       }
     }
-    const result = { scenario: i + 1, status: response.status, headersMs, firstTokenMs, completeMs: Math.round(performance.now() - start), chars: answer.length };
+    const result = { scenario: i + 1, status: response.status, mode: 'sse', headersMs, firstTokenMs, completeMs: Math.round(performance.now() - start), chars: answer.length };
     samples.push(result);
     console.log(JSON.stringify(result));
   } catch (err) {
@@ -53,5 +62,7 @@ for (const [i, message] of prompts.entries()) {
 }
 const times = samples.map(s => s.firstTokenMs).filter(Number.isFinite).sort((a,b)=>a-b);
 const percentile = p => times.length ? times[Math.ceil(p * times.length) - 1] : null;
-console.log(JSON.stringify({ total: samples.length, success: times.length, medianFirstTokenMs: percentile(0.5), p95FirstTokenMs: percentile(0.95), note: 'Small sample diagnostic only; not an SLA.' }));
-if (times.length !== prompts.length) process.exitCode = 1;
+const httpSuccess = samples.filter(s => s.status === 200).length;
+const jsonFallbacks = samples.filter(s => s.mode === 'json-fallback').length;
+console.log(JSON.stringify({ total: samples.length, httpSuccess, sseSamples: times.length, jsonFallbacks, medianFirstTokenMs: percentile(0.5), p95FirstTokenMs: percentile(0.95), note: 'First-token metrics apply only to SSE. JSON fallback is full-response latency. Small sample; not an SLA.' }));
+if (httpSuccess !== prompts.length || (times.length === 0 && jsonFallbacks === 0)) process.exitCode = 1;
