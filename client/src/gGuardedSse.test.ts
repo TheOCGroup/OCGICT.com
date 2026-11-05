@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { streamGeminiTokens } from "../../server/services/geminiStream.js";
+import { looksSpanish } from "../../server/services/streamingModelProvider.js";
+import { analyzeSellerContext } from "../../server/voice/sellerPolicy.js";
 vi.mock("../../server/services/gPlatform.js", () => ({ platformBudgetStore: vi.fn(async () => ({})) }));
 vi.mock("../../server/services/gBudget.js", () => ({ consumeBudget: vi.fn(async () => ({ allowed: true })) }));
 vi.mock("../../server/services/gRateLimit.js", () => ({ rateLimitActive: vi.fn(() => false), consumeRateLimit: vi.fn(), clientIdFromRequest: vi.fn() }));
@@ -36,6 +38,26 @@ describe("G guarded SSE delivery", () => {
       expect(body).not.toContain("RAW_PART_ONE");
       expect(body).not.toContain("RAW_PART_TWO");
     } finally {
+      if (priorKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = priorKey;
+      if (priorApproval === undefined) delete process.env.OCG_G_PAID_MODEL_APPROVED;
+      else process.env.OCG_G_PAID_MODEL_APPROVED = priorApproval;
+    }
+  });
+  it("passes Spanish seller context through the guard before delivery", async () => {
+    const priorKey = process.env.GEMINI_API_KEY;
+    const priorApproval = process.env.OCG_G_PAID_MODEL_APPROVED;
+    try {
+      process.env.GEMINI_API_KEY = "mock-key";
+      process.env.OCG_G_PAID_MODEL_APPROVED = "true";
+      vi.mocked(looksSpanish).mockReturnValue(true);
+      const response = await invoke();
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain("Approved answer.");
+      expect(vi.mocked(analyzeSellerContext)).toHaveBeenLastCalledWith([], "I want to sell my house", { spanish: true });
+    } finally {
+      vi.mocked(looksSpanish).mockReturnValue(false);
       if (priorKey === undefined) delete process.env.GEMINI_API_KEY;
       else process.env.GEMINI_API_KEY = priorKey;
       if (priorApproval === undefined) delete process.env.OCG_G_PAID_MODEL_APPROVED;
