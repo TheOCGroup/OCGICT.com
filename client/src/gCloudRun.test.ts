@@ -27,6 +27,7 @@ vi.mock('@netlify/blobs', () => {
 });
 
 import { firestoreBudgetStore, encodeCounterDocId } from '../../server/services/gFirestoreStore';
+import { resolveFirestoreCollectionName } from '../../server/services/gFirestore';
 import type { FirestoreCounterDb, FirestoreDocSnap, FirestoreTx } from '../../server/services/gFirestore';
 import { consumeBudget } from '../../server/services/gBudget';
 import { consumeRateLimit } from '../../server/services/gRateLimit';
@@ -86,6 +87,16 @@ function makeFirestoreDouble(opts: { failAll?: boolean } = {}) {
 }
 
 describe('Firestore BudgetStore (Cloud Run fallback)', () => {
+  it('isolates counters in a configured staging collection and rejects unsafe collection names', async () => {
+    const { db, docs } = makeFirestoreDouble();
+    const store = firestoreBudgetStore(db, 'g-counters-staging');
+    await store.set('staging-probe', 7);
+    expect(docs.get(`g-counters-staging/${encodeCounterDocId('staging-probe')}`)?.value).toBe(7);
+    expect(resolveFirestoreCollectionName('g-leads-staging', 'g-leads')).toBe('g-leads-staging');
+    expect(resolveFirestoreCollectionName('../g-leads', 'g-leads')).toBe('g-leads');
+    expect(resolveFirestoreCollectionName('', 'g-leads')).toBe('g-leads');
+  });
+
   it('get returns null for a missing counter; set then get round-trips', async () => {
     const { db } = makeFirestoreDouble();
     const store = firestoreBudgetStore(db);

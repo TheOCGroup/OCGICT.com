@@ -15,12 +15,13 @@
 - Seller intake preserves submitted city/state/ZIP; no silent Wichita substitution.
 - Address autocomplete is limited to Sedgwick County, Kansas; manual entry remains available.
 - Human review remains mandatory without a separately verified comparable-sales source.
-- Cloud Run host-level durable per-client rate limits: property lookup 20/minute; address suggestions 30/minute; configurable downward/upward only within existing hard ceiling. Store failures fail closed.
+- Cloud Run host-level durable per-client rate limits: property lookup 20/minute; address suggestions 30/minute; configurable within the existing hard ceiling. Store failures fail closed.
+- Firestore lead and counter collection names are configurable with strict identifier validation. Staging can isolate writes to `g-leads-staging` and counters to `g-counters-staging`; production defaults remain `g-leads` and `g-counters`.
 
 ## Verification performed on DESKTOP-5E83JLJ
 
 - `pnpm check`: PASS.
-- `pnpm vitest run`: 262/262 PASS across 25 files.
+- `pnpm vitest run`: 263/263 PASS across 25 files.
 - `pnpm build:cloudrun`: PASS.
 - `git diff --check`: PASS.
 - Live GIS provider: matched one test address; returned ambiguous for a multi-parcel address; returned not-found for two test addresses.

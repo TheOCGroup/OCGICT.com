@@ -16,7 +16,7 @@ import sellerSuggestions from "../netlify/functions/seller-suggestions.mts";
 import marketplaceListings from "../netlify/functions/marketplace-listings.mts";
 import { registerBudgetStoreFactory, platformBudgetStore, storeBackend, leadBackend } from "./services/gPlatform.js";
 import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath, isKnownPagePath, cacheControlFor, rateLimitScopeForRequest, SECURITY_HEADERS } from "./cloudrunRoutes.js";
-import { getGFirestore } from "./services/gFirestore.js";
+import { getGFirestore, resolveFirestoreCollectionName } from "./services/gFirestore.js";
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, evaluateFormIntake, persistLeadToFirestore, FORM_LIMITS } from "./services/gLeadStore.js";
 import { consumeRateLimit } from "./services/gRateLimit.js";
@@ -374,7 +374,7 @@ export async function main(): Promise<void> {
   if (storeBackend(env) === "firestore" || leadBackend(env) === "firestore") {
     const gf = await getGFirestore();
     if (storeBackend(env) === "firestore") {
-      registerBudgetStoreFactory(async () => firestoreBudgetStore(gf.counters));
+      registerBudgetStoreFactory(async () => firestoreBudgetStore(gf.counters, resolveFirestoreCollectionName(env.OCG_FIRESTORE_COUNTERS_COLLECTION, "g-counters")));
     }
     // Marketplace listings read source (empty until listing documents
     // exist — the endpoint and page handle that state by design).
