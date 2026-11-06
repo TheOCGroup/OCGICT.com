@@ -143,8 +143,14 @@ export function Sell() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address }),
       });
-      const data = await res.json();
-      setPublicMatch(data.found ? data.publicRecord : null);
+      if (!res.ok) throw new Error('Property lookup unavailable');
+      const data = await res.json() as { found?: boolean; publicRecord?: { parcelId?: string; situsAddress?: string; livingAreaSqft?: number; yearBuilt?: number; provenance?: { source?: string; certainty?: string } } };
+      const record = data.found ? data.publicRecord : null;
+      // Never label a demo/heuristic record as a verified county property.
+      const verified = !!record?.parcelId && !!record?.situsAddress &&
+        record.provenance?.certainty === 'KNOWN' &&
+        !/demo|heuristic|mock|fixture/i.test(record.provenance?.source || '');
+      setPublicMatch(verified ? record : null);
       setStep(2);
     } catch {
       // A provider failure should not destroy the seller's progress. The final
@@ -337,7 +343,7 @@ export function Sell() {
                 {publicMatch ? (
                   <div className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4">
                     <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" />
-                    <div><div className="text-sm font-bold text-white">Property record found</div><div className="mt-1 text-xs text-slate-400">We matched available property information and will use it only as permitted by the active data mode.</div></div>
+                    <div><div className="text-sm font-bold text-white">County property record found</div><div className="mt-1 text-xs text-slate-300">{publicMatch.situsAddress}</div><div className="mt-1 text-xs text-slate-400">Parcel: {publicMatch.parcelId} · {publicMatch.livingAreaSqft?.toLocaleString() || 'Unknown'} sq ft · Built {publicMatch.yearBuilt || 'Unknown'}</div><div className="mt-1 text-xs text-slate-400">Source: {publicMatch.provenance?.source || 'Unspecified'}</div></div>
                   </div>
                 ) : (
                   <div className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
