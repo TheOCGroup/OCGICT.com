@@ -38,6 +38,16 @@ export function selectRenovatedArvComps(comps: IComparableSale[], asOf: Date = n
       Number.isFinite(comp.similarityScore) && comp.similarityScore > 0 && comp.similarityScore <= 1;
   });
 }
+/** Age of the oldest eligible closed sale, so freshness is never a fabricated constant. */
+export function oldestComparableAgeDays(comps: IComparableSale[], asOf: Date = new Date()): number {
+  if (!comps.length || !Number.isFinite(asOf.getTime())) return 9999;
+  const ages = comps.map((comp) => {
+    const soldAt = /^\d{4}-\d{2}-\d{2}$/.test(comp.saleDate) ? new Date(`${comp.saleDate}T00:00:00Z`) : new Date(NaN);
+    return Number.isFinite(soldAt.getTime()) && soldAt <= asOf
+      ? Math.ceil((asOf.getTime() - soldAt.getTime()) / 86400000) : 9999;
+  });
+  return Math.max(...ages);
+}
 export class SellerUnderwritingService {
   public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
@@ -94,7 +104,7 @@ export class SellerUnderwritingService {
       compQualityScore,
       arvConfidence,
       repairEstimateConfidence: rehab.repairConfidence,
-      dataFreshnessDays: dataMode === "production" && eligibleComps.length > 0 ? 45 : 9999,
+      dataFreshnessDays: dataMode === "production" ? oldestComparableAgeDays(eligibleComps) : 9999,
       ownershipConsistency: !probateOrLegalFlag,
       structuralRiskDetected: rehab.structuralRiskDetected,
       probateOrLegalFlag,
