@@ -16,6 +16,12 @@ function getDataMode(): "production" | "development" | "demo" {
   return "production";
 }
 
+/** Seller-visible opening offer; the 70% acquisition ceiling remains private. */
+export function calculateSellerOpeningOffer(arv: number, rehab: number, ceiling: number): number {
+  if (![arv, rehab, ceiling].every(Number.isFinite) || arv <= 0 || rehab < 0 || ceiling <= 0) return 0;
+  return Math.max(0, Math.min(ceiling, Math.floor((arv * 0.65 - rehab) / 1000) * 1000));
+}
+
 export class SellerUnderwritingService {
   public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
@@ -360,8 +366,7 @@ export class SellerUnderwritingService {
     if (params.confidenceGate.tier === "HIGH_CONFIDENCE" && params.internalMaoCeiling > 0) {
       // Founder-approved opening: 65% of renovated ARV minus rehab. The 70%
       // internal MAO is a hard ceiling, never a seller-facing offer range.
-      const openingOffer = Math.max(0, Math.min(params.internalMaoCeiling,
-        Math.floor((params.estimatedArv * 0.65 - params.estimatedRehabBudget) / 1000) * 1000));
+      const openingOffer = calculateSellerOpeningOffer(params.estimatedArv, params.estimatedRehabBudget, params.internalMaoCeiling);
       if (openingOffer <= 0) return this.buildOfferPresentation({ ...params, confidenceGate: { ...params.confidenceGate, tier: "LOW_CONFIDENCE" } });
       return {
         status: "PRELIMINARY_OFFER_AVAILABLE",
