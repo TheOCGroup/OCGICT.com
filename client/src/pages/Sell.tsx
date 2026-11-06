@@ -86,6 +86,7 @@ export function Sell() {
   const [propertyResolutionMessage, setPropertyResolutionMessage] = useState('');
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [condition, setCondition] = useState<ISellerIntakePayload['propertyCondition'] | ''>('');
+  const [knownRepairs, setKnownRepairs] = useState<string[]>([]);
   const [occupancy, setOccupancy] = useState<ISellerIntakePayload['occupancyStatus'] | ''>('');
   const [situation, setSituation] = useState<ISellerIntakePayload['sellerSituation'] | ''>('');
   const [timeline, setTimeline] = useState<ISellerIntakePayload['desiredTimeline'] | ''>('');
@@ -212,7 +213,7 @@ export function Sell() {
       sellerSituation: situation,
       desiredTimeline: timeline,
       primaryPriority: priority,
-      knownRepairs: [],
+      knownRepairs,
       sellerNotes,
       fullName: fullName.trim(),
       email: email.trim(),
@@ -403,6 +404,18 @@ export function Sell() {
                   <label className="text-xs font-bold text-slate-300 sm:col-span-2">What matters most?<select required value={priority} onChange={(e) => setPriority(e.target.value as any)} className={`${fieldClass} mt-2`}><option value="">Choose priority</option>{priorities.map((x) => <option key={x}>{x}</option>)}</select></label>
                 </div>
 
+                <fieldset className="mt-5 rounded-xl border border-slate-700 p-4">
+                  <legend className="px-1 text-xs font-bold text-slate-300">Which major systems need repair or replacement? (Select all that apply)</legend>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {['Roof', 'HVAC', 'Foundation', 'Plumbing'].map((repair) => (
+                      <label key={repair} className="flex items-center gap-3 text-sm text-slate-200">
+                        <input type="checkbox" checked={knownRepairs.includes(repair)} onChange={(e) => setKnownRepairs((current) => e.target.checked ? [...current, repair] : current.filter((value) => value !== repair))} className="h-4 w-4 accent-amber-500" />
+                        {repair}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400">These are seller-reported issues, not verified repair estimates. Final costs require inspection.</p>
+                </fieldset>
                 <label className="mt-4 block text-xs font-bold text-slate-300">Anything important we should know? <span className="font-normal text-slate-500">Optional</span><textarea value={sellerNotes} onChange={(e) => setSellerNotes(e.target.value)} rows={3} maxLength={1000} placeholder="Major repairs, access, title situation, or anything else that could matter…" className={`${fieldClass} mt-2 resize-none`} /></label>
 
                 <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
