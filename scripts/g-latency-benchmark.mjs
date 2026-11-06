@@ -53,6 +53,7 @@ for (const [i, message] of prompts.entries()) {
     // This is first client-visible GUARDED text, not the model's first token.
     let firstGuardedTextMs = null;
     let answer = "";
+    let completed = false;
     let pending = "";
     const decoder = new TextDecoder();
     for await (const bytes of response.body) {
@@ -74,9 +75,18 @@ for (const [i, message] of prompts.entries()) {
             firstGuardedTextMs = Math.round(performance.now() - start);
           answer += parsed.t;
         }
-        if (parsed.error) throw new Error("SSE error");
+        if (parsed.error) throw new Error("SSE error: " + String(parsed.error));
+        if (parsed.done === true) {
+          completed = true;
+          if (
+            typeof parsed.replyText === "string" &&
+            parsed.replyText !== answer
+          )
+            throw new Error("SSE final answer mismatch");
+        }
       }
     }
+    if (!completed) throw new Error("SSE stream ended without done event");
     const result = {
       scenario: i + 1,
       status: response.status,
@@ -116,6 +126,7 @@ console.log(
 );
 if (
   httpSuccess !== prompts.length ||
-  (times.length === 0 && jsonFallbacks === 0)
+  samples.some(s => s.error) ||
+  times.length + jsonFallbacks !== prompts.length
 )
   process.exitCode = 1;
