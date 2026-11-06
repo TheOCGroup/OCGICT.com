@@ -41,15 +41,30 @@ export function Sell() {
   useEffect(() => {
     if (selectedAddress || address.trim().length < 4) {
       setSuggestions([]);
+      setSuggestionStatus('');
       return;
     }
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const query = address.trim();
+    const load = async (attempt = 0) => {
       setSuggestionStatus('Looking for addresses…');
       try {
-        const response = await fetch('/api/seller/address-suggestions?q=' + encodeURIComponent(address.trim()), { signal: controller.signal });
+        const response = await fetch('/api/seller/address-suggestions?q=' + encodeURIComponent(query), { signal: controller.signal });
+        if (response.status === 429 && attempt < 2) {
+          // Photon-backed suggestions have a server-wide throttle. Retry the
+          // current query instead of incorrectly showing "no matching address".
+          retryTimer = window.setTimeout(() => { void load(attempt + 1); }, 1400);
+          setSuggestionStatus('Address search is busy. Retrying…');
+          return;
+        }
         if (!response.ok) throw new Error('Suggestions unavailable');
-        const data = await response.json() as { suggestions?: string[] };
+        const data = await response.json() as { suggestions?: string[]; retry?: boolean };
+        if (controller.signal.aborted) return;
+        if (data.retry && attempt < 2) {
+          retryTimer = window.setTimeout(() => { void load(attempt + 1); }, 1400);
+          return;
+        }
         setSuggestions(data.suggestions || []);
         setSuggestionStatus(data.suggestions?.length ? 'Choose your address below' : 'No match yet. Keep typing or enter the address manually.');
       } catch {
@@ -58,8 +73,13 @@ export function Sell() {
           setSuggestionStatus('Suggestions temporarily unavailable. You can still type your address.');
         }
       }
-    }, 600);
-    return () => { window.clearTimeout(timer); controller.abort(); };
+    };
+    const timer = window.setTimeout(() => { void load(); }, 600);
+    return () => {
+      window.clearTimeout(timer);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      controller.abort();
+    };
   }, [address, selectedAddress]);
   const [publicMatch, setPublicMatch] = useState<any | null>(null);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
