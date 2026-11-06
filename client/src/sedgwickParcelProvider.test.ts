@@ -93,6 +93,21 @@ describe("Sedgwick parcel provider", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("does not misread a city beginning with St. as the state abbreviation ST", async () => {
+    const fetcher = mockFetch({
+      features: [feature({
+        PIN: "00999123",
+        Prop_Addr: "123 MAIN ST",
+        Prop_City: "ST JOHN",
+        Prop_zip: "67576",
+      })],
+    });
+    const result = await lookupSedgwickParcel("123 Main Street, St. John, KS 67576", fetcher);
+    expect(result.status).toBe("matched");
+    const requested = new URL(String(fetcher.mock.calls[0][0]));
+    expect(requested.searchParams.get("where")).toContain("UPPER(Prop_City) = 'ST JOHN'");
+  });
+
   it("reports provider failures honestly and does not fabricate a match", async () => {
     const result = await lookupSedgwickParcel("100 Test Street, Wichita, KS", mockFetch({}, 503));
     expect(result.status).toBe("provider_unavailable");
