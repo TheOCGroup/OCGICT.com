@@ -41,15 +41,30 @@ export function Sell() {
   useEffect(() => {
     if (selectedAddress || address.trim().length < 4) {
       setSuggestions([]);
+      setSuggestionStatus('');
       return;
     }
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+    let retryTimer: number | undefined;
+    const query = address.trim();
+    const load = async (attempt = 0) => {
       setSuggestionStatus('Looking for addresses…');
       try {
-        const response = await fetch('/api/seller/address-suggestions?q=' + encodeURIComponent(address.trim()), { signal: controller.signal });
+        const response = await fetch('/api/seller/address-suggestions?q=' + encodeURIComponent(query), { signal: controller.signal });
+        if (response.status === 429 && attempt < 2) {
+          // Photon-backed suggestions have a server-wide throttle. Retry the
+          // current query instead of incorrectly showing "no matching address".
+          retryTimer = window.setTimeout(() => { void load(attempt + 1); }, 1400);
+          setSuggestionStatus('Address search is busy. Retrying…');
+          return;
+        }
         if (!response.ok) throw new Error('Suggestions unavailable');
-        const data = await response.json() as { suggestions?: string[] };
+        const data = await response.json() as { suggestions?: string[]; retry?: boolean };
+        if (controller.signal.aborted) return;
+        if (data.retry && attempt < 2) {
+          retryTimer = window.setTimeout(() => { void load(attempt + 1); }, 1400);
+          return;
+        }
         setSuggestions(data.suggestions || []);
         setSuggestionStatus(data.suggestions?.length ? 'Choose your address below' : 'No match yet. Keep typing or enter the address manually.');
       } catch {
@@ -58,8 +73,13 @@ export function Sell() {
           setSuggestionStatus('Suggestions temporarily unavailable. You can still type your address.');
         }
       }
-    }, 600);
-    return () => { window.clearTimeout(timer); controller.abort(); };
+    };
+    const timer = window.setTimeout(() => { void load(); }, 600);
+    return () => {
+      window.clearTimeout(timer);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      controller.abort();
+    };
   }, [address, selectedAddress]);
   const [publicMatch, setPublicMatch] = useState<any | null>(null);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
@@ -83,30 +103,32 @@ export function Sell() {
   const [leadReference, setLeadReference] = useState('');
   const leadReferenceRef = useRef('');
 
-  // The durable lead record is a Netlify Forms submission (ocg-seller-intake).
-  // A review result is only shown after the lead is actually recorded; the
-  // same reference is reused across retries so duplicates are identifiable.
+  // Cloud Run uses the existing durable /api/g/lead handler, not a POST to
+  // the SPA root. A seller reference is reused on retries for deduplication.
   const recordSellerLead = async (payload: ISellerIntakePayload, trackingId: string, reviewStatus: string) => {
     if (!leadReferenceRef.current) {
       leadReferenceRef.current = `SELLER-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
-    const fields = new URLSearchParams({
-      'form-name': 'ocg-seller-intake',
-      name: payload.fullName,
-      email: payload.email,
-      phone: payload.phone,
-      address: payload.address,
-      details: JSON.stringify(payload).slice(0, 8000),
-      trackingId,
-      reviewStatus,
-      reference: leadReferenceRef.current,
-    });
-    const response = await fetch('/', {
+    const response = await fetch('/api/g/lead', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: fields.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: payload.fullName,
+        email: payload.email,
+        phone: payload.phone,
+        address: payload.address,
+        role: 'seller',
+        consent: true,
+        reference: leadReferenceRef.current,
+        summary: JSON.stringify({ trackingId, reviewStatus, propertyCondition: payload.propertyCondition,
+          occupancyStatus: payload.occupancyStatus, sellerSituation: payload.sellerSituation,
+          desiredTimeline: payload.desiredTimeline, primaryPriority: payload.primaryPriority,
+          sellerNotes: payload.sellerNotes }).slice(0, 4000),
+      }),
     });
     if (!response.ok) throw new Error('Lead could not be recorded');
+    const receipt = await response.json();
+    if (receipt?.ok !== true || receipt?.status !== 'recorded') throw new Error('Lead receipt not confirmed');
     setLeadReference(leadReferenceRef.current);
   };
 
@@ -121,8 +143,14 @@ export function Sell() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address }),
       });
-      const data = await res.json();
-      setPublicMatch(data.found ? data.publicRecord : null);
+      if (!res.ok) throw new Error('Property lookup unavailable');
+      const data = await res.json() as { found?: boolean; publicRecord?: { parcelId?: string; situsAddress?: string; livingAreaSqft?: number; yearBuilt?: number; provenance?: { source?: string; certainty?: string } } };
+      const record = data.found ? data.publicRecord : null;
+      // Never label a demo/heuristic record as a verified county property.
+      const verified = !!record?.parcelId && !!record?.situsAddress &&
+        record.provenance?.certainty === 'KNOWN' &&
+        !/demo|heuristic|mock|fixture/i.test(record.provenance?.source || '');
+      setPublicMatch(verified ? record : null);
       setStep(2);
     } catch {
       // A provider failure should not destroy the seller's progress. The final
@@ -315,7 +343,7 @@ export function Sell() {
                 {publicMatch ? (
                   <div className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4">
                     <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-400" />
-                    <div><div className="text-sm font-bold text-white">Property record found</div><div className="mt-1 text-xs text-slate-400">We matched available property information and will use it only as permitted by the active data mode.</div></div>
+                    <div><div className="text-sm font-bold text-white">County property record found</div><div className="mt-1 text-xs text-slate-300">{publicMatch.situsAddress}</div><div className="mt-1 text-xs text-slate-400">Parcel: {publicMatch.parcelId} · {publicMatch.livingAreaSqft?.toLocaleString() || 'Unknown'} sq ft · Built {publicMatch.yearBuilt || 'Unknown'}</div><div className="mt-1 text-xs text-slate-400">Source: {publicMatch.provenance?.source || 'Unspecified'}</div></div>
                   </div>
                 ) : (
                   <div className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">

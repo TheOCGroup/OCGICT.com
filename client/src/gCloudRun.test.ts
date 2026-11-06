@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import path from 'node:path';
 
 // Default-factory test: the Blobs module is stubbed with the same faithful
 // in-memory CAS store the handler smoke tests use.
@@ -263,9 +264,9 @@ describe('security response headers', () => {
 describe('static file path hardening', () => {
   const root = '/srv/public';
   it('serves ordinary files and the index', () => {
-    expect(staticFilePath(root, '/')).toBe('/srv/public/index.html');
-    expect(staticFilePath(root, '/assets/app.js')).toBe('/srv/public/assets/app.js');
-    expect(staticFilePath(root, '//double//slash.css')).toBe('/srv/public/double/slash.css');
+    expect(staticFilePath(root, '/')).toBe(path.resolve(root, 'index.html'));
+    expect(staticFilePath(root, '/assets/app.js')).toBe(path.resolve(root, 'assets/app.js'));
+    expect(staticFilePath(root, '//double//slash.css')).toBe(path.resolve(root, 'double/slash.css'));
   });
   it('rejects traversal in every encoding', () => {
     expect(staticFilePath(root, '/../../etc/passwd')).toBeNull();
@@ -277,7 +278,7 @@ describe('static file path hardening', () => {
   it('cannot be escaped through a sibling prefix', () => {
     expect(staticFilePath(root, '/../public-evil/evil.js')).toBeNull();
     // A legitimate in-root path that merely resembles the prefix is fine.
-    expect(staticFilePath(root, '/public-evil.js')).toBe('/srv/public/public-evil.js');
+    expect(staticFilePath(root, '/public-evil.js')).toBe(path.resolve(root, 'public-evil.js'));
   });
 });
 
