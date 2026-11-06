@@ -358,14 +358,17 @@ export class SellerUnderwritingService {
     const disclaimer = "This is a non-binding preliminary property review. Any preliminary offer is subject to property walkthrough, verification of condition and property data, title review, and mutual execution of a separate written purchase agreement.";
 
     if (params.confidenceGate.tier === "HIGH_CONFIDENCE" && params.internalMaoCeiling > 0) {
-      const minOffer = Math.round((params.internalMaoCeiling * 0.96) / 1000) * 1000;
-      const maxOffer = Math.round((params.internalMaoCeiling * 1.03) / 1000) * 1000;
+      // Founder-approved opening: 65% of renovated ARV minus rehab. The 70%
+      // internal MAO is a hard ceiling, never a seller-facing offer range.
+      const openingOffer = Math.max(0, Math.min(params.internalMaoCeiling,
+        Math.floor((params.estimatedArv * 0.65 - params.estimatedRehabBudget) / 1000) * 1000));
+      if (openingOffer <= 0) return this.buildOfferPresentation({ ...params, confidenceGate: { ...params.confidenceGate, tier: "LOW_CONFIDENCE" } });
       return {
         status: "PRELIMINARY_OFFER_AVAILABLE",
         headline: "Your Preliminary OCG Offer Range",
-        offerRangeMin: minOffer,
-        offerRangeMax: maxOffer,
-        singlePointEstimate: params.internalMaoCeiling,
+        offerRangeMin: openingOffer,
+        offerRangeMax: openingOffer,
+        singlePointEstimate: openingOffer,
         displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
         explanation: {
           whatOcgReviewed: ["Verified property record", "Live comparable-sale evidence", "Reported/verified condition inputs", "OCG acquisition formula"],
