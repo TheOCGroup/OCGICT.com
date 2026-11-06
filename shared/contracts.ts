@@ -123,6 +123,7 @@ export interface IComparableSale {
   pricePerSqft: number;
   yearBuilt: number;
   similarityScore: number; // 0.0 - 1.0
+  renovatedConditionVerified?: boolean; // true only with documented post-renovation evidence
   source: string;
 }
 

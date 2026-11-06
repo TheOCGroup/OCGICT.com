@@ -22,6 +22,22 @@ export function calculateSellerOpeningOffer(arv: number, rehab: number, ceiling:
   return Math.max(0, Math.min(ceiling, Math.floor((arv * 0.65 - rehab) / 1000) * 1000));
 }
 
+/** Eligible ARV comps: documented renovated condition, close to subject, sold in last 6 months. */
+export function selectRenovatedArvComps(comps: IComparableSale[], asOf: Date = new Date()): IComparableSale[] {
+  if (!Number.isFinite(asOf.getTime())) return [];
+  const cutoff = new Date(asOf.getTime());
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - 6);
+  return comps.filter((comp) => {
+    const soldAt = /^\d{4}-\d{2}-\d{2}$/.test(comp.saleDate) ? new Date(`${comp.saleDate}T00:00:00Z`) : new Date(NaN);
+    return comp.renovatedConditionVerified === true &&
+      Number.isFinite(soldAt.getTime()) && soldAt >= cutoff && soldAt <= asOf &&
+      Number.isFinite(comp.distanceMiles) && comp.distanceMiles >= 0 && comp.distanceMiles <= 1 &&
+      Number.isFinite(comp.salePrice) && comp.salePrice > 0 &&
+      Number.isFinite(comp.sqft) && comp.sqft > 0 &&
+      Number.isFinite(comp.pricePerSqft) && comp.pricePerSqft > 0 &&
+      Number.isFinite(comp.similarityScore) && comp.similarityScore > 0 && comp.similarityScore <= 1;
+  });
+}
 export class SellerUnderwritingService {
   public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
@@ -56,7 +72,8 @@ export class SellerUnderwritingService {
     const totalAppraised = publicRecord?.totalAppraisedValue ?? 0;
     const parcelId = publicRecord?.parcelId;
 
-    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(comps, livingAreaSqft);
+    const eligibleComps = selectRenovatedArvComps(comps);
+    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(eligibleComps, livingAreaSqft);
 
     const rehab = livingAreaSqft > 0
       ? this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt)
@@ -70,19 +87,19 @@ export class SellerUnderwritingService {
 
     const probateOrLegalFlag = ["probate", "inherited", "estate"].some((term) => sellerSituation.toLowerCase().includes(term));
     const propertyMatchConfidence = publicRecord ? (dataMode === "production" ? 0.95 : 0.65) : 0;
-    const compQualityScore = comps.length >= 3 ? (dataMode === "production" ? 0.88 : 0.60) : comps.length > 0 ? 0.45 : 0;
+    const compQualityScore = eligibleComps.length >= 3 ? (dataMode === "production" ? 0.88 : 0.60) : eligibleComps.length > 0 ? 0.45 : 0;
 
     const confidenceGate = this.evaluateConfidenceGate({
       propertyMatchConfidence,
       compQualityScore,
       arvConfidence,
       repairEstimateConfidence: rehab.repairConfidence,
-      dataFreshnessDays: dataMode === "production" && comps.length > 0 ? 45 : 9999,
+      dataFreshnessDays: dataMode === "production" && eligibleComps.length > 0 ? 45 : 9999,
       ownershipConsistency: !probateOrLegalFlag,
       structuralRiskDetected: rehab.structuralRiskDetected,
       probateOrLegalFlag,
       hasPublicRecord: !!publicRecord,
-      liveCompsAvailable: dataMode === "production" && comps.length >= 3,
+      liveCompsAvailable: dataMode === "production" && eligibleComps.length >= 3,
       productionMode: dataMode === "production",
     });
 
@@ -150,7 +167,7 @@ export class SellerUnderwritingService {
       },
       sellerOfferPresentation,
       confidenceGate,
-      comparableSales: comps,
+      comparableSales: eligibleComps,
       piperHandoff: {
         outboxTrackingId: trackingId,
         status: "READY_FOR_PIPER",
