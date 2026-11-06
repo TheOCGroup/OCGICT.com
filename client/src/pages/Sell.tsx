@@ -45,7 +45,7 @@ export function Sell() {
       return;
     }
     const controller = new AbortController();
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: number | undefined;
     const query = address.trim();
     const load = async (attempt = 0) => {
       setSuggestionStatus('Looking for addresses…');
