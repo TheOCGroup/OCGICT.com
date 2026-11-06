@@ -70,6 +70,27 @@ const cache = new Map<string, { expiresAt: number; result: SedgwickParcelResolut
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 300;
 
+// Match state only as a suffix after the city (and before an optional ZIP).
+// Looking for any two-letter token in the whole city/state string misclassifies
+// city names beginning with "St." (for example, St. John) as state code "ST".
+const US_STATE_SUFFIXES = [
+  "NORTH CAROLINA", "NORTH DAKOTA", "NEW HAMPSHIRE", "NEW JERSEY",
+  "NEW MEXICO", "NEW YORK", "RHODE ISLAND", "SOUTH CAROLINA",
+  "SOUTH DAKOTA", "WEST VIRGINIA",
+  "ALABAMA", "ALASKA", "ARIZONA", "ARKANSAS", "CALIFORNIA", "COLORADO",
+  "CONNECTICUT", "DELAWARE", "FLORIDA", "GEORGIA", "HAWAII", "IDAHO",
+  "ILLINOIS", "INDIANA", "IOWA", "KANSAS", "KENTUCKY", "LOUISIANA",
+  "MAINE", "MARYLAND", "MASSACHUSETTS", "MICHIGAN", "MINNESOTA",
+  "MISSISSIPPI", "MISSOURI", "MONTANA", "NEBRASKA", "NEVADA", "OHIO",
+  "OKLAHOMA", "OREGON", "PENNSYLVANIA", "TENNESSEE", "TEXAS", "UTAH",
+  "VERMONT", "VIRGINIA", "WASHINGTON", "WISCONSIN", "WYOMING",
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI",
+  "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI",
+  "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC",
+  "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT",
+  "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+].sort((a, b) => b.length - a.length);
+
 function normalizeStreet(value: string): string {
   const suffixes: Record<string, string> = {
     STREET: "ST", AVENUE: "AVE", ROAD: "RD", DRIVE: "DR", LANE: "LN",
@@ -94,11 +115,15 @@ function parseAddress(input: string): ParsedAddress | { error: "invalid" | "unsu
   }
 
   const remainder = parts.slice(1).join(" ").toUpperCase();
-  const stateMatch = remainder.match(/\b([A-Z]{2}|KANSAS)\b/);
-  if (stateMatch && !["KS", "KANSAS"].includes(stateMatch[1])) {
+  const zip = remainder.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+  const locationWithoutZip = remainder.replace(/\b\d{5}(?:-\d{4})?\b/g, " ").trim();
+  const stateSuffix = US_STATE_SUFFIXES.find((state) =>
+    locationWithoutZip === state || locationWithoutZip.endsWith(" " + state),
+  );
+  if (stateSuffix && !["KS", "KANSAS"].includes(stateSuffix)) {
     return { error: "unsupported", reason: "The Sedgwick County provider only covers Kansas properties." };
   }
-  const zip = remainder.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1];
+
   const city = parts.length > 1
     ? parts[1].replace(/\b(?:KS|KANSAS)\b/gi, "").replace(/\b\d{5}(?:-\d{4})?\b/g, "").trim()
     : undefined;
