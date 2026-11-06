@@ -341,6 +341,10 @@ export class SellerUnderwritingService {
       params.hasPublicRecord &&
       params.liveCompsAvailable &&
       !params.structuralRiskDetected &&
+      !params.probateOrLegalFlag &&
+      params.ownershipConsistency &&
+      params.propertyMatchConfidence >= 0.85 &&
+      params.dataFreshnessDays <= 180 &&
       compositeScore >= 0.82 &&
       params.compQualityScore >= 0.80 &&
       params.arvConfidence >= 0.80 &&
