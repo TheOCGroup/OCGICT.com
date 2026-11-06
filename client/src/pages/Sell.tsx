@@ -81,7 +81,9 @@ export function Sell() {
       controller.abort();
     };
   }, [address, selectedAddress]);
-  const [publicMatch, setPublicMatch] = useState<any | null>(null);
+  const [publicMatch, setPublicMatch] = useState<{ parcelId: string; situsAddress: string; city: string; state: string; zip: string; livingAreaSqft?: number; yearBuilt?: number; bedrooms?: number; bathrooms?: number; provenance?: { source?: string; certainty?: string } } | null>(null);
+  const [propertyResolutionStatus, setPropertyResolutionStatus] = useState('');
+  const [propertyResolutionMessage, setPropertyResolutionMessage] = useState('');
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [condition, setCondition] = useState<ISellerIntakePayload['propertyCondition'] | ''>('');
   const [occupancy, setOccupancy] = useState<ISellerIntakePayload['occupancyStatus'] | ''>('');
@@ -137,6 +139,9 @@ export function Sell() {
     if (!address.trim()) return;
     setIsSearchingAddress(true);
     setErrorMessage('');
+    setPublicMatch(null);
+    setPropertyResolutionStatus('');
+    setPropertyResolutionMessage('');
     try {
       const res = await fetch('/api/seller/property-lookup', {
         method: 'POST',
@@ -144,18 +149,47 @@ export function Sell() {
         body: JSON.stringify({ address }),
       });
       if (!res.ok) throw new Error('Property lookup unavailable');
-      const data = await res.json() as { found?: boolean; publicRecord?: { parcelId?: string; situsAddress?: string; livingAreaSqft?: number; yearBuilt?: number; provenance?: { source?: string; certainty?: string } } };
+      const data = await res.json() as {
+        found?: boolean;
+        publicRecord?: { parcelId?: string; situsAddress?: string; city?: string; state?: string; zip?: string; livingAreaSqft?: number; yearBuilt?: number; bedrooms?: number; bathrooms?: number; provenance?: { source?: string; certainty?: string } };
+        resolution?: { status?: string; reason?: string };
+      };
       const record = data.found ? data.publicRecord : null;
-      // Never label a demo/heuristic record as a verified county property.
-      const verified = !!record?.parcelId && !!record?.situsAddress &&
+      const verified = !!record?.parcelId && !!record?.situsAddress && !!record?.city && !!record?.state &&
         record.provenance?.certainty === 'KNOWN' &&
         !/demo|heuristic|mock|fixture/i.test(record.provenance?.source || '');
-      setPublicMatch(verified ? record : null);
+      setPublicMatch(verified ? {
+        parcelId: record!.parcelId!,
+        situsAddress: record!.situsAddress!,
+        city: record!.city!,
+        state: record!.state!,
+        zip: record!.zip || '',
+        livingAreaSqft: record!.livingAreaSqft,
+        yearBuilt: record!.yearBuilt,
+        bedrooms: record!.bedrooms,
+        bathrooms: record!.bathrooms,
+        provenance: record!.provenance,
+      } : null);
+      const rawStatus = data.resolution?.status || (verified ? 'matched' : 'provider_unavailable');
+      const status = rawStatus === 'matched' && !verified ? 'provisional' : rawStatus;
+      setPropertyResolutionStatus(status);
+      const messages: Record<string, string> = {
+        matched: 'Official parcel attributes were retrieved. Condition, repairs, and comparable sales still require separate verification.',
+        provisional: 'Only provisional or demo data was returned. It is not treated as a verified county record; OCG will review manually.',
+        ambiguous: 'More than one parcel matches this address. We will not choose a parcel automatically; OCG will confirm it during review.',
+        not_found: 'No exact parcel match was returned. You can continue and OCG will review the address manually.',
+        provider_unavailable: 'The parcel lookup is temporarily unavailable. You can continue; OCG will review the address manually.',
+        unsupported_location: 'The connected parcel source does not cover this location yet. You can continue with manual review.',
+        invalid_address: data.resolution?.reason || 'Please check the property address.',
+      };
+      setPropertyResolutionMessage(messages[status] || messages.provider_unavailable);
       setStep(2);
     } catch {
       // A provider failure should not destroy the seller's progress. The final
       // underwriting endpoint will route the submission to manual review.
       setPublicMatch(null);
+      setPropertyResolutionStatus('provider_unavailable');
+      setPropertyResolutionMessage('The parcel lookup is temporarily unavailable. You can continue; OCG will review the address manually.');
       setStep(2);
     } finally {
       setIsSearchingAddress(false);
@@ -170,8 +204,9 @@ export function Sell() {
 
     const payload: ISellerIntakePayload = {
       address: address.trim(),
-      city: 'Wichita',
-      state: 'KS',
+      city: publicMatch?.city || address.split(',')[1]?.trim() || '',
+      state: publicMatch?.state || (address.match(/\b(KS|Kansas)\b/i) ? 'KS' : ''),
+      zip: publicMatch?.zip || address.match(/\b\d{5}\b/)?.[0] || '',
       propertyCondition: condition,
       occupancyStatus: occupancy,
       sellerSituation: situation,
@@ -251,6 +286,8 @@ export function Sell() {
     setSelectedAddress(false);
     setSuggestions([]);
     setPublicMatch(null);
+    setPropertyResolutionStatus('');
+    setPropertyResolutionMessage('');
     setCondition('');
     setOccupancy('');
     setSituation('');
@@ -325,9 +362,9 @@ export function Sell() {
                   </div>
                   <div className="relative">
                     <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input autoFocus autoComplete="street-address" required value={address} onChange={(e) => { setAddress(e.target.value); setSelectedAddress(false); }} placeholder="Start with house number and street…" role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-controls="seller-address-options" className={`${fieldClass} py-4 pl-12 text-base`} />
+                    <input autoFocus autoComplete="street-address" required value={address} onChange={(e) => { setAddress(e.target.value); setSelectedAddress(false); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} placeholder="Start with house number and street…" role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-controls="seller-address-options" className={`${fieldClass} py-4 pl-12 text-base`} />
                     {suggestions.length > 0 && <div id="seller-address-options" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-auto rounded-xl border border-sky-400/30 bg-[#101c30] p-1 shadow-2xl">
-                      {suggestions.map(value => <button type="button" role="option" aria-selected={false} key={value} onClick={() => { setAddress(value); setSelectedAddress(true); setSuggestions([]); setSuggestionStatus('Address selected'); }} className="flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-sky-500/15 focus:bg-sky-500/15"><MapPin size={16} className="mt-0.5 shrink-0 text-sky-300"/>{value}</button>)}
+                      {suggestions.map(value => <button type="button" role="option" aria-selected={false} key={value} onClick={() => { setAddress(value); setSelectedAddress(true); setSuggestions([]); setSuggestionStatus('Address selected'); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} className="flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-sky-500/15 focus:bg-sky-500/15"><MapPin size={16} className="mt-0.5 shrink-0 text-sky-300"/>{value}</button>)}
                     </div>}
                     <p role="status" className="mt-2 text-xs text-slate-400">{selectedAddress ? 'Address selected. Continue to the next step.' : address.trim().length >= 4 ? suggestionStatus : 'Type a few characters to see matching addresses. You can also enter one manually.'}</p>
                   </div>
@@ -348,7 +385,7 @@ export function Sell() {
                 ) : (
                   <div className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
                     <Clock size={18} className="mt-0.5 shrink-0 text-blue-400" />
-                    <div><div className="text-sm font-bold text-white">Research is continuing</div><div className="mt-1 text-xs text-slate-400">You can keep going. If we cannot verify enough reliable information automatically, OCG will review the property manually rather than guess.</div></div>
+                    <div><div className="text-sm font-bold text-white">{propertyResolutionStatus === 'ambiguous' ? 'Parcel match needs confirmation' : propertyResolutionStatus === 'not_found' ? 'Parcel not found' : propertyResolutionStatus === 'unsupported_location' ? 'Location needs manual review' : 'Research is continuing'}</div><div className="mt-1 text-xs text-slate-400">{propertyResolutionMessage || 'You can keep going. OCG will review missing information manually rather than guess.'}</div></div>
                   </div>
                 )}
 

@@ -30,22 +30,23 @@ export class SellerUnderwritingService {
     const phone = payload.phone || payload.sellerPhone || "";
 
     OcgObservability.log("SELLER_INTAKE_PROCESSING_STARTED", {
-      address: cleanAddress,
+      addressProvided: !!cleanAddress,
       condition: propertyCondition,
       situation: sellerSituation,
       dataMode,
     });
 
-    const [publicRecord, comps] = await Promise.all([
-      WichitaPropertyService.lookupPublicRecord({ address: cleanAddress }),
+    const [propertyResolution, comps] = await Promise.all([
+      WichitaPropertyService.resolvePublicRecord({ address: cleanAddress }),
       this.fetchComparableSales(cleanAddress, dataMode),
     ]);
+    const publicRecord = propertyResolution.status === "matched" ? propertyResolution.record : null;
 
     // Never invent missing property facts in production. Zero values are used only
     // as neutral placeholders in the response contract when the record is unavailable.
     const livingAreaSqft = publicRecord?.livingAreaSqft ?? 0;
     const yearBuilt = publicRecord?.yearBuilt ?? 0;
-    const propertyType = publicRecord?.zoningDescription || "Property details pending verification";
+    const propertyType = publicRecord?.propertyUseDescription || publicRecord?.zoningDescription || "Property details pending verification";
     const totalAppraised = publicRecord?.totalAppraisedValue ?? 0;
     const parcelId = publicRecord?.parcelId;
 
@@ -109,11 +110,18 @@ export class SellerUnderwritingService {
     const result: ISellerOfferResult = {
       id: trackingId,
       createdAt: new Date().toISOString(),
+      propertyResolution: {
+        status: propertyResolution.status,
+        source: propertyResolution.source,
+        retrievedAt: propertyResolution.retrievedAt,
+        ...(propertyResolution.status === "ambiguous" ? { candidateCount: propertyResolution.candidates.length } : {}),
+        ...("reason" in propertyResolution ? { reason: propertyResolution.reason } : {}),
+      },
       property: {
         address: cleanAddress,
-        city: payload.city || "Wichita",
-        state: payload.state || "KS",
-        zip: payload.zip || "",
+        city: publicRecord?.city || payload.city || "",
+        state: publicRecord?.state || payload.state || "",
+        zip: publicRecord?.zip || payload.zip || "",
         parcelId,
         livingAreaSqft,
         yearBuilt,
@@ -122,8 +130,8 @@ export class SellerUnderwritingService {
         totalAppraisedValue: totalAppraised,
       },
       provenance: {
-        recordsSource: publicRecord?.provenance.source || "Live property provider unavailable — manual review required",
-        retrievalTimestamp: new Date().toISOString(),
+        recordsSource: publicRecord?.provenance.source || (propertyResolution.source + " — " + propertyResolution.status),
+        retrievalTimestamp: propertyResolution.retrievedAt,
         certaintyLevel,
       },
       internalUnderwriting: {
@@ -164,7 +172,7 @@ export class SellerUnderwritingService {
   private static async fetchComparableSales(address: string, dataMode: "production" | "development" | "demo"): Promise<IComparableSale[]> {
     if (dataMode === "production") {
       OcgObservability.log("COMPARABLE_PROVIDER_NOT_CONNECTED", {
-        address,
+        addressProvided: !!address,
         behavior: "MANUAL_REVIEW_REQUIRED",
       });
       return [];

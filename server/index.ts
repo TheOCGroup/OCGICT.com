@@ -9,6 +9,7 @@ import { WichitaPropertyService } from "./services/wichitaPropertyService.js";
 import { SellerUnderwritingService } from "./services/sellerUnderwritingService.js";
 import { OcgObservability } from "./services/observability.js";
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -87,8 +88,9 @@ export function createApp() {
     try {
       const address = (req.query.address as string) || "";
       if (!address) return res.status(400).json({ error: "Missing required query parameter: address" });
-      const record = await WichitaPropertyService.lookupPublicRecord({ address });
-      res.json({ record });
+      const resolution = await WichitaPropertyService.resolvePublicRecord({ address });
+      const record = resolution.status === "matched" ? resolution.record : null;
+      res.json({ resolution, record });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -118,7 +120,7 @@ export function createApp() {
     lastSuggestionRequest = Date.now();
     try {
       const url = new URL("https://photon.komoot.io/api/");
-      url.searchParams.set("q", /wichita|kansas|\bks\b/i.test(q) ? q : `${q} Wichita Kansas`);
+      url.searchParams.set("q", q);
       url.searchParams.set("lat", "37.6872");
       url.searchParams.set("lon", "-97.3301");
       url.searchParams.set("limit", "30");
@@ -129,13 +131,16 @@ export function createApp() {
         const house = String(p?.housenumber || "").trim();
         const street = String(p?.street || "").trim();
         const city = String(p?.city || p?.locality || "").trim();
-        const state = String(p?.state || "").trim();
-        if (!house || !street || city.toLowerCase() !== "wichita" || (state && !["Kansas", "KS"].includes(state))) return "";
-        return `${house} ${street}, ${city}, KS`;
+        const state = String(p?.state || "").trim().toUpperCase();
+        const county = String(p?.county || "").trim().toLowerCase();
+        const country = String(p?.country || "").trim().toLowerCase();
+        const zip = String(p?.postcode || "").trim();
+        if (!house || !street || !city || county !== "sedgwick" || !["KS", "KANSAS"].includes(state) || !country.includes("united states")) return "";
+        return house + " " + street + ", " + city + ", KS" + (zip ? " " + zip : "");
       }).filter(Boolean))).filter(candidate => {
         // Do not show unrelated house numbers or streets as address matches.
         const normalized = (value: string) => value.toLowerCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
-        const typed = normalized(q).replace(/\b(wichita|kansas|ks)\b/g, "").trim();
+        const typed = normalized(q).replace(/\b(kansas|ks|sedgwick|county)\b/g, "").trim();
         const match = typed.match(/^(\d+)\s+(.+)$/);
         const proposed = normalized(candidate);
         if (match) {
@@ -157,8 +162,10 @@ export function createApp() {
     try {
       const address = String(req.body?.address || "").trim();
       if (!address) return res.status(400).json({ error: "Missing address" });
-      const publicRecord = await WichitaPropertyService.lookupPublicRecord({ address });
-      res.json({ address, publicRecord, found: !!publicRecord });
+      const resolution = await WichitaPropertyService.resolvePublicRecord({ address });
+      const publicRecord = resolution.status === "matched" ? resolution.record : null;
+      const found = !!publicRecord && publicRecord.provenance.certainty === "KNOWN";
+      res.json({ address, resolution, publicRecord, found });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

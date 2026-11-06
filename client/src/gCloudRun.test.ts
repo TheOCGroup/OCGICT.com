@@ -32,7 +32,7 @@ import { consumeBudget } from '../../server/services/gBudget';
 import { consumeRateLimit } from '../../server/services/gRateLimit';
 import { platformBudgetStore, registerBudgetStoreFactory, hasRegisteredStoreFactory, storeBackend, leadBackend } from '../../server/services/gPlatform';
 import { parseFormSubmission, persistLeadToFirestore } from '../../server/services/gLeadStore';
-import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath, isHealthPath, HEALTH_PATHS, SECURITY_HEADERS } from '../../server/cloudrunRoutes';
+import { trustedClientIp, hasRoute, ROUTE_PATHS, staticFilePath, isHealthPath, HEALTH_PATHS, rateLimitScopeForRequest, SECURITY_HEADERS } from '../../server/cloudrunRoutes';
 
 // An optimistic-concurrency Firestore double: transactions snapshot doc
 // versions at read time and abort (then retry) when a staged doc changed
@@ -138,6 +138,21 @@ describe('Firestore BudgetStore (Cloud Run fallback)', () => {
     expect(r3.retryAfterSeconds).toBeGreaterThan(0);
   });
 
+  it('property lookup and address suggestions have independent per-client limits', async () => {
+    const { db } = makeFirestoreDouble();
+    const store = firestoreBudgetStore(db);
+    const env = { OCG_G_RATELIMIT_PROPERTY_LOOKUP: '2', OCG_G_RATELIMIT_ADDRESS_SUGGESTIONS: '1' };
+    const p1 = await consumeRateLimit(store, 'propertyLookup', '203.0.113.10', env);
+    const p2 = await consumeRateLimit(store, 'propertyLookup', '203.0.113.10', env);
+    const p3 = await consumeRateLimit(store, 'propertyLookup', '203.0.113.10', env);
+    const a1 = await consumeRateLimit(store, 'addressSuggestions', '203.0.113.10', env);
+    const a2 = await consumeRateLimit(store, 'addressSuggestions', '203.0.113.10', env);
+    const otherClient = await consumeRateLimit(store, 'propertyLookup', '203.0.113.11', env);
+    expect([p1.allowed, p2.allowed, p3.allowed]).toEqual([true, true, false]);
+    expect([a1.allowed, a2.allowed]).toEqual([true, false]);
+    expect(otherClient.allowed).toBe(true);
+  });
+
   it('store failure throws so callers fail closed', async () => {
     const { db } = makeFirestoreDouble({ failAll: true });
     const store = firestoreBudgetStore(db);
@@ -183,6 +198,14 @@ describe('Cloud Run harness helpers', () => {
     expect(trustedClientIp(undefined, undefined)).toBe('unknown');
     // A client-forged first entry never wins over the platform-appended last.
     expect(trustedClientIp('1.1.1.1, 203.0.113.44')).toBe('203.0.113.44');
+  });
+
+  it('maps only the public property-resolution methods to their rate-limit scopes', () => {
+    expect(rateLimitScopeForRequest('/api/seller/property-lookup', 'POST')).toBe('propertyLookup');
+    expect(rateLimitScopeForRequest('/api/seller/address-suggestions', 'GET')).toBe('addressSuggestions');
+    expect(rateLimitScopeForRequest('/api/seller/property-lookup', 'GET')).toBeNull();
+    expect(rateLimitScopeForRequest('/api/seller/address-suggestions', 'POST')).toBeNull();
+    expect(rateLimitScopeForRequest('/api/g/chat', 'POST')).toBeNull();
   });
 
   it('routes cover the full certified API surface', () => {
