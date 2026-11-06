@@ -83,30 +83,32 @@ export function Sell() {
   const [leadReference, setLeadReference] = useState('');
   const leadReferenceRef = useRef('');
 
-  // The durable lead record is a Netlify Forms submission (ocg-seller-intake).
-  // A review result is only shown after the lead is actually recorded; the
-  // same reference is reused across retries so duplicates are identifiable.
+  // Cloud Run uses the existing durable /api/g/lead handler, not a POST to
+  // the SPA root. A seller reference is reused on retries for deduplication.
   const recordSellerLead = async (payload: ISellerIntakePayload, trackingId: string, reviewStatus: string) => {
     if (!leadReferenceRef.current) {
       leadReferenceRef.current = `SELLER-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
-    const fields = new URLSearchParams({
-      'form-name': 'ocg-seller-intake',
-      name: payload.fullName,
-      email: payload.email,
-      phone: payload.phone,
-      address: payload.address,
-      details: JSON.stringify(payload).slice(0, 8000),
-      trackingId,
-      reviewStatus,
-      reference: leadReferenceRef.current,
-    });
-    const response = await fetch('/', {
+    const response = await fetch('/api/g/lead', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: fields.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: payload.fullName,
+        email: payload.email,
+        phone: payload.phone,
+        address: payload.address,
+        role: 'seller',
+        consent: true,
+        reference: leadReferenceRef.current,
+        summary: JSON.stringify({ trackingId, reviewStatus, propertyCondition: payload.propertyCondition,
+          occupancyStatus: payload.occupancyStatus, sellerSituation: payload.sellerSituation,
+          desiredTimeline: payload.desiredTimeline, primaryPriority: payload.primaryPriority,
+          sellerNotes: payload.sellerNotes }).slice(0, 4000),
+      }),
     });
     if (!response.ok) throw new Error('Lead could not be recorded');
+    const receipt = await response.json();
+    if (receipt?.ok !== true || receipt?.status !== 'recorded') throw new Error('Lead receipt not confirmed');
     setLeadReference(leadReferenceRef.current);
   };
 
