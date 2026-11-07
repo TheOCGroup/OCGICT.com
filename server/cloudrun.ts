@@ -334,7 +334,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         jsonReply(res, 503, { error: "Lead review is temporarily unavailable." });
       }
       return;
-    }    // Authenticated, but the admin data layer is deliberately disabled
+    }
+    // All other admin data routes remain disabled.
     // until a separate founder-approved activation (P0 §3): no endpoint
     // serves administrative data yet.
     jsonReply(res, 404, { error: "Not found." });

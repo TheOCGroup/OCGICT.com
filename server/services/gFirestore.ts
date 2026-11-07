@@ -77,6 +77,11 @@ async function init(): Promise<GFirestore> {
       runTransaction: (update) => db.runTransaction(update as never),
     },
     leads: {
+      listRecentLeads: async (limit: number) => {
+        const bounded = Math.min(Math.max(Math.trunc(limit), 1), 25);
+        const snap = await db.collection(leadsCollection).orderBy("receivedAt", "desc").limit(bounded).get();
+        return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() as Record<string, unknown> }));
+      },
       addLead: async (record: Record<string, unknown>) => {
         await db.collection(leadsCollection).add({
           ...record,
