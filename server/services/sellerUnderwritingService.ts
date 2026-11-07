@@ -141,7 +141,7 @@ export class SellerUnderwritingService {
       targetStrategy: "Direct Sale / Liquidation",
       liquidityTier: "Equity / Real Estate Only",
       timeline: desiredTimeline,
-      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Notes: ${payload.sellerNotes || "None"}.`,
+      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Reported repairs: ${Array.isArray(payload.knownRepairs) ? payload.knownRepairs.filter((r: unknown) => typeof r === "string").slice(0, 12).join(", ") || "None" : "None"}. Notes: ${String(payload.sellerNotes || "None").slice(0, 1000)}.`,
     });
 
     const result: ISellerOfferResult = {
