@@ -300,6 +300,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
   if (pathname.startsWith("/api/admin/")) {
+    res.setHeader("Cache-Control", "no-store");
     if (!isAdminAuthenticated(req.headers.cookie, env, Date.now())) {
       jsonReply(res, 401, { error: "Unauthorized." });
       return;

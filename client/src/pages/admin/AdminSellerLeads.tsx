@@ -13,7 +13,7 @@ export default function AdminSellerLeads() {
     setLoading(true); setError("");
     try {
       const response = await fetch("/api/admin/seller-leads", { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) throw new Error(response.status === 404 ? "Seller review is not activated on this deployment." : "Seller records are unavailable. Please try again.");
+      if (!response.ok) throw new Error(response.status === 401 ? "Your administrator session has expired. Sign in again." : response.status === 404 ? "Seller review is not activated on this deployment." : "Seller records are unavailable. Please try again.");
       const data = await response.json() as { leads?: Lead[] };
       setLeads(Array.isArray(data.leads) ? data.leads : []);
     } catch (e) { setLeads([]); setError(e instanceof Error ? e.message : "Unable to load seller records."); }
