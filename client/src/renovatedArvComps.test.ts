@@ -21,6 +21,7 @@ describe("renovated ARV comparable eligibility", () => {
       { ...base, id: "far", distanceMiles: 2 },
       { ...base, id: "future", saleDate: "2026-12-01" },
       { ...base, id: "invalid", salePrice: -10 },
+      { ...base, id: "inconsistent", salePrice: 250000, pricePerSqft: 900 },
     ];
     expect(selectRenovatedArvComps(variants, now)).toEqual([]);
   });

@@ -35,6 +35,7 @@ export function selectRenovatedArvComps(comps: IComparableSale[], asOf: Date = n
       Number.isFinite(comp.salePrice) && comp.salePrice > 0 &&
       Number.isFinite(comp.sqft) && comp.sqft > 0 &&
       Number.isFinite(comp.pricePerSqft) && comp.pricePerSqft > 0 &&
+      Math.abs(comp.pricePerSqft - comp.salePrice / comp.sqft) <= Math.max(1, comp.salePrice / comp.sqft * 0.01) &&
       Number.isFinite(comp.similarityScore) && comp.similarityScore > 0 && comp.similarityScore <= 1;
   });
 }
