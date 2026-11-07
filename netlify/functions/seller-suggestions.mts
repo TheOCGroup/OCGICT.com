@@ -1,4 +1,5 @@
 import { jsonHeaders } from "./_forms.js";
+import { lookupSedgwickParcel } from "../../server/services/sedgwickParcelProvider.js";
 
 /**
  * GET /api/seller/address-suggestions.
@@ -63,6 +64,16 @@ export default async function handler(request: Request): Promise<Response> {
       return typed.split(" ").filter(Boolean).every((word) => proposed.includes(word));
     }).slice(0, 6);
 
+    // Photon is a geocoder, not a parcel address directory. For a complete
+    // seller-entered street address, perform one exact GIS lookup when Photon
+    // has no usable house-number results. Never enumerate parcel addresses.
+    if (suggestions.length === 0 && process.env.OCGICT_SEDGWICK_GIS_ENABLED === "true"
+      && /^\d+[a-z]?\s+(?:[nsew]\s+)?[a-z0-9 .'-]+\s+(?:st|street|ave|avenue|rd|road|dr|drive|ln|lane|ct|court|blvd|boulevard|pl|place|ter|terrace|cir|circle)\b/i.test(q)) {
+      const exact = await lookupSedgwickParcel(q);
+      if (exact.status === "matched") {
+        suggestions.push(`${exact.record.situsAddress}, ${exact.record.city}, KS${exact.record.zip ? " " + exact.record.zip : ""}`);
+      }
+    }
     if (cache.size > 150) cache.clear();
     cache.set(key, { results: suggestions, expires: Date.now() + 120000 });
     return new Response(JSON.stringify({ suggestions }), { status: 200, headers: jsonHeaders });
