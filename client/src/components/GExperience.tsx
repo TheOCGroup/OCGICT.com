@@ -211,6 +211,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
   const [leadAddress, setLeadAddress] = useState("");
   const [leadConsent, setLeadConsent] = useState(false);
   const [leadStatus, setLeadStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [leadProgress, setLeadProgress] = useState("");
   const [leadReference, setLeadReference] = useState("");
   const leadReferenceRef = useRef("");
 
@@ -219,16 +220,58 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       leadReferenceRef.current = `G-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     }
     setLeadStatus("idle");
+    setLeadProgress("");
     setLeadOpen(true);
   };
 
   const submitLead = async () => {
     if (leadStatus === "sending") return;
     setLeadStatus("sending");
-    const summary = messages.slice(-12)
+    let propertyEvidence = "";
+    if (leadRole === "seller" && leadAddress.trim()) {
+      setLeadProgress("Checking the property record…");
+      try {
+        const lookup = await fetch("/api/seller/property-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: leadAddress.trim() }),
+        });
+        const result = await lookup.json().catch(() => ({})) as {
+          found?: boolean;
+          publicRecord?: {
+            parcelId?: string; situsAddress?: string; city?: string; state?: string; zip?: string;
+            yearBuilt?: number; livingAreaSqft?: number; bedrooms?: number; bathrooms?: number;
+            totalAppraisedValue?: number; provenance?: { source?: string; certainty?: string };
+          };
+          resolution?: { status?: string; source?: string; retrievedAt?: string; candidates?: unknown[] };
+        };
+        const status = result.resolution?.status || (result.found ? "matched" : "provider_unavailable");
+        propertyEvidence = "Property lookup status: " + status + ".";
+        if (result.resolution?.source) propertyEvidence += " Source: " + result.resolution.source + ".";
+        if (result.resolution?.retrievedAt) propertyEvidence += " Retrieved: " + result.resolution.retrievedAt + ".";
+        if (status === "ambiguous") propertyEvidence += " Candidate count: " + (result.resolution?.candidates?.length || 0) + ".";
+        if (result.found && result.publicRecord?.provenance?.certainty === "KNOWN") {
+          const record = result.publicRecord;
+          propertyEvidence += " Verified parcel attributes: parcel " + (record.parcelId || "unavailable") +
+            "; situs " + (record.situsAddress || leadAddress.trim()) +
+            "; city/state/ZIP " + [record.city, record.state, record.zip].filter(Boolean).join(" ") +
+            "; year built " + (record.yearBuilt ?? "not supplied") +
+            "; living area " + (record.livingAreaSqft ?? "not supplied") + " sq ft" +
+            "; bedrooms " + (record.bedrooms ?? "not supplied") +
+            "; bathrooms " + (record.bathrooms ?? "not supplied") +
+            "; appraised value " + (record.totalAppraisedValue ?? "not supplied") + ".";
+        }
+      } catch {
+        propertyEvidence = "Property lookup status: provider_unavailable. OCG must verify the address manually.";
+      }
+    }
+    setLeadProgress("Saving your request to OCG…");
+
+    const conversationSummary = messages.slice(-12)
       .map(m => `${m.sender === "user" ? "Visitor" : "G"}: ${m.text.slice(0, 500)}`)
       .join("\n")
-      .slice(0, 4000);
+      .slice(0, 3000);
+    const summary = [conversationSummary, propertyEvidence].filter(Boolean).join("\n\n").slice(0, 4000);
     try {
       const res = await fetch("/api/g/lead", {
         method: "POST",
@@ -248,8 +291,10 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
       if (!res.ok || !data.ok) throw new Error(data.error || "We could not save your request.");
       setLeadReference(data.reference || leadReferenceRef.current);
       setLeadStatus("sent");
+      setLeadProgress("");
     } catch {
       setLeadStatus("error");
+      setLeadProgress("");
     }
   };
 
@@ -890,7 +935,7 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
         </div>
         <label className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-300">
           <input type="checkbox" checked={leadConsent} onChange={e => setLeadConsent(e.target.checked)} className="mt-0.5 accent-sky-400" />
-          <span>I authorize The OC Group to receive my information and the conversation summary, and to contact me about my inquiry. *</span>
+          <span>I authorize The OC Group to receive my information and conversation summary, check public parcel records for the property address I provide, and contact me about my inquiry. *</span>
         </label>
         {leadStatus === "error" && (
           <p role="alert" className="mt-2 text-xs text-amber-300">
@@ -898,13 +943,14 @@ export function GExperience({ embedded = false, active = true }: { embedded?: bo
             <a href={emailHref} className="underline">email The OC Group</a> instead.
           </p>
         )}
+        {leadStatus === "sending" && leadProgress && <p role="status" aria-live="polite" className="mt-2 text-xs text-sky-200">{leadProgress}</p>}
         <button
           type="button"
           onClick={submitLead}
           disabled={leadStatus === "sending" || !leadName.trim() || (!leadEmail.trim() && !leadPhone.trim()) || !leadConsent}
           className="mt-3 w-full rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-40"
         >
-          {leadStatus === "sending" ? "Sending to OCG…" : "Send my request to OCG"}
+          {leadStatus === "sending" ? (leadProgress || "Sending to OCG…") : "Send my request to OCG"}
         </button>
       </div>
     );

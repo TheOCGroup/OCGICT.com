@@ -16,6 +16,42 @@ function getDataMode(): "production" | "development" | "demo" {
   return "production";
 }
 
+/** Seller-visible opening offer; the 70% acquisition ceiling remains private. */
+export function calculateSellerOpeningOffer(arv: number, rehab: number, ceiling: number): number {
+  if (![arv, rehab, ceiling].every(Number.isFinite) || arv <= 0 || rehab < 0 || ceiling <= 0) return 0;
+  return Math.max(0, Math.min(ceiling, Math.floor((arv * 0.65 - rehab) / 1000) * 1000));
+}
+
+/** Eligible ARV comps: documented renovated condition, close to subject, sold in last 6 months. */
+export function selectRenovatedArvComps(comps: IComparableSale[], asOf: Date = new Date()): IComparableSale[] {
+  if (!Number.isFinite(asOf.getTime())) return [];
+  // Clamp the day when subtracting calendar months: August 31 minus six months
+  // must land on February 28/29, not overflow into March.
+  const targetMonthStart = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - 6, 1));
+  const lastDay = new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth() + 1, 0)).getUTCDate();
+  const cutoff = new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), Math.min(asOf.getUTCDate(), lastDay), asOf.getUTCHours(), asOf.getUTCMinutes(), asOf.getUTCSeconds(), asOf.getUTCMilliseconds()));
+  return comps.filter((comp) => {
+    const soldAt = /^\d{4}-\d{2}-\d{2}$/.test(comp.saleDate) ? new Date(`${comp.saleDate}T00:00:00Z`) : new Date(NaN);
+    return comp.renovatedConditionVerified === true &&
+      Number.isFinite(soldAt.getTime()) && soldAt >= cutoff && soldAt <= asOf &&
+      Number.isFinite(comp.distanceMiles) && comp.distanceMiles >= 0 && comp.distanceMiles <= 1 &&
+      Number.isFinite(comp.salePrice) && comp.salePrice > 0 &&
+      Number.isFinite(comp.sqft) && comp.sqft > 0 &&
+      Number.isFinite(comp.pricePerSqft) && comp.pricePerSqft > 0 &&
+      Math.abs(comp.pricePerSqft - comp.salePrice / comp.sqft) <= Math.max(1, comp.salePrice / comp.sqft * 0.01) &&
+      Number.isFinite(comp.similarityScore) && comp.similarityScore > 0 && comp.similarityScore <= 1;
+  });
+}
+/** Age of the oldest eligible closed sale, so freshness is never a fabricated constant. */
+export function oldestComparableAgeDays(comps: IComparableSale[], asOf: Date = new Date()): number {
+  if (!comps.length || !Number.isFinite(asOf.getTime())) return 9999;
+  const ages = comps.map((comp) => {
+    const soldAt = /^\d{4}-\d{2}-\d{2}$/.test(comp.saleDate) ? new Date(`${comp.saleDate}T00:00:00Z`) : new Date(NaN);
+    return Number.isFinite(soldAt.getTime()) && soldAt <= asOf
+      ? Math.ceil((asOf.getTime() - soldAt.getTime()) / 86400000) : 9999;
+  });
+  return Math.max(...ages);
+}
 export class SellerUnderwritingService {
   public static async processSellerIntake(payload: ISellerIntakePayload & any): Promise<ISellerOfferResult> {
     const startTime = Date.now();
@@ -30,26 +66,28 @@ export class SellerUnderwritingService {
     const phone = payload.phone || payload.sellerPhone || "";
 
     OcgObservability.log("SELLER_INTAKE_PROCESSING_STARTED", {
-      address: cleanAddress,
+      addressProvided: !!cleanAddress,
       condition: propertyCondition,
       situation: sellerSituation,
       dataMode,
     });
 
-    const [publicRecord, comps] = await Promise.all([
-      WichitaPropertyService.lookupPublicRecord({ address: cleanAddress }),
+    const [propertyResolution, comps] = await Promise.all([
+      WichitaPropertyService.resolvePublicRecord({ address: cleanAddress }),
       this.fetchComparableSales(cleanAddress, dataMode),
     ]);
+    const publicRecord = propertyResolution.status === "matched" ? propertyResolution.record : null;
 
     // Never invent missing property facts in production. Zero values are used only
     // as neutral placeholders in the response contract when the record is unavailable.
     const livingAreaSqft = publicRecord?.livingAreaSqft ?? 0;
     const yearBuilt = publicRecord?.yearBuilt ?? 0;
-    const propertyType = publicRecord?.zoningDescription || "Property details pending verification";
+    const propertyType = publicRecord?.propertyUseDescription || publicRecord?.zoningDescription || "Property details pending verification";
     const totalAppraised = publicRecord?.totalAppraisedValue ?? 0;
     const parcelId = publicRecord?.parcelId;
 
-    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(comps, livingAreaSqft);
+    const eligibleComps = selectRenovatedArvComps(comps);
+    const { estimatedArv, arvConfidence } = this.calculateEstimatedArv(eligibleComps, livingAreaSqft);
 
     const rehab = livingAreaSqft > 0
       ? this.calculateRehabScope({ ...payload, propertyCondition, sellerSituation, desiredTimeline, primaryPriority }, livingAreaSqft, yearBuilt)
@@ -63,19 +101,19 @@ export class SellerUnderwritingService {
 
     const probateOrLegalFlag = ["probate", "inherited", "estate"].some((term) => sellerSituation.toLowerCase().includes(term));
     const propertyMatchConfidence = publicRecord ? (dataMode === "production" ? 0.95 : 0.65) : 0;
-    const compQualityScore = comps.length >= 3 ? (dataMode === "production" ? 0.88 : 0.60) : comps.length > 0 ? 0.45 : 0;
+    const compQualityScore = eligibleComps.length >= 3 ? (dataMode === "production" ? 0.88 : 0.60) : eligibleComps.length > 0 ? 0.45 : 0;
 
     const confidenceGate = this.evaluateConfidenceGate({
       propertyMatchConfidence,
       compQualityScore,
       arvConfidence,
       repairEstimateConfidence: rehab.repairConfidence,
-      dataFreshnessDays: dataMode === "production" && comps.length > 0 ? 45 : 9999,
+      dataFreshnessDays: dataMode === "production" ? oldestComparableAgeDays(eligibleComps) : 9999,
       ownershipConsistency: !probateOrLegalFlag,
       structuralRiskDetected: rehab.structuralRiskDetected,
       probateOrLegalFlag,
       hasPublicRecord: !!publicRecord,
-      liveCompsAvailable: dataMode === "production" && comps.length >= 3,
+      liveCompsAvailable: dataMode === "production" && eligibleComps.length >= 3,
       productionMode: dataMode === "production",
     });
 
@@ -103,17 +141,24 @@ export class SellerUnderwritingService {
       targetStrategy: "Direct Sale / Liquidation",
       liquidityTier: "Equity / Real Estate Only",
       timeline: desiredTimeline,
-      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Notes: ${payload.sellerNotes || "None"}.`,
+      summary: `Seller property intake for ${cleanAddress}. Status: ${sellerOfferPresentation.status}. Condition: ${propertyCondition}. Priority: ${primaryPriority}. Reported repairs: ${Array.isArray(payload.knownRepairs) ? payload.knownRepairs.filter((r: unknown) => typeof r === "string").slice(0, 12).join(", ") || "None" : "None"}. Notes: ${String(payload.sellerNotes || "None").slice(0, 1000)}.`,
     });
 
     const result: ISellerOfferResult = {
       id: trackingId,
       createdAt: new Date().toISOString(),
+      propertyResolution: {
+        status: propertyResolution.status,
+        source: propertyResolution.source,
+        retrievedAt: propertyResolution.retrievedAt,
+        ...(propertyResolution.status === "ambiguous" ? { candidateCount: propertyResolution.candidates.length } : {}),
+        ...("reason" in propertyResolution ? { reason: propertyResolution.reason } : {}),
+      },
       property: {
         address: cleanAddress,
-        city: payload.city || "Wichita",
-        state: payload.state || "KS",
-        zip: payload.zip || "",
+        city: publicRecord?.city || payload.city || "",
+        state: publicRecord?.state || payload.state || "",
+        zip: publicRecord?.zip || payload.zip || "",
         parcelId,
         livingAreaSqft,
         yearBuilt,
@@ -122,8 +167,8 @@ export class SellerUnderwritingService {
         totalAppraisedValue: totalAppraised,
       },
       provenance: {
-        recordsSource: publicRecord?.provenance.source || "Live property provider unavailable — manual review required",
-        retrievalTimestamp: new Date().toISOString(),
+        recordsSource: publicRecord?.provenance.source || (propertyResolution.source + " — " + propertyResolution.status),
+        retrievalTimestamp: propertyResolution.retrievedAt,
         certaintyLevel,
       },
       internalUnderwriting: {
@@ -136,7 +181,7 @@ export class SellerUnderwritingService {
       },
       sellerOfferPresentation,
       confidenceGate,
-      comparableSales: comps,
+      comparableSales: eligibleComps,
       piperHandoff: {
         outboxTrackingId: trackingId,
         status: "READY_FOR_PIPER",
@@ -164,7 +209,7 @@ export class SellerUnderwritingService {
   private static async fetchComparableSales(address: string, dataMode: "production" | "development" | "demo"): Promise<IComparableSale[]> {
     if (dataMode === "production") {
       OcgObservability.log("COMPARABLE_PROVIDER_NOT_CONNECTED", {
-        address,
+        addressProvided: !!address,
         behavior: "MANUAL_REVIEW_REQUIRED",
       });
       return [];
@@ -310,6 +355,10 @@ export class SellerUnderwritingService {
       params.hasPublicRecord &&
       params.liveCompsAvailable &&
       !params.structuralRiskDetected &&
+      !params.probateOrLegalFlag &&
+      params.ownershipConsistency &&
+      params.propertyMatchConfidence >= 0.85 &&
+      params.dataFreshnessDays <= 180 &&
       compositeScore >= 0.82 &&
       params.compQualityScore >= 0.80 &&
       params.arvConfidence >= 0.80 &&
@@ -350,14 +399,16 @@ export class SellerUnderwritingService {
     const disclaimer = "This is a non-binding preliminary property review. Any preliminary offer is subject to property walkthrough, verification of condition and property data, title review, and mutual execution of a separate written purchase agreement.";
 
     if (params.confidenceGate.tier === "HIGH_CONFIDENCE" && params.internalMaoCeiling > 0) {
-      const minOffer = Math.round((params.internalMaoCeiling * 0.96) / 1000) * 1000;
-      const maxOffer = Math.round((params.internalMaoCeiling * 1.03) / 1000) * 1000;
+      // Founder-approved opening: 65% of renovated ARV minus rehab. The 70%
+      // internal MAO is a hard ceiling, never a seller-facing offer range.
+      const openingOffer = calculateSellerOpeningOffer(params.estimatedArv, params.estimatedRehabBudget, params.internalMaoCeiling);
+      if (openingOffer <= 0) return this.buildOfferPresentation({ ...params, confidenceGate: { ...params.confidenceGate, tier: "LOW_CONFIDENCE" } });
       return {
         status: "PRELIMINARY_OFFER_AVAILABLE",
         headline: "Your Preliminary OCG Offer Range",
-        offerRangeMin: minOffer,
-        offerRangeMax: maxOffer,
-        singlePointEstimate: params.internalMaoCeiling,
+        offerRangeMin: openingOffer,
+        offerRangeMax: openingOffer,
+        singlePointEstimate: openingOffer,
         displayTerms: { isBinding: false, asIsCondition: true, commissionFree: true, subjectToWalkthrough: true, subjectToTitleReview: true },
         explanation: {
           whatOcgReviewed: ["Verified property record", "Live comparable-sale evidence", "Reported/verified condition inputs", "OCG acquisition formula"],
