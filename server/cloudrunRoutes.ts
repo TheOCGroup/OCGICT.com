@@ -21,6 +21,16 @@ export const ROUTE_PATHS = [
   "/api/marketplace/listings",
 ] as const;
 
+export type CloudRunRateLimitScope = "propertyLookup" | "addressSuggestions";
+
+/** Rate-limit public property-resolution routes at the Cloud Run host layer.
+ * Netlify function config declarations are not enforced by this custom host. */
+export function rateLimitScopeForRequest(pathname: string, method: string): CloudRunRateLimitScope | null {
+  if (pathname === "/api/seller/property-lookup" && method === "POST") return "propertyLookup";
+  if (pathname === "/api/seller/address-suggestions" && method === "GET") return "addressSuggestions";
+  return null;
+}
+
 /**
  * Client-side page routes the SPA actually defines (client/src/App.tsx),
  * used to answer an honest status for unknown paths: a known page route

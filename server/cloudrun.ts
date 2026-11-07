@@ -15,8 +15,8 @@ import sellerOffer from "../netlify/functions/seller-offer.mts";
 import sellerSuggestions from "../netlify/functions/seller-suggestions.mts";
 import marketplaceListings from "../netlify/functions/marketplace-listings.mts";
 import { registerBudgetStoreFactory, platformBudgetStore, storeBackend, leadBackend } from "./services/gPlatform.js";
-import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath, isKnownPagePath, cacheControlFor, SECURITY_HEADERS } from "./cloudrunRoutes.js";
-import { getGFirestore } from "./services/gFirestore.js";
+import { ROUTE_PATHS, trustedClientIp, staticFilePath, isHealthPath, isKnownPagePath, cacheControlFor, rateLimitScopeForRequest, SECURITY_HEADERS } from "./cloudrunRoutes.js";
+import { getGFirestore, resolveFirestoreCollectionName } from "./services/gFirestore.js";
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, evaluateFormIntake, persistLeadToFirestore, FORM_LIMITS } from "./services/gLeadStore.js";
 import { consumeRateLimit } from "./services/gRateLimit.js";
@@ -310,6 +310,23 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  const rateScope = rateLimitScopeForRequest(pathname, req.method || "");
+  if (rateScope) {
+    try {
+      const clientId = trustedClientIp(req.headers["x-forwarded-for"], req.socket.remoteAddress);
+      const decision = await consumeRateLimit(await platformBudgetStore(), rateScope, clientId, env);
+      if (!decision.allowed) {
+        res.writeHead(429, { "Content-Type": "application/json", "Retry-After": String(decision.retryAfterSeconds) });
+        res.end(JSON.stringify({ error: "Too many property lookup requests. Please try again shortly." }));
+        return;
+      }
+    } catch {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Property lookup is temporarily unavailable." }));
+      return;
+    }
+  }
+
   const handler = routeFor(pathname);
   if (handler) {
     const body = await readBody(req);
@@ -357,7 +374,7 @@ export async function main(): Promise<void> {
   if (storeBackend(env) === "firestore" || leadBackend(env) === "firestore") {
     const gf = await getGFirestore();
     if (storeBackend(env) === "firestore") {
-      registerBudgetStoreFactory(async () => firestoreBudgetStore(gf.counters));
+      registerBudgetStoreFactory(async () => firestoreBudgetStore(gf.counters, resolveFirestoreCollectionName(env.OCG_FIRESTORE_COUNTERS_COLLECTION, "g-counters")));
     }
     // Marketplace listings read source (empty until listing documents
     // exist — the endpoint and page handle that state by design).

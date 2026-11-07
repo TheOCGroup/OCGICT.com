@@ -3,8 +3,8 @@ import { jsonError, jsonHeaders, readGuardedJson, trimmedString } from "./_forms
 
 /**
  * POST /api/seller/property-lookup — Netlify edition of the Express route.
- * Production mode has no connected county provider, so lookups honestly
- * return `found: false` and the seller flow routes to human review.
+ * Returns an explicit resolution state. The Sedgwick GIS provider is
+ * production-gated; disabled, ambiguous, and failed lookups route to review.
  */
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") return jsonError(405, "Method not allowed.");
@@ -13,8 +13,10 @@ export default async function handler(request: Request): Promise<Response> {
   const address = trimmedString(parsed.body.address, 300);
   if (!address) return jsonError(400, "Missing address");
   try {
-    const publicRecord = await WichitaPropertyService.lookupPublicRecord({ address });
-    return new Response(JSON.stringify({ address, publicRecord, found: !!publicRecord }), {
+    const resolution = await WichitaPropertyService.resolvePublicRecord({ address });
+    const publicRecord = resolution.status === "matched" ? resolution.record : null;
+    const found = !!publicRecord && publicRecord.provenance.certainty === "KNOWN";
+    return new Response(JSON.stringify({ address, resolution, publicRecord, found }), {
       status: 200,
       headers: jsonHeaders,
     });

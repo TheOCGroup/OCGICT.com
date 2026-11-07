@@ -1,15 +1,15 @@
 import { SellerUnderwritingService } from "../../server/services/sellerUnderwritingService.js";
+import { toPublicSellerOffer } from "../../server/services/sellerPublicResponse.js";
 import { jsonError, jsonHeaders, readGuardedJson, trimmedString } from "./_forms.js";
 
 /**
  * POST /api/seller/preliminary-offer — Netlify edition of the Express route.
  *
- * Runs the same underwriting service as the server build. In production data
- * mode the property provider and comparable-sales provider are not connected,
- * so the service honestly routes to human review instead of inventing an
- * offer. The durable lead record is created by the client submitting the
- * `ocg-seller-intake` Netlify form with this result's tracking ID; this
- * function never claims a lead was saved.
+ * Runs the same underwriting service as the server build. The property
+ * provider is separately gated; comparable-sales evidence remains disconnected,
+ * so production stays in human review unless all evidence gates are met. The
+ * client separately records the durable seller lead through `/api/g/lead`;
+ * this function never claims a lead was saved.
  */
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") return jsonError(405, "Method not allowed.");
@@ -26,7 +26,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     const result = await SellerUnderwritingService.processSellerIntake({ ...payload, address, fullName, email, phone });
-    return new Response(JSON.stringify(result), { status: 200, headers: jsonHeaders });
+    return new Response(JSON.stringify(toPublicSellerOffer(result)), { status: 200, headers: jsonHeaders });
   } catch {
     return jsonError(500, "The property review could not be completed.");
   }
