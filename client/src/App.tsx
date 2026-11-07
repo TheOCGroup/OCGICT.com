@@ -1,4 +1,4 @@
-﻿import { MotionConfig } from "framer-motion";
+import { MotionConfig } from "framer-motion";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -27,6 +27,7 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import AdminListings from "./pages/admin/AdminListings";
 import AdminListingForm from "./pages/admin/AdminListingForm";
 import AdminSubmissions from "./pages/admin/AdminSubmissions";
+import AdminSellerLeads from "./pages/admin/AdminSellerLeads";
 import { useEffect } from "react";
 
 function AdminGuard({ component: Component }: { component: React.ComponentType }) {
@@ -60,7 +61,8 @@ function Router() {
       <Route path="/admin">{() => <AdminGuard component={AdminListings} />}</Route>
       <Route path="/admin/listings/new">{() => <AdminGuard component={AdminListingForm} />}</Route>
       <Route path="/admin/listings/:id/edit">{() => <AdminGuard component={AdminListingForm} />}</Route>
-      <Route path="/admin/submissions">{() => <AdminGuard component={AdminSubmissions} />}</Route>
+      <Route path="/admin/seller-leads">{() => <AdminGuard component={AdminSellerLeads} />}</Route>
+        <Route path="/admin/submissions">{() => <AdminGuard component={AdminSubmissions} />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
