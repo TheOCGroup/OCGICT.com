@@ -317,7 +317,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         const rows = await store.listRecentLeads(25);
         const leads = projectSellerLeadRows(rows);
         res.setHeader("Cache-Control", "no-store");
-        jsonReply(res, 200, { leads, limit: 25, hasMore: rows.length === 25 });
+        jsonReply(res, 200, { leads, limit: 25, hasMore: false });
       } catch {
         jsonReply(res, 503, { error: "Lead review is temporarily unavailable." });
       }
