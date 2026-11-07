@@ -1,4 +1,5 @@
 import { SellerUnderwritingService } from "../../server/services/sellerUnderwritingService.js";
+import { toPublicSellerOffer } from "../../server/services/sellerPublicResponse.js";
 import { jsonError, jsonHeaders, readGuardedJson, trimmedString } from "./_forms.js";
 
 /**
@@ -25,7 +26,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     const result = await SellerUnderwritingService.processSellerIntake({ ...payload, address, fullName, email, phone });
-    return new Response(JSON.stringify(result), { status: 200, headers: jsonHeaders });
+    return new Response(JSON.stringify(toPublicSellerOffer(result)), { status: 200, headers: jsonHeaders });
   } catch {
     return jsonError(500, "The property review could not be completed.");
   }

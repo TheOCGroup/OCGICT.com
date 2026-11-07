@@ -1,3 +1,4 @@
+import type { PublicSellerOffer } from "../../../server/services/sellerPublicResponse";
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -15,7 +16,7 @@ import {
   CalendarDays,
   Phone,
 } from 'lucide-react';
-import { ISellerIntakePayload, ISellerOfferResult } from '../../../shared/contracts';
+import { ISellerIntakePayload } from '../../../shared/contracts';
 
 type SellerAction = 'ACCEPT_PRELIMINARY_OFFER' | 'COUNTEROFFER' | 'REQUEST_CALL' | 'REQUEST_WALKTHROUGH';
 
@@ -97,7 +98,7 @@ export function Sell() {
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [offerResult, setOfferResult] = useState<ISellerOfferResult | null>(null);
+  const [offerResult, setOfferResult] = useState<PublicSellerOffer | null>(null);
   const [counterAmount, setCounterAmount] = useState('');
   const [preferredWindow, setPreferredWindow] = useState('');
   const [actionPending, setActionPending] = useState<SellerAction | null>(null);
@@ -221,7 +222,7 @@ export function Sell() {
       preferredContact: 'Phone',
     };
 
-    let result: ISellerOfferResult | null = null;
+    let result: PublicSellerOffer | null = null;
     try {
       const res = await fetch('/api/seller/preliminary-offer', {
         method: 'POST',

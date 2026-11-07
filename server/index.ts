@@ -7,6 +7,7 @@ import { HunterAdapter, VictorAdapter } from "./services/systemAdapters.js";
 import { PiperQueueAdapter, SellerActionType } from "./services/piperAdapter.js";
 import { WichitaPropertyService } from "./services/wichitaPropertyService.js";
 import { SellerUnderwritingService } from "./services/sellerUnderwritingService.js";
+import { toPublicSellerOffer } from "./services/sellerPublicResponse.js";
 import { OcgObservability } from "./services/observability.js";
 
 
@@ -177,7 +178,7 @@ export function createApp() {
       if (!payload?.address) return res.status(400).json({ error: "Missing required seller intake payload: address" });
       if (!payload?.fullName || !payload?.email || !payload?.phone) return res.status(400).json({ error: "Name, email, and phone are required" });
       const offerResult = await SellerUnderwritingService.processSellerIntake(payload);
-      res.json(offerResult);
+      res.json(toPublicSellerOffer(offerResult));
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
