@@ -20,6 +20,7 @@ import { getGFirestore, resolveFirestoreCollectionName } from "./services/gFires
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, evaluateFormIntake, persistLeadToFirestore, FORM_LIMITS } from "./services/gLeadStore.js";
 import { consumeRateLimit } from "./services/gRateLimit.js";
+import { projectSellerLeadRows } from "./services/sellerLeadReview.js";
 import { registerListingsSource } from "./services/gListingsSource.js";
 import {
   adminAuthConfig,
@@ -314,20 +315,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         const store = (await getGFirestore()).leads;
         if (!store.listRecentLeads) throw new Error("lead listing not available");
         const rows = await store.listRecentLeads(25);
-        const leads = rows.filter((row) => ["ocg-seller-intake", "ocg-seller-action", "ocg-g-lead"].includes(String(row.data.form || "")))
-          .map((row) => {
-            const fields = (row.data.fields || {}) as Record<string, unknown>;
-            const safe = (key: string, max: number) => typeof fields[key] === "string" ? String(fields[key]).slice(0, max) : "";
-            return {
-              id: row.id,
-              form: String(row.data.form),
-              receivedAt: row.data.receivedAt && typeof (row.data.receivedAt as { toDate?: () => Date }).toDate === "function"
-                ? (row.data.receivedAt as { toDate: () => Date }).toDate().toISOString() : null,
-              reference: safe("reference", 80), name: safe("name", 150),
-              address: safe("address", 240), email: safe("email", 254), phone: safe("phone", 40),
-              action: safe("action", 40), offerId: safe("offerId", 80),
-            };
-          });
+        const leads = projectSellerLeadRows(rows);
         res.setHeader("Cache-Control", "no-store");
         jsonReply(res, 200, { leads, limit: 25, hasMore: rows.length === 25 });
       } catch {
