@@ -367,6 +367,7 @@ export default function AdminListings() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Link href="/admin/seller-leads" className="flex items-center gap-1.5 text-white/40 hover:text-[#3B3BFF] text-xs transition-colors"><FileText size={13} /> Seller Review</Link>
               <Link href="/admin/submissions"
                 className="flex items-center gap-1.5 text-white/40 hover:text-[#3B3BFF] text-xs transition-colors">
                 <FileText size={13} /> Deal Submissions
