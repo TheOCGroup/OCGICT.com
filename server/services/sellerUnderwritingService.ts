@@ -109,7 +109,8 @@ export class SellerUnderwritingService {
       arvConfidence,
       repairEstimateConfidence: rehab.repairConfidence,
       dataFreshnessDays: dataMode === "production" ? oldestComparableAgeDays(eligibleComps) : 9999,
-      ownershipConsistency: !probateOrLegalFlag,
+      // No title/ownership provider is connected yet. Absence of a probate keyword is not proof of clear title.
+      ownershipConsistency: false,
       structuralRiskDetected: rehab.structuralRiskDetected,
       probateOrLegalFlag,
       hasPublicRecord: !!publicRecord,
@@ -342,6 +343,10 @@ export class SellerUnderwritingService {
     if (params.structuralRiskDetected) {
       reasons.push("Potential structural risk requires an on-site review.");
       requiredHumanVerifications.push("Property walkthrough / structural review");
+    }
+    if (!params.ownershipConsistency) {
+      reasons.push("Title and ownership consistency have not been independently verified.");
+      requiredHumanVerifications.push("Verify current vesting, ownership authority, liens, and title status");
     }
     if (params.probateOrLegalFlag) {
       reasons.push("Estate/probate context requires title and authority verification.");

@@ -42,6 +42,7 @@ describe("Seller underwriting evidence gates", () => {
     expect(result.internalUnderwriting.internalMaoCeiling).toBe(0);
     expect(result.sellerOfferPresentation.status).toBe("ADDITIONAL_REVIEW_REQUIRED");
     expect(result.confidenceGate.tier).toBe("HUMAN_REVIEW_REQUIRED");
+    expect(result.confidenceGate.reasonsForTier).toContain("Title and ownership consistency have not been independently verified.");
   });
 
   it("does not create an automated offer from parcel appraisal facts without verified comps", async () => {
@@ -67,5 +68,6 @@ describe("Seller underwriting evidence gates", () => {
     expect(result.internalUnderwriting.internalMaoCeiling).toBe(0);
     expect(result.sellerOfferPresentation.status).toBe("ADDITIONAL_REVIEW_REQUIRED");
     expect(result.confidenceGate.tier).toBe("HUMAN_REVIEW_REQUIRED");
+    expect(result.confidenceGate.reasonsForTier).toContain("Title and ownership consistency have not been independently verified.");
   });
 });
