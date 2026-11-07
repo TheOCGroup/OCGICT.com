@@ -127,7 +127,7 @@ export function Sell() {
         summary: JSON.stringify({ trackingId, reviewStatus, propertyCondition: payload.propertyCondition,
           occupancyStatus: payload.occupancyStatus, sellerSituation: payload.sellerSituation,
           desiredTimeline: payload.desiredTimeline, primaryPriority: payload.primaryPriority,
-          sellerNotes: payload.sellerNotes }).slice(0, 4000),
+          knownRepairs: payload.knownRepairs, sellerNotes: payload.sellerNotes }).slice(0, 4000),
       }),
     });
     if (!response.ok) throw new Error('Lead could not be recorded');
