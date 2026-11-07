@@ -24,8 +24,9 @@ export function encodeCounterDocId(key: string): string {
   return Buffer.from(key, "utf8").toString("base64url");
 }
 
-export function firestoreBudgetStore(db: FirestoreCounterDb): BudgetStore {
-  const refFor = (key: string) => db.doc(`g-counters/${encodeCounterDocId(key)}`);
+export function firestoreBudgetStore(db: FirestoreCounterDb, collectionName = "g-counters"): BudgetStore {
+  const safeCollection = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(collectionName) ? collectionName : "g-counters";
+  const refFor = (key: string) => db.doc(`${safeCollection}/${encodeCounterDocId(key)}`);
   const readValue = (snap: { exists: boolean; data(): Record<string, unknown> | undefined }): number | null => {
     if (!snap.exists) return null;
     const value = Number(snap.data()?.value);

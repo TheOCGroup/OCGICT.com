@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -41,24 +41,22 @@ export default function SubmitDeal() {
 
   const [form, setForm] = useState({
     // Step 1 — Situation & Intent
-    submitter_type: "Property Owner",
-    situation: "Estate / Inherited Property",
-    timeline_preference: "Flexible / Exploring Options",
+    submitter_type: "",
+    situation: "",
+    timeline_preference: "",
     // Step 2 — Property Address & Basics
     property_address: "",
-    city: "Wichita",
-    state: "KS",
+    city: "",
+    state: "",
     zip: "",
-    neighborhood: "East Wichita / Crown Heights",
-    bedrooms: "3",
-    bathrooms: "2",
+    bedrooms: "",
+    bathrooms: "",
     sqft: "",
     year_built: "",
-    occupancy_status: "Vacant",
     // Step 3 — Condition & Priority
-    property_condition: "Fair — Needs Updating",
+    property_condition: "",
     known_repairs: "",
-    seller_priority: "Speed & As-Is Simplicity",
+    seller_priority: "",
     asking_price: "",
     // Step 4 — Contact Info
     submitter_name: "",
@@ -66,8 +64,137 @@ export default function SubmitDeal() {
     submitter_email: "",
     notes: "",
   });
+  const [addressSelected, setAddressSelected] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [suggestionStatus, setSuggestionStatus] = useState("");
+  const [propertyLookupLoading, setPropertyLookupLoading] = useState(false);
+  const [propertyLookupMessage, setPropertyLookupMessage] = useState("");
+  const [propertyResolution, setPropertyResolution] = useState<{ status: string; source?: string; retrievedAt?: string } | null>(null);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    const query = form.property_address.trim();
+    if (addressSelected || query.length < 4) {
+      setAddressSuggestions([]);
+      if (query.length < 4) setSuggestionStatus("");
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        setSuggestionStatus("Searching Sedgwick County addresses…");
+        const response = await fetch("/api/seller/address-suggestions?q=" + encodeURIComponent(query), { signal: controller.signal });
+        if (response.status === 429) {
+          setSuggestionStatus("Address search is busy. Keep typing or enter the address manually.");
+          return;
+        }
+        if (!response.ok) throw new Error("Address suggestions unavailable");
+        const data = await response.json() as { suggestions?: string[]; unavailable?: boolean };
+        if (controller.signal.aborted) return;
+        setAddressSuggestions(data.suggestions || []);
+        setSuggestionStatus(data.unavailable
+          ? "Suggestions are temporarily unavailable. You can enter the address manually."
+          : data.suggestions?.length ? "Select a matching address below." : "No exact suggestion found. You can enter the address manually.");
+      } catch {
+        if (!controller.signal.aborted) setSuggestionStatus("Suggestions are temporarily unavailable. You can enter the address manually.");
+      }
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.property_address, addressSelected]);
+
+  const selectAddressSuggestion = (value: string) => {
+    const parts = value.split(",").map((part) => part.trim());
+    const stateZip = parts[2] || "";
+    const state = stateZip.match(/\b(KS|KANSAS)\b/i)?.[1] || "";
+    const zip = stateZip.match(/\b\d{5}\b/)?.[0] || "";
+    setForm((current) => ({
+      ...current,
+      property_address: parts[0] || current.property_address,
+      city: parts[1] || current.city,
+      state: state ? "KS" : current.state,
+      zip: zip || current.zip,
+    }));
+    setAddressSelected(true);
+    setAddressSuggestions([]);
+    setSuggestionStatus("Address selected.");
+    setPropertyResolution(null);
+    setPropertyLookupMessage("");
+  };
+
+  const handlePropertyLookup = async () => {
+    if (!form.property_address.trim()) {
+      toast.error("Enter the property street address first.");
+      return;
+    }
+    const location = [form.state.trim(), form.zip.trim()].filter(Boolean).join(" ");
+    const address = form.property_address.includes(",")
+      ? form.property_address.trim()
+      : [form.property_address.trim(), form.city.trim(), location].filter(Boolean).join(", ");
+    setPropertyLookupLoading(true);
+    setPropertyResolution(null);
+    setPropertyLookupMessage("");
+    try {
+      const response = await fetch("/api/seller/property-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      if (!response.ok) throw new Error("Property lookup unavailable");
+      const data = await response.json() as {
+        found?: boolean;
+        publicRecord?: {
+          parcelId?: string; city?: string; state?: string; zip?: string;
+          livingAreaSqft?: number; yearBuilt?: number; bedrooms?: number; bathrooms?: number;
+          provenance?: { source?: string; certainty?: string };
+        };
+        resolution?: { status?: string; source?: string; retrievedAt?: string; reason?: string };
+      };
+      const record = data.publicRecord;
+      const verified = !!data.found && !!record?.parcelId &&
+        record.provenance?.certainty === "KNOWN" &&
+        !/demo|heuristic|mock|fixture/i.test(record.provenance?.source || "");
+      const rawStatus = data.resolution?.status || (verified ? "matched" : "provider_unavailable");
+      const status = rawStatus === "matched" && !verified ? "provisional" : rawStatus;
+      setPropertyResolution({
+        status,
+        source: data.resolution?.source || record?.provenance?.source,
+        retrievedAt: data.resolution?.retrievedAt,
+      });
+      if (verified && record) {
+        setForm((current) => ({
+          ...current,
+          city: current.city || record.city || "",
+          state: current.state || record.state || "",
+          zip: current.zip || record.zip || "",
+          bedrooms: current.bedrooms || (record.bedrooms !== undefined ? String(record.bedrooms) : ""),
+          bathrooms: current.bathrooms || (record.bathrooms !== undefined ? String(record.bathrooms) : ""),
+          sqft: current.sqft || (record.livingAreaSqft !== undefined ? String(record.livingAreaSqft) : ""),
+          year_built: current.year_built || (record.yearBuilt !== undefined ? String(record.yearBuilt) : ""),
+        }));
+        setPropertyLookupMessage("Official parcel attributes found. Existing entries were preserved; missing fields were filled. Condition and comparable sales still require separate verification.");
+      } else {
+        const messages: Record<string, string> = {
+          provisional: "Only provisional or demo data was returned. It is not treated as a verified county record; OCG will review manually.",
+          ambiguous: "Multiple parcels match this address. No parcel was selected automatically; OCG will confirm it during review.",
+          not_found: "No exact parcel match was returned. You can continue with manual review.",
+          provider_unavailable: "The parcel lookup is unavailable or not activated. You can continue with manual review.",
+          unsupported_location: "The connected parcel source does not cover this location yet. You can continue with manual review.",
+          invalid_address: data.resolution?.reason || "Check the property address and try again.",
+        };
+        setPropertyLookupMessage(messages[status] || messages.provider_unavailable);
+      }
+    } catch {
+      setPropertyResolution({ status: "provider_unavailable" });
+      setPropertyLookupMessage("The parcel lookup could not be completed. Your submission can continue to manual review.");
+    } finally {
+      setPropertyLookupLoading(false);
+    }
+  };
+
 
   const handleSubmit = async () => {
     if (!form.property_address || !form.submitter_name || !form.submitter_phone) {
@@ -82,9 +209,12 @@ export default function SubmitDeal() {
         submitter_email: form.submitter_email || null,
         submitter_type: form.submitter_type,
         property_address: form.property_address,
-        city: form.city || "Wichita",
-        state: form.state || "KS",
+        city: form.city || null,
+        state: form.state || null,
         zip: form.zip || null,
+        property_resolution_status: propertyResolution?.status || "not_attempted",
+        property_source: propertyResolution?.source || "",
+        property_retrieved_at: propertyResolution?.retrievedAt || "",
         bedrooms: form.bedrooms ? parseInt(form.bedrooms) : null,
         bathrooms: form.bathrooms ? parseFloat(form.bathrooms) : null,
         sqft: form.sqft ? parseInt(form.sqft) : null,
@@ -121,7 +251,7 @@ export default function SubmitDeal() {
               </span>
             </h1>
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
-              Whether you are managing an inherited estate, handling deferred repairs, or transitioning an asset in Wichita, OCG provides an objective preliminary review and transparent acquisition options.
+              Whether you are managing an inherited estate, handling deferred repairs, or transitioning an asset in the Wichita area, OCG provides an objective preliminary review and transparent acquisition options.
             </p>
           </div>
         </section>
@@ -161,7 +291,7 @@ export default function SubmitDeal() {
                 </div>
                 <h2 className="text-3xl font-bold text-white">Review Request Received</h2>
                 <p className="text-slate-300 max-w-lg mx-auto text-sm leading-relaxed">
-                  Thank you, {form.submitter_name}. OCG acquisition operations (PIPER & VICTOR) are retrieving public record filings for <strong>{form.property_address}</strong>. Genaro and our acquisitions team will review the details and reach out to discuss your options.
+                  Thank you, {form.submitter_name}. Your property review request for <strong>{form.property_address}</strong> has been recorded. OCG will verify the property details and contact you to discuss your options.
                 </p>
                 <div className="pt-4 flex justify-center gap-4">
                   <button
@@ -193,6 +323,7 @@ export default function SubmitDeal() {
                           onChange={(e) => set("submitter_type", e.target.value)}
                           className={inputCls}
                         >
+                          <option value="" disabled>Select your relationship</option>
                           <option value="Property Owner">Owner / Title Holder</option>
                           <option value="Heir / Estate Executor">Heir / Estate Representative</option>
                           <option value="Tired Landlord">Landlord Disposing Portfolio</option>
@@ -208,6 +339,7 @@ export default function SubmitDeal() {
                           onChange={(e) => set("situation", e.target.value)}
                           className={inputCls}
                         >
+                          <option value="" disabled>Select your situation</option>
                           <option value="Estate / Inherited Property">Inherited Property / Probate</option>
                           <option value="Downsizing / Senior Transition">Downsizing / Family Transition</option>
                           <option value="Deferred Maintenance / Major Repairs">Deferred Maintenance / Major Repairs Needed</option>
@@ -223,6 +355,7 @@ export default function SubmitDeal() {
                           onChange={(e) => set("timeline_preference", e.target.value)}
                           className={inputCls}
                         >
+                          <option value="" disabled>Select your timeline</option>
                           <option value="ASAP (Under 14 Days)">As fast as possible (Under 14 Days)</option>
                           <option value="30 Days">30 Days</option>
                           <option value="60 - 90 Days">60 – 90 Days</option>
@@ -248,19 +381,48 @@ export default function SubmitDeal() {
                   <div className="space-y-6">
                     <div>
                       <h3 className="text-2xl font-bold text-white">Property Details</h3>
-                      <p className="text-xs text-slate-400 mt-1">We pull public records for Sedgwick County to prepare your review.</p>
+                      <p className="text-xs text-slate-400 mt-1">We can attempt an official Sedgwick County parcel lookup. If the record is unavailable or ambiguous, your submission continues to manual review.</p>
                     </div>
 
                     <div className="space-y-4">
-                      <div>
+                      <div className="relative">
                         <label className={labelCls}>Street Address *</label>
                         <input
                           type="text"
                           value={form.property_address}
-                          onChange={(e) => set("property_address", e.target.value)}
+                          onChange={(e) => {
+                            set("property_address", e.target.value);
+                            setAddressSelected(false);
+                            setPropertyResolution(null);
+                            setPropertyLookupMessage("");
+                          }}
                           placeholder="e.g. 1420 N Roosevelt St"
+                          autoComplete="street-address"
+                          role="combobox"
+                          aria-autocomplete="list"
+                          aria-expanded={addressSuggestions.length > 0}
+                          aria-controls="deal-address-options"
                           className={inputCls}
                         />
+                        {addressSuggestions.length > 0 && (
+                          <div id="deal-address-options" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-auto rounded-xl border border-blue-400/30 bg-slate-900 p-1 shadow-2xl">
+                            {addressSuggestions.map((value) => (
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={false}
+                                key={value}
+                                onClick={() => selectAddressSuggestion(value)}
+                                className="block w-full rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-blue-500/15 focus:bg-blue-500/15"
+                              >
+                                {value}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <p role="status" className="mt-2 text-xs text-slate-400">
+                          {addressSelected ? "Address selected." : form.property_address.trim().length >= 4 ? suggestionStatus : "Enter the street address. You can also enter it manually."}
+                        </p>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3">
@@ -269,7 +431,7 @@ export default function SubmitDeal() {
                           <input
                             type="text"
                             value={form.city}
-                            onChange={(e) => set("city", e.target.value)}
+                            onChange={(e) => { set("city", e.target.value); setPropertyResolution(null); setPropertyLookupMessage(""); }}
                             className={inputCls}
                           />
                         </div>
@@ -278,7 +440,7 @@ export default function SubmitDeal() {
                           <input
                             type="text"
                             value={form.state}
-                            onChange={(e) => set("state", e.target.value)}
+                            onChange={(e) => { set("state", e.target.value); setPropertyResolution(null); setPropertyLookupMessage(""); }}
                             className={inputCls}
                           />
                         </div>
@@ -287,11 +449,28 @@ export default function SubmitDeal() {
                           <input
                             type="text"
                             value={form.zip}
-                            onChange={(e) => set("zip", e.target.value)}
-                            placeholder="67208"
+                            onChange={(e) => { set("zip", e.target.value); setPropertyResolution(null); setPropertyLookupMessage(""); }}
+                            placeholder="ZIP code"
                             className={inputCls}
                           />
                         </div>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-2">
+                        <button
+                          type="button"
+                          onClick={handlePropertyLookup}
+                          disabled={!form.property_address.trim() || propertyLookupLoading}
+                          className="rounded-lg border border-blue-500/40 bg-blue-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-blue-200 hover:bg-blue-500/20 disabled:opacity-40"
+                        >
+                          {propertyLookupLoading ? "Checking parcel…" : "Verify property record"}
+                        </button>
+                        {propertyLookupMessage && (
+                          <p role="status" aria-live="polite" className="text-xs leading-relaxed text-slate-300">{propertyLookupMessage}</p>
+                        )}
+                        {propertyResolution?.source && (
+                          <p className="text-[11px] text-slate-500">Source: {propertyResolution.source}{propertyResolution.retrievedAt ? " · Retrieved " + propertyResolution.retrievedAt : ""}</p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -378,6 +557,7 @@ export default function SubmitDeal() {
                           onChange={(e) => set("property_condition", e.target.value)}
                           className={inputCls}
                         >
+                          <option value="" disabled>Select the reported condition</option>
                           <option value="Move-In Ready / Updated">Move-In Ready / Updated</option>
                           <option value="Fair — Needs Updating">Fair — Needs Cosmetic Updating</option>
                           <option value="Needs Significant Renovation">Needs Significant Renovation</option>
@@ -414,6 +594,7 @@ export default function SubmitDeal() {
                             onChange={(e) => set("seller_priority", e.target.value)}
                             className={inputCls}
                           >
+                            <option value="" disabled>Select your priority</option>
                             <option value="Speed & As-Is Simplicity">Speed & 100% As-Is Simplicity</option>
                             <option value="Maximizing Net Proceeds">Maximizing Net Proceeds</option>
                             <option value="Flexible Closing Date">Flexible Closing Date</option>

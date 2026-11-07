@@ -79,31 +79,33 @@ export interface IOCGStrategyBrief {
 export interface IPropertyIntelligenceRecord {
   id: string;
   address: string;
-  city: "Wichita" | string;
-  state: "KS" | string;
+  city: string;
+  state: string;
   zip: string;
   sedgwickCountyParcelId?: IDataFieldProvenance<string>;
   legalDescription?: IDataFieldProvenance<string>;
-  
-  // Physical Characteristics
-  propertyType: IDataFieldProvenance<"Single Family Craftsman" | "Mid-Century Ranch" | "Victorian / Cottage" | "Multi-Family" | "Other">;
-  sqft: IDataFieldProvenance<number>;
-  yearBuilt: IDataFieldProvenance<number>;
-  bedrooms: IDataFieldProvenance<number>;
-  bathrooms: IDataFieldProvenance<number>;
-  
-  // Underwriting & Scope
-  arvRetailEstimate: IDataFieldProvenance<number>;
-  rehabScopeEstimate: IDataFieldProvenance<number>;
-  maximumAllowableOffer: IDataFieldProvenance<number>;
-  projectedMonthlyRent: IDataFieldProvenance<number>;
-  
-  // Risk & Physical Verification Flags
+
+  // Physical characteristics are optional until a source supplies them.
+  // Unknown values must not be filled with architectural or sqft heuristics.
+  propertyType?: IDataFieldProvenance<string>;
+  sqft?: IDataFieldProvenance<number>;
+  yearBuilt?: IDataFieldProvenance<number>;
+  bedrooms?: IDataFieldProvenance<number>;
+  bathrooms?: IDataFieldProvenance<number>;
+
+  // Underwriting metrics remain absent until supported by verified comps
+  // and an evidenced repair scope.
+  arvRetailEstimate?: IDataFieldProvenance<number>;
+  rehabScopeEstimate?: IDataFieldProvenance<number>;
+  maximumAllowableOffer?: IDataFieldProvenance<number>;
+  projectedMonthlyRent?: IDataFieldProvenance<number>;
+
+  // Physical condition always requires professional verification.
   foundationInspectionStatus: DataCertaintyLevel;
   roofAgeAndCondition: DataCertaintyLevel;
-  mepSystemsCondition: DataCertaintyLevel; // Mechanical, Electrical, Plumbing
-  floodPlainZone: IDataFieldProvenance<string>;
-  taxDelinquencyStatus: IDataFieldProvenance<"Current" | "Delinquent" | "In Foreclosure">;
+  mepSystemsCondition: DataCertaintyLevel;
+  floodPlainZone?: IDataFieldProvenance<string>;
+  taxDelinquencyStatus?: IDataFieldProvenance<"Current" | "Delinquent" | "In Foreclosure" | "Exempt">;
 }
 
 // ============================================================
@@ -121,6 +123,7 @@ export interface IComparableSale {
   pricePerSqft: number;
   yearBuilt: number;
   similarityScore: number; // 0.0 - 1.0
+  renovatedConditionVerified?: boolean; // true only with documented post-renovation evidence
   source: string;
 }
 
@@ -165,6 +168,13 @@ export interface IOfferConfidenceGate {
 export interface ISellerOfferResult {
   id: string;
   createdAt: string;
+  propertyResolution?: {
+    status: "matched" | "not_found" | "ambiguous" | "invalid_address" | "unsupported_location" | "provider_unavailable";
+    source: string;
+    retrievedAt: string;
+    candidateCount?: number;
+    reason?: string;
+  };
   property: {
     address: string;
     city: string;

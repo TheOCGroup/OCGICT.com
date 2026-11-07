@@ -32,7 +32,7 @@
 
 import type { BudgetStore } from "./gBudget.js";
 
-export type RateScope = "chat" | "tts" | "voice" | "lead" | "ttsLocal";
+export type RateScope = "chat" | "tts" | "voice" | "lead" | "ttsLocal" | "propertyLookup" | "addressSuggestions";
 
 export const RATE_WINDOW_SECONDS = 60;
 
@@ -42,6 +42,8 @@ const DEFAULTS: Record<RateScope, number> = {
   voice: 20,
   lead: 10,
   ttsLocal: 20,
+  propertyLookup: 20,
+  addressSuggestions: 30,
 };
 
 const HARD_CEILING = 10000;
@@ -52,6 +54,8 @@ const ENV_KEYS: Record<RateScope, string> = {
   voice: "OCG_G_RATELIMIT_VOICE",
   lead: "OCG_G_RATELIMIT_LEAD",
   ttsLocal: "OCG_G_RATELIMIT_TTS_LOCAL",
+  propertyLookup: "OCG_G_RATELIMIT_PROPERTY_LOOKUP",
+  addressSuggestions: "OCG_G_RATELIMIT_ADDRESS_SUGGESTIONS",
 };
 
 export function rateLimitFor(scope: RateScope, env: Record<string, string | undefined>): number {

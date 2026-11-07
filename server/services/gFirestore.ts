@@ -45,6 +45,11 @@ export interface FirestoreListingDb {
   listListingDocs(): Promise<Array<{ id: string; data: Record<string, unknown> }>>;
 }
 
+export function resolveFirestoreCollectionName(value: string | undefined, fallback: string): string {
+  const candidate = (value || "").trim();
+  return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(candidate) ? candidate : fallback;
+}
+
 export interface GFirestore {
   counters: FirestoreCounterDb;
   leads: FirestoreLeadDb;
@@ -63,6 +68,7 @@ async function init(): Promise<GFirestore> {
   const fsMod = await import("firebase-admin/firestore");
   if (!appMod.getApps().length) appMod.initializeApp();
   const db = fsMod.getFirestore();
+  const leadsCollection = resolveFirestoreCollectionName(process.env.OCG_FIRESTORE_LEADS_COLLECTION, "g-leads");
   return {
     counters: {
       doc: (path: string) => db.doc(path),
@@ -71,14 +77,14 @@ async function init(): Promise<GFirestore> {
     },
     leads: {
       addLead: async (record: Record<string, unknown>) => {
-        await db.collection("g-leads").add({
+        await db.collection(leadsCollection).add({
           ...record,
           receivedAt: fsMod.FieldValue.serverTimestamp(),
         });
       },
       createLeadWithId: async (id: string, record: Record<string, unknown>) => {
         try {
-          await db.collection("g-leads").doc(id).create({
+          await db.collection(leadsCollection).doc(id).create({
             ...record,
             receivedAt: fsMod.FieldValue.serverTimestamp(),
           });
