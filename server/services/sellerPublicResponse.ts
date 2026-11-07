@@ -5,13 +5,8 @@ export function toPublicSellerOffer(result: ISellerOfferResult) {
   return {
     id: result.id,
     createdAt: result.createdAt,
-    propertyResolution: result.propertyResolution,
-    property: result.property,
-    provenance: result.provenance,
+    property: { address: result.property.address },
     sellerOfferPresentation: result.sellerOfferPresentation,
-    confidenceGate: result.confidenceGate,
-    comparableSales: result.comparableSales,
-    piperHandoff: result.piperHandoff,
   };
 }
 export type PublicSellerOffer = ReturnType<typeof toPublicSellerOffer>;

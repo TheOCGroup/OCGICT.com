@@ -11,6 +11,8 @@ describe("public seller offer confidentiality", () => {
       property: { address: "example" },
     } as unknown as ISellerOfferResult;
     const publicResult = toPublicSellerOffer(internal);
+    expect(Object.keys(publicResult).sort()).toEqual(["createdAt", "id", "property", "sellerOfferPresentation"]);
+    expect(publicResult.property).toEqual({ address: "example" });
     expect(publicResult.id).toBe("offer-test");
     expect(publicResult.sellerOfferPresentation.singlePointEstimate).toBe(145000);
     expect(JSON.stringify(publicResult)).not.toContain("internalUnderwriting");
