@@ -13,6 +13,13 @@ describe("renovated ARV comparable eligibility", () => {
   it("accepts a nearby recent renovated closed sale", () => {
     expect(selectRenovatedArvComps([base], now)).toHaveLength(1);
   });
+  it("clamps six calendar months correctly at month ends and leap years", () => {
+    const august31 = new Date("2026-08-31T12:00:00Z");
+    expect(selectRenovatedArvComps([{ ...base, saleDate: "2026-02-28" }], august31)).toHaveLength(0);
+    expect(selectRenovatedArvComps([{ ...base, saleDate: "2026-03-01" }], august31)).toHaveLength(1);
+    const leapAugust31 = new Date("2024-08-31T00:00:00Z");
+    expect(selectRenovatedArvComps([{ ...base, saleDate: "2024-02-29" }], leapAugust31)).toHaveLength(1);
+  });
   it("rejects distressed, unverified, stale, distant and future comps", () => {
     const variants: IComparableSale[] = [
       { ...base, id: "distressed", renovatedConditionVerified: false },

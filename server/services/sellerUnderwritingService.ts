@@ -25,8 +25,11 @@ export function calculateSellerOpeningOffer(arv: number, rehab: number, ceiling:
 /** Eligible ARV comps: documented renovated condition, close to subject, sold in last 6 months. */
 export function selectRenovatedArvComps(comps: IComparableSale[], asOf: Date = new Date()): IComparableSale[] {
   if (!Number.isFinite(asOf.getTime())) return [];
-  const cutoff = new Date(asOf.getTime());
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - 6);
+  // Clamp the day when subtracting calendar months: August 31 minus six months
+  // must land on February 28/29, not overflow into March.
+  const targetMonthStart = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - 6, 1));
+  const lastDay = new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth() + 1, 0)).getUTCDate();
+  const cutoff = new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), Math.min(asOf.getUTCDate(), lastDay), asOf.getUTCHours(), asOf.getUTCMinutes(), asOf.getUTCSeconds(), asOf.getUTCMilliseconds()));
   return comps.filter((comp) => {
     const soldAt = /^\d{4}-\d{2}-\d{2}$/.test(comp.saleDate) ? new Date(`${comp.saleDate}T00:00:00Z`) : new Date(NaN);
     return comp.renovatedConditionVerified === true &&
