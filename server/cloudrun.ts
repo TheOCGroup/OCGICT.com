@@ -303,7 +303,38 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       jsonReply(res, 401, { error: "Unauthorized." });
       return;
     }
-    // Authenticated, but the admin data layer is deliberately disabled
+    // Explicit activation gate: credentials alone never expose customer data.
+    // This endpoint is read-only and bounded; no bulk export or owner fields.
+    if (pathname === "/api/admin/seller-leads" && req.method === "GET") {
+      if (env.OCG_ADMIN_LEADS_ENABLED !== "true" || leadBackend(env) !== "firestore") {
+        jsonReply(res, 404, { error: "Not found." });
+        return;
+      }
+      try {
+        const store = (await getGFirestore()).leads;
+        if (!store.listRecentLeads) throw new Error("lead listing not available");
+        const rows = await store.listRecentLeads(25);
+        const leads = rows.filter((row) => ["ocg-seller-intake", "ocg-seller-action", "ocg-g-lead"].includes(String(row.data.form || "")))
+          .map((row) => {
+            const fields = (row.data.fields || {}) as Record<string, unknown>;
+            const safe = (key: string, max: number) => typeof fields[key] === "string" ? String(fields[key]).slice(0, max) : "";
+            return {
+              id: row.id,
+              form: String(row.data.form),
+              receivedAt: row.data.receivedAt && typeof (row.data.receivedAt as { toDate?: () => Date }).toDate === "function"
+                ? (row.data.receivedAt as { toDate: () => Date }).toDate().toISOString() : null,
+              reference: safe("reference", 80), name: safe("name", 150),
+              address: safe("address", 240), email: safe("email", 254), phone: safe("phone", 40),
+              action: safe("action", 40), offerId: safe("offerId", 80),
+            };
+          });
+        res.setHeader("Cache-Control", "no-store");
+        jsonReply(res, 200, { leads, limit: 25, hasMore: rows.length === 25 });
+      } catch {
+        jsonReply(res, 503, { error: "Lead review is temporarily unavailable." });
+      }
+      return;
+    }    // Authenticated, but the admin data layer is deliberately disabled
     // until a separate founder-approved activation (P0 §3): no endpoint
     // serves administrative data yet.
     jsonReply(res, 404, { error: "Not found." });

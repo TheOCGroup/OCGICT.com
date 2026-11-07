@@ -35,6 +35,7 @@ export interface FirestoreLeadDb {
    *  (without overwriting) when the id already exists. Powers the form
    *  intake's duplicate protection for reference-bearing submissions. */
   createLeadWithId?(id: string, record: Record<string, unknown>): Promise<boolean>;
+  listRecentLeads?(limit: number): Promise<Array<{ id: string; data: Record<string, unknown> }>>;
 }
 
 /** The narrow Firestore surface the Marketplace listings read path uses. */
