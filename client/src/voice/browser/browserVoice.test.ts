@@ -245,6 +245,11 @@ class FakeCtx {
   async close() {}
 }
 
+it("reports browser voice not ready before a model has loaded", () => {
+  __setBrowserEngineForTests(null, null);
+  expect(new GBrowserSpeech().ready).toBe(false);
+});
+
 describe("GBrowserSpeech — playback + stop semantics with a fake engine", () => {
   beforeEach(() => {
     vi.stubGlobal("AudioContext", FakeCtx);
@@ -262,6 +267,7 @@ describe("GBrowserSpeech — playback + stop semantics with a fake engine", () =
 
   it("speaks every planned segment and fires onStart/onEnd once", async () => {
     const { speech, events, synth } = makeSpeech();
+    expect(speech.ready).toBe(true);
     await speech.speak("First point here. Second point follows.", { lang: "en" }, events);
     expect(synth.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(events.onStart).toHaveBeenCalledTimes(1);
