@@ -45,6 +45,18 @@ describe("Seller underwriting evidence gates", () => {
     expect(result.confidenceGate.reasonsForTier).toContain("Title and ownership consistency have not been independently verified.");
   });
 
+  it("never substitutes illustrative College Hill examples for live sold comps in production", async () => {
+    process.env.OCGICT_DATA_MODE = "production";
+    delete process.env.OCGICT_SEDGWICK_GIS_ENABLED;
+
+    const result = await SellerUnderwritingService.processSellerIntake(payload("248 S Rutan Ave, Wichita, KS 67218"));
+    expect(result.comparableSales).toHaveLength(0);
+    expect(result.internalUnderwriting.estimatedArv).toBe(0);
+    expect(result.internalUnderwriting.internalMaoCeiling).toBe(0);
+    expect(result.sellerOfferPresentation.status).toBe("ADDITIONAL_REVIEW_REQUIRED");
+    expect(result.confidenceGate.tier).toBe("HUMAN_REVIEW_REQUIRED");
+    expect(result.confidenceGate.requiredHumanVerifications).toContain("Run live comparable-sale review");
+  });
   it("does not create an automated offer from parcel appraisal facts without verified comps", async () => {
     process.env.OCGICT_DATA_MODE = "production";
     process.env.OCGICT_SEDGWICK_GIS_ENABLED = "true";
