@@ -14,11 +14,22 @@ describe("seller lead review privacy projection", () => {
     expect(JSON.stringify(result)).not.toContain("other@example.test");
   });
   it("handles malformed fields without leaking arbitrary data", () => {
-    const result = projectSellerLeadRows([{ id: "3", data: { form: "ocg-g-lead", fields: "untrusted", extra: "hidden" } }]);
+    const result = projectSellerLeadRows([{ id: "3", data: { form: "ocg-seller-intake", fields: "untrusted", extra: "hidden" } }]);
     expect(result).toHaveLength(1);
     expect(result[0].email).toBe("");
     expect(result[0].receivedAt).toBeNull();
     expect(JSON.stringify(result)).not.toContain("hidden");
+  });
+  it("does not expose general G concierge leads in the seller-only queue", () => {
+    const rows = projectSellerLeadRows([
+      { id: "g-general", data: { form: "ocg-g-lead", fields: { role: "general", name: "Private concierge contact", email: "private@example.test" } } },
+      { id: "g-no-role", data: { form: "ocg-g-lead", fields: { email: "unknown@example.test" } } },
+      { id: "g-seller", data: { form: "ocg-g-lead", fields: { role: "seller", name: "Seller", email: "seller@example.test" } } },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("g-seller");
+    expect(JSON.stringify(rows)).not.toContain("private@example.test");
+    expect(JSON.stringify(rows)).not.toContain("unknown@example.test");
   });
   it("truncates all user-controlled text fields", () => {
     const result = projectSellerLeadRows([{ id: "4", data: { form: "ocg-seller-intake", fields: { name: "x".repeat(200), email: "y".repeat(300) } } }]);

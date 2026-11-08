@@ -1,6 +1,13 @@
 /** Privacy-minimized seller review projection. No raw Firestore fields escape. */
 export function projectSellerLeadRows(rows: Array<{ id: string; data: Record<string, unknown> }>) {
-  return rows.filter((row) => ["ocg-seller-intake", "ocg-seller-action", "ocg-g-lead"].includes(String(row.data.form || "")))
+  return rows.filter((row) => {
+    const form = String(row.data.form || "");
+    if (form === "ocg-seller-intake" || form === "ocg-seller-action") return true;
+    if (form !== "ocg-g-lead") return false;
+    const fields = row.data.fields;
+    return !!fields && typeof fields === "object" && !Array.isArray(fields) &&
+      (fields as Record<string, unknown>).role === "seller";
+  })
     .map((row) => {
       const fields = row.data.fields && typeof row.data.fields === "object" && !Array.isArray(row.data.fields)
         ? row.data.fields as Record<string, unknown> : {};
