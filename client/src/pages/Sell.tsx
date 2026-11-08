@@ -107,6 +107,7 @@ export function Sell() {
   const [errorMessage, setErrorMessage] = useState('');
   const [leadReference, setLeadReference] = useState('');
   const leadReferenceRef = useRef('');
+  const lookupSequenceRef = useRef(0);
 
   // Cloud Run uses the existing durable /api/g/lead handler, not a POST to
   // the SPA root. A seller reference is reused on retries for deduplication.
@@ -140,6 +141,8 @@ export function Sell() {
   const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.trim()) return;
+    const lookupSequence = ++lookupSequenceRef.current;
+    const lookupAddress = address;
     setIsSearchingAddress(true);
     setErrorMessage('');
     setPublicMatch(null);
@@ -149,7 +152,7 @@ export function Sell() {
       const res = await fetch('/api/seller/property-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address: lookupAddress }),
       });
       if (!res.ok) throw new Error('Property lookup unavailable');
       const data = await res.json() as {
@@ -157,6 +160,7 @@ export function Sell() {
         publicRecord?: { parcelId?: string; situsAddress?: string; city?: string; state?: string; zip?: string; livingAreaSqft?: number; yearBuilt?: number; bedrooms?: number; bathrooms?: number; provenance?: { source?: string; certainty?: string } };
         resolution?: { status?: string; reason?: string };
       };
+      if (lookupSequence !== lookupSequenceRef.current) return;
       const record = data.found ? data.publicRecord : null;
       const verified = !!record?.parcelId && !!record?.situsAddress && !!record?.city && !!record?.state &&
         record.provenance?.certainty === 'KNOWN' &&
@@ -188,6 +192,7 @@ export function Sell() {
       setPropertyResolutionMessage(messages[status] || messages.provider_unavailable);
       setStep(2);
     } catch {
+      if (lookupSequence !== lookupSequenceRef.current) return;
       // A provider failure should not destroy the seller's progress. The final
       // underwriting endpoint will route the submission to manual review.
       setPublicMatch(null);
@@ -195,7 +200,7 @@ export function Sell() {
       setPropertyResolutionMessage('The parcel lookup is temporarily unavailable. You can continue; OCG will review the address manually.');
       setStep(2);
     } finally {
-      setIsSearchingAddress(false);
+      if (lookupSequence === lookupSequenceRef.current) setIsSearchingAddress(false);
     }
   };
 
@@ -284,6 +289,8 @@ export function Sell() {
   };
 
   const reset = () => {
+    ++lookupSequenceRef.current;
+    setIsSearchingAddress(false);
     setStep(1);
     leadReferenceRef.current = '';
     setLeadReference('');
@@ -307,6 +314,7 @@ export function Sell() {
     setCounterAmount('');
     setPreferredWindow('');
     setActionMessage('');
+    setActionError(false);
   };
 
   const fieldClass = 'w-full rounded-xl border border-slate-800 bg-slate-950 p-3.5 text-sm text-white outline-none transition focus:border-amber-400';
