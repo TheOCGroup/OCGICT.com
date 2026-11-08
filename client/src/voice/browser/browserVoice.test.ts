@@ -172,7 +172,7 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");
-      expect(browserVoiceFlagEnabled()).toBe(false);
+      expect(browserVoiceFlagEnabled()).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -192,7 +192,7 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       // Query string dropped by SPA navigation — still on.
       set("");
       expect(browserVoiceFlagEnabled()).toBe(true);
-      // Explicit off clears the persisted choice everywhere.
+      // Explicit off persists the opt-out everywhere.
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");
