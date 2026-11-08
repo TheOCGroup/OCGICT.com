@@ -103,6 +103,7 @@ export function Sell() {
   const [preferredWindow, setPreferredWindow] = useState('');
   const [actionPending, setActionPending] = useState<SellerAction | null>(null);
   const [actionMessage, setActionMessage] = useState('');
+  const [actionError, setActionError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [leadReference, setLeadReference] = useState('');
   const leadReferenceRef = useRef('');
@@ -259,6 +260,7 @@ export function Sell() {
     if (!offerResult) return;
     setActionPending(action);
     setActionMessage('');
+    setActionError(false);
     try {
       const res = await fetch('/api/seller/action', {
         method: 'POST',
@@ -274,6 +276,7 @@ export function Sell() {
       if (!res.ok) throw new Error(data?.error || 'Unable to record your request');
       setActionMessage(data.message || 'Your request was recorded for OCG review.');
     } catch (error: any) {
+      setActionError(true);
       setActionMessage(error?.message || 'We could not record that request. Please try again.');
     } finally {
       setActionPending(null);
@@ -492,7 +495,7 @@ export function Sell() {
                     </div>
                   )}
 
-                  {actionMessage && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 text-center text-sm text-emerald-200">{actionMessage}</div>}
+                  {actionMessage && <div role={actionError ? "alert" : "status"} className={`rounded-2xl border p-4 text-center text-sm ${actionError ? "border-red-500/40 bg-red-500/10 text-red-200" : "border-emerald-500/25 bg-emerald-500/5 text-emerald-200"}`}>{actionMessage}</div>}
 
                   <div className="mt-5 grid gap-4 border-t border-slate-800 pt-6 sm:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5"><div className="mb-3 text-xs font-black uppercase tracking-wider text-blue-400">What OCG reviewed</div><ul className="space-y-2 text-xs leading-relaxed text-slate-400">{offerResult.sellerOfferPresentation.explanation.whatOcgReviewed.map((x) => <li key={x} className="flex gap-2"><span className="text-blue-400">•</span>{x}</li>)}</ul></div>
