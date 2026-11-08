@@ -262,6 +262,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // ADMIN_PASSWORD / ADMIN_SESSION_SECRET are not configured, which is
   // the production state today: the admin surface is disabled, and every
   // protected admin route rejects anonymous callers server-side.
+  if (pathname.startsWith("/api/admin/")) res.setHeader("Cache-Control", "no-store");
   if (pathname === "/api/admin/login" && req.method === "POST") {
     const config = adminAuthConfig(env);
     if (!config) { jsonReply(res, 503, { error: "Admin access is not configured on this deployment." }); return; }
