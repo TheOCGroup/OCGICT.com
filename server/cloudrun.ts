@@ -316,10 +316,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       try {
         const store = (await getGFirestore()).leads;
         if (!store.listRecentLeads) throw new Error("lead listing not available");
-        const rows = await store.listRecentLeads(25);
-        const leads = projectSellerLeadRows(rows);
+        const rows = await store.listRecentLeads(100);
+        const sellerRows = projectSellerLeadRows(rows);
+        const leads = sellerRows.slice(0, 25);
         res.setHeader("Cache-Control", "no-store");
-        jsonReply(res, 200, { leads, limit: 25, hasMore: false });
+        jsonReply(res, 200, { leads, limit: 25, hasMore: sellerRows.length > 25 || rows.length === 100 });
       } catch {
         jsonReply(res, 503, { error: "Lead review is temporarily unavailable." });
       }
