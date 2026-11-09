@@ -1,3 +1,17 @@
+/** Convert supported Firestore/ISO timestamp values without allowing malformed data to fail the queue. */
+function safeIsoTimestamp(value: unknown): string | null {
+  try {
+    const date = value instanceof Date
+      ? value
+      : value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : null;
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Privacy-minimized seller review projection. No raw Firestore fields escape. */
 export function projectSellerLeadRows(rows: Array<{ id: string; data: Record<string, unknown> }>) {
   return rows.filter((row) => {
@@ -16,7 +30,7 @@ export function projectSellerLeadRows(rows: Array<{ id: string; data: Record<str
       return {
         id: row.id,
         form: String(row.data.form),
-        receivedAt: receivedAt && typeof receivedAt.toDate === "function" ? receivedAt.toDate().toISOString() : null,
+        receivedAt: safeIsoTimestamp(row.data.receivedAt),
         reference: safe("reference", 80), name: safe("name", 150),
         address: safe("address", 240), email: safe("email", 254), phone: safe("phone", 40),
         action: safe("action", 40), offerId: safe("offerId", 80),
