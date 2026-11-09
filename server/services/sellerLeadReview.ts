@@ -23,3 +23,41 @@ export function projectSellerLeadRows(rows: Array<{ id: string; data: Record<str
       };
     });
 }
+/** Firestore query surface used to fetch only seller submissions before applying a limit. */
+export interface SellerLeadQuery {
+  where(field: string, operator: "in" | "==", value: unknown): SellerLeadQuery;
+  orderBy(field: string, direction: "desc"): SellerLeadQuery;
+  limit(count: number): SellerLeadQuery;
+  get(): Promise<{ docs: Array<{ id: string; data(): Record<string, unknown> }> }>;
+}
+
+function receivedAtMillis(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") { const parsed = Date.parse(value); return Number.isFinite(parsed) ? parsed : 0; }
+  if (value && typeof value === "object") {
+    const timestamp = value as { toMillis?: () => number; toDate?: () => Date };
+    if (typeof timestamp.toMillis === "function") return timestamp.toMillis();
+    if (typeof timestamp.toDate === "function") return timestamp.toDate().getTime();
+  }
+  return 0;
+}
+
+/**
+ * Query seller forms and seller-tagged G leads independently. Filtering
+ * fields.role === seller happens in Firestore BEFORE limit(), so general
+ * concierge traffic cannot crowd genuine seller submissions out of review.
+ */
+export async function queryRecentSellerLeadRows(collection: SellerLeadQuery, limit: number) {
+  const bounded = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const [sellerForms, sellerGLeads] = await Promise.all([
+    collection.where("form", "in", ["ocg-seller-intake", "ocg-seller-action"])
+      .orderBy("receivedAt", "desc").limit(bounded).get(),
+    collection.where("form", "==", "ocg-g-lead")
+      .where("fields.role", "==", "seller")
+      .orderBy("receivedAt", "desc").limit(bounded).get(),
+  ]);
+  return [...sellerForms.docs, ...sellerGLeads.docs]
+    .sort((a, b) => receivedAtMillis(b.data().receivedAt) - receivedAtMillis(a.data().receivedAt))
+    .slice(0, bounded)
+    .map((doc) => ({ id: doc.id, data: doc.data() }));
+}
