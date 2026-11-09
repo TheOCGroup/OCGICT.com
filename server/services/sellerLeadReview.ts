@@ -5,7 +5,9 @@ function safeIsoTimestamp(value: unknown): string | null {
       ? value
       : value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function"
         ? (value as { toDate: () => Date }).toDate()
-        : null;
+        : typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)
+          ? new Date(value)
+          : null;
     return date instanceof Date && Number.isFinite(date.getTime()) ? date.toISOString() : null;
   } catch {
     return null;
