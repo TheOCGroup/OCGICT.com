@@ -30,6 +30,7 @@ import {
   mintAdminSession,
   adminSessionCookie,
   adminSessionClearCookie,
+  googleAdminSessionSecret,
   isAdminAuthenticated,
 } from "./services/adminAuth.js";
 
@@ -299,7 +300,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
     res.setHeader("Set-Cookie", [
       oauthStateCookie("", 0),
-      adminSessionCookie(mintAdminSession({ password: "", secret: config.sessionSecret }, Date.now())),
+      adminSessionCookie(mintAdminSession({ password: "", secret: googleAdminSessionSecret(config.sessionSecret) }, Date.now())),
     ]);
     res.writeHead(303, { Location: "/admin" });
     res.end();
