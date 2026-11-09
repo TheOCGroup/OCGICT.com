@@ -52,6 +52,22 @@ describe("seller lead review privacy projection", () => {
 });
 
 describe("seller review queue query", () => {
+  it("does not fail the entire queue when one Firestore timestamp throws", async () => {
+    const rows = [
+      { id: "broken", data: { form: "ocg-seller-intake", receivedAt: { toMillis: () => { throw new Error("invalid"); } }, fields: {} } },
+      { id: "valid", data: { form: "ocg-seller-intake", receivedAt: new Date("2026-11-09T16:00:00Z"), fields: {} } },
+    ];
+    const makeQuery = (filtered: typeof rows) => ({
+      where(field: string, _operator: string, value: unknown) {
+        return makeQuery(filtered.filter(row => field === "form" ? (Array.isArray(value) ? value.includes(row.data.form) : row.data.form === value) : false));
+      },
+      orderBy() { return this; },
+      limit(count: number) { return makeQuery(filtered.slice(0, count)); },
+      async get() { return { docs: filtered.map(row => ({ id: row.id, data: () => row.data })) }; },
+    });
+    const result = await queryRecentSellerLeadRows(makeQuery(rows), 25);
+    expect(result.map(row => row.id)).toEqual(["valid", "broken"]);
+  });
   it("filters general G leads in Firestore before the bounded seller queue limit", async () => {
     const rows = [
       ...Array.from({ length: 140 }, (_, i) => ({ id: "general-" + i, data: { form: "ocg-g-lead", fields: { role: "general" }, receivedAt: new Date(10000 + i) } })),
