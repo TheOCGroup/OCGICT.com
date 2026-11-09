@@ -21,6 +21,8 @@ import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, evaluateFormIntake, persistLeadToFirestore, FORM_LIMITS } from "./services/gLeadStore.js";
 import { consumeRateLimit } from "./services/gRateLimit.js";
 import { projectSellerLeadRows } from "./services/sellerLeadReview.js";
+import { createGoogleAdminState, googleAdminAuthorizationUrl, googleAdminOAuthConfig, verifyGoogleAdminState } from "./services/googleAdminOAuth.js";
+import { exchangeGoogleAdminCode, verifyGoogleAdminIdToken } from "./services/googleAdminToken.js";
 import { registerListingsSource } from "./services/gListingsSource.js";
 import {
   adminAuthConfig,
@@ -263,6 +265,46 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // the production state today: the admin surface is disabled, and every
   // protected admin route rejects anonymous callers server-side.
   if (pathname.startsWith("/api/admin/")) res.setHeader("Cache-Control", "no-store");
+  // Google OpenID Connect: state cookie binds the callback to the initiating browser.
+  // Both endpoints fail closed unless OAuth and the authorized-email allowlist are configured.
+  const oauthStateCookieName = "ocg_admin_oauth_state";
+  const oauthStateCookie = (value: string, age: number) =>
+    `${oauthStateCookieName}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/api/admin/google; Max-Age=${age}`;
+  if (pathname === "/api/admin/google/start" && req.method === "GET") {
+    const config = googleAdminOAuthConfig(env);
+    if (!config) { jsonReply(res, 503, { error: "Google sign-in is not configured." }); return; }
+    const state = createGoogleAdminState(config);
+    res.setHeader("Set-Cookie", oauthStateCookie(state.cookie, 300));
+    res.writeHead(302, { Location: googleAdminAuthorizationUrl(config, state.state, state.nonce) });
+    res.end();
+    return;
+  }
+  if (pathname === "/api/admin/google/callback" && req.method === "GET") {
+    const config = googleAdminOAuthConfig(env);
+    res.setHeader("Set-Cookie", oauthStateCookie("", 0));
+    const cookies = req.headers.cookie?.split(";") || [];
+    const stateCookie = cookies.find((part) => part.trim().startsWith(oauthStateCookieName + "="))
+      ?.trim().slice(oauthStateCookieName.length + 1);
+    const stateParam = url.searchParams.get("state") || "";
+    const code = url.searchParams.get("code") || "";
+    const nonce = config ? verifyGoogleAdminState(stateCookie, stateParam, config) : null;
+    if (!config || !nonce || !code || code.length > 4096 || url.searchParams.has("error")) {
+      jsonReply(res, 401, { error: "Google sign-in failed." });
+      return;
+    }
+    const token = await exchangeGoogleAdminCode(code, config);
+    if (!token || !(await verifyGoogleAdminIdToken(token, config, nonce))) {
+      jsonReply(res, 401, { error: "Google sign-in failed." });
+      return;
+    }
+    res.setHeader("Set-Cookie", [
+      oauthStateCookie("", 0),
+      adminSessionCookie(mintAdminSession({ password: "", secret: config.sessionSecret }, Date.now())),
+    ]);
+    res.writeHead(303, { Location: "/admin" });
+    res.end();
+    return;
+  }
   if (pathname === "/api/admin/login" && req.method === "POST") {
     const config = adminAuthConfig(env);
     if (!config) { jsonReply(res, 503, { error: "Admin access is not configured on this deployment." }); return; }
@@ -295,7 +337,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (pathname === "/api/admin/session" && req.method === "GET") {
     jsonReply(res, 200, {
-      configured: adminAuthConfig(env) !== null,
+      configured: adminAuthConfig(env) !== null || googleAdminOAuthConfig(env) !== null,
+      googleConfigured: googleAdminOAuthConfig(env) !== null,
       authenticated: isAdminAuthenticated(req.headers.cookie, env, Date.now()),
     });
     return;
