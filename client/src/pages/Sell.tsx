@@ -103,9 +103,11 @@ export function Sell() {
   const [preferredWindow, setPreferredWindow] = useState('');
   const [actionPending, setActionPending] = useState<SellerAction | null>(null);
   const [actionMessage, setActionMessage] = useState('');
+  const [actionError, setActionError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [leadReference, setLeadReference] = useState('');
   const leadReferenceRef = useRef('');
+  const lookupSequenceRef = useRef(0);
 
   // Cloud Run uses the existing durable /api/g/lead handler, not a POST to
   // the SPA root. A seller reference is reused on retries for deduplication.
@@ -139,6 +141,8 @@ export function Sell() {
   const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.trim()) return;
+    const lookupSequence = ++lookupSequenceRef.current;
+    const lookupAddress = address;
     setIsSearchingAddress(true);
     setErrorMessage('');
     setPublicMatch(null);
@@ -148,7 +152,7 @@ export function Sell() {
       const res = await fetch('/api/seller/property-lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address: lookupAddress }),
       });
       if (!res.ok) throw new Error('Property lookup unavailable');
       const data = await res.json() as {
@@ -156,6 +160,7 @@ export function Sell() {
         publicRecord?: { parcelId?: string; situsAddress?: string; city?: string; state?: string; zip?: string; livingAreaSqft?: number; yearBuilt?: number; bedrooms?: number; bathrooms?: number; provenance?: { source?: string; certainty?: string } };
         resolution?: { status?: string; reason?: string };
       };
+      if (lookupSequence !== lookupSequenceRef.current) return;
       const record = data.found ? data.publicRecord : null;
       const verified = !!record?.parcelId && !!record?.situsAddress && !!record?.city && !!record?.state &&
         record.provenance?.certainty === 'KNOWN' &&
@@ -187,6 +192,7 @@ export function Sell() {
       setPropertyResolutionMessage(messages[status] || messages.provider_unavailable);
       setStep(2);
     } catch {
+      if (lookupSequence !== lookupSequenceRef.current) return;
       // A provider failure should not destroy the seller's progress. The final
       // underwriting endpoint will route the submission to manual review.
       setPublicMatch(null);
@@ -194,7 +200,7 @@ export function Sell() {
       setPropertyResolutionMessage('The parcel lookup is temporarily unavailable. You can continue; OCG will review the address manually.');
       setStep(2);
     } finally {
-      setIsSearchingAddress(false);
+      if (lookupSequence === lookupSequenceRef.current) setIsSearchingAddress(false);
     }
   };
 
@@ -259,6 +265,7 @@ export function Sell() {
     if (!offerResult) return;
     setActionPending(action);
     setActionMessage('');
+    setActionError(false);
     try {
       const res = await fetch('/api/seller/action', {
         method: 'POST',
@@ -274,6 +281,7 @@ export function Sell() {
       if (!res.ok) throw new Error(data?.error || 'Unable to record your request');
       setActionMessage(data.message || 'Your request was recorded for OCG review.');
     } catch (error: any) {
+      setActionError(true);
       setActionMessage(error?.message || 'We could not record that request. Please try again.');
     } finally {
       setActionPending(null);
@@ -281,6 +289,8 @@ export function Sell() {
   };
 
   const reset = () => {
+    ++lookupSequenceRef.current;
+    setIsSearchingAddress(false);
     setStep(1);
     leadReferenceRef.current = '';
     setLeadReference('');
@@ -304,6 +314,7 @@ export function Sell() {
     setCounterAmount('');
     setPreferredWindow('');
     setActionMessage('');
+    setActionError(false);
   };
 
   const fieldClass = 'w-full rounded-xl border border-slate-800 bg-slate-950 p-3.5 text-sm text-white outline-none transition focus:border-amber-400';
@@ -364,9 +375,9 @@ export function Sell() {
                   </div>
                   <div className="relative">
                     <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input autoFocus autoComplete="street-address" required value={address} onChange={(e) => { setAddress(e.target.value); setSelectedAddress(false); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} placeholder="Start with house number and street…" role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-controls="seller-address-options" className={`${fieldClass} py-4 pl-12 text-base`} />
+                    <input autoFocus autoComplete="street-address" required value={address} onChange={(e) => { ++lookupSequenceRef.current; setIsSearchingAddress(false); setAddress(e.target.value); setSelectedAddress(false); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} placeholder="Start with house number and street…" role="combobox" aria-autocomplete="list" aria-expanded={suggestions.length > 0} aria-controls="seller-address-options" className={`${fieldClass} py-4 pl-12 text-base`} />
                     {suggestions.length > 0 && <div id="seller-address-options" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-2 max-h-64 overflow-auto rounded-xl border border-sky-400/30 bg-[#101c30] p-1 shadow-2xl">
-                      {suggestions.map(value => <button type="button" role="option" aria-selected={false} key={value} onClick={() => { setAddress(value); setSelectedAddress(true); setSuggestions([]); setSuggestionStatus('Address selected'); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} className="flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-sky-500/15 focus:bg-sky-500/15"><MapPin size={16} className="mt-0.5 shrink-0 text-sky-300"/>{value}</button>)}
+                      {suggestions.map(value => <button type="button" role="option" aria-selected={false} key={value} onClick={() => { ++lookupSequenceRef.current; setIsSearchingAddress(false); setAddress(value); setSelectedAddress(true); setSuggestions([]); setSuggestionStatus('Address selected'); setPublicMatch(null); setPropertyResolutionStatus(''); setPropertyResolutionMessage(''); }} className="flex w-full items-start gap-2 rounded-lg px-3 py-3 text-left text-sm text-white hover:bg-sky-500/15 focus:bg-sky-500/15"><MapPin size={16} className="mt-0.5 shrink-0 text-sky-300"/>{value}</button>)}
                     </div>}
                     <p role="status" className="mt-2 text-xs text-slate-400">{selectedAddress ? 'Address selected. Continue to the next step.' : address.trim().length >= 4 ? suggestionStatus : 'Type a few characters to see matching addresses. You can also enter one manually.'}</p>
                   </div>
@@ -492,7 +503,7 @@ export function Sell() {
                     </div>
                   )}
 
-                  {actionMessage && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 text-center text-sm text-emerald-200">{actionMessage}</div>}
+                  {actionMessage && <div role={actionError ? "alert" : "status"} className={`rounded-2xl border p-4 text-center text-sm ${actionError ? "border-red-500/40 bg-red-500/10 text-red-200" : "border-emerald-500/25 bg-emerald-500/5 text-emerald-200"}`}>{actionMessage}</div>}
 
                   <div className="mt-5 grid gap-4 border-t border-slate-800 pt-6 sm:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-5"><div className="mb-3 text-xs font-black uppercase tracking-wider text-blue-400">What OCG reviewed</div><ul className="space-y-2 text-xs leading-relaxed text-slate-400">{offerResult.sellerOfferPresentation.explanation.whatOcgReviewed.map((x) => <li key={x} className="flex gap-2"><span className="text-blue-400">•</span>{x}</li>)}</ul></div>

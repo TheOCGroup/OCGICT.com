@@ -27,6 +27,7 @@
  * founder-approved admin data-layer activation.
  */
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { googleAdminOAuthConfig } from "./googleAdminOAuth.js";
 
 export const ADMIN_COOKIE = "ocg_admin_session";
 export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -110,13 +111,18 @@ export function adminSessionClearCookie(): string {
   return `${ADMIN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
 }
 
+/** Domain separation prevents legacy password sessions from becoming Google sessions. */
+export function googleAdminSessionSecret(secret: string): string {
+  return createHmac("sha256", secret).update("ocgict-google-admin-session-v1").digest("base64url");
+}
+
 /** Is this request authenticated as admin? Fail-closed when unconfigured. */
 export function isAdminAuthenticated(
   cookieHeader: string | undefined,
   env: Record<string, string | undefined>,
   nowMs: number,
 ): boolean {
-  const config = adminAuthConfig(env);
+  const config = googleAdminOAuthConfig(env);
   if (!config) return false;
-  return verifyAdminSession(adminSessionFromCookie(cookieHeader), config, nowMs);
+  return verifyAdminSession(adminSessionFromCookie(cookieHeader), { password: "", secret: googleAdminSessionSecret(config.sessionSecret) }, nowMs);
 }

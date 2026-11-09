@@ -30,5 +30,8 @@ jobs:
       - name: Type check
         run: pnpm run check
 
+      - name: Test suite
+        run: pnpm exec vitest run --reporter=dot
+
       - name: Production build
         run: pnpm run build

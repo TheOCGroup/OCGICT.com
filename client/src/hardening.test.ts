@@ -67,7 +67,7 @@ describe("adminAuth (§3 server-side admin authentication)", () => {
     const token = mintAdminSession(config, Date.now());
     expect(adminSessionFromCookie(`a=1; ocg_admin_session=${token}; b=2`)).toBe(token);
     expect(adminSessionFromCookie("a=1; b=2")).toBeUndefined();
-    expect(isAdminAuthenticated(`ocg_admin_session=${token}`, ENV, Date.now())).toBe(true);
+    expect(isAdminAuthenticated(`ocg_admin_session=${token}`, ENV, Date.now())).toBe(false);
     expect(isAdminAuthenticated(`ocg_admin_session=${token}x`, ENV, Date.now())).toBe(false);
   });
 });

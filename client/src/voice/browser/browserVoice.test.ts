@@ -172,7 +172,7 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");
-      expect(browserVoiceFlagEnabled()).toBe(false);
+      expect(browserVoiceFlagEnabled()).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -192,7 +192,7 @@ describe("browserVoiceFlagEnabled — explicit values only", () => {
       // Query string dropped by SPA navigation — still on.
       set("");
       expect(browserVoiceFlagEnabled()).toBe(true);
-      // Explicit off clears the persisted choice everywhere.
+      // Explicit off persists the opt-out everywhere.
       set("?browserVoice=0");
       expect(browserVoiceFlagEnabled()).toBe(false);
       set("");
@@ -245,6 +245,11 @@ class FakeCtx {
   async close() {}
 }
 
+it("reports browser voice not ready before a model has loaded", () => {
+  __setBrowserEngineForTests(null, null);
+  expect(new GBrowserSpeech().ready).toBe(false);
+});
+
 describe("GBrowserSpeech — playback + stop semantics with a fake engine", () => {
   beforeEach(() => {
     vi.stubGlobal("AudioContext", FakeCtx);
@@ -262,6 +267,7 @@ describe("GBrowserSpeech — playback + stop semantics with a fake engine", () =
 
   it("speaks every planned segment and fires onStart/onEnd once", async () => {
     const { speech, events, synth } = makeSpeech();
+    expect(speech.ready).toBe(true);
     await speech.speak("First point here. Second point follows.", { lang: "en" }, events);
     expect(synth.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(events.onStart).toHaveBeenCalledTimes(1);

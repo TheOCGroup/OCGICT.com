@@ -80,6 +80,8 @@ class WorkerSynth {
   private readyPromise: Promise<void> | null = null;
   private config: WorkerConfig = {};
   private inited = false;
+  private loaded = false;
+  get isLoaded(): boolean { return this.loaded; }
 
   configure(cfg: WorkerConfig): void {
     Object.assign(this.config, cfg);
@@ -147,6 +149,7 @@ class WorkerSynth {
         const r = await this.call({ type: "load" });
         this.sampleRate = r.sampleRate ?? 44100;
         this.providersUsed = r.providersUsed ?? this.providersUsed;
+        this.loaded = true;
         this.config.onReady?.({ providersUsed: this.providersUsed, variantLabel: this.config.variantLabel });
       })().catch((err) => { this.readyPromise = null; throw err; });
     }
@@ -196,7 +199,7 @@ export class GBrowserSpeech {
   }
 
   get ready(): boolean {
-    return !!testEngine || !!sharedWorker;
+    return !!testEngine || sharedWorker.isLoaded;
   }
 
   private async synth(text: string, lang: string, speed: number, gen = 0): Promise<SynthResult> {

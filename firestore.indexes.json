@@ -1,0 +1,69 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "g-leads-staging",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "form",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "g-leads-staging",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "form",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fields.role",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "g-leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "form",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "g-leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "form",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fields.role",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

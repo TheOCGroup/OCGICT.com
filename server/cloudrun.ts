@@ -20,6 +20,9 @@ import { getGFirestore, resolveFirestoreCollectionName } from "./services/gFires
 import { firestoreBudgetStore } from "./services/gFirestoreStore.js";
 import { parseFormSubmission, evaluateFormIntake, persistLeadToFirestore, FORM_LIMITS } from "./services/gLeadStore.js";
 import { consumeRateLimit } from "./services/gRateLimit.js";
+import { projectSellerLeadRows } from "./services/sellerLeadReview.js";
+import { createGoogleAdminState, googleAdminAuthorizationUrl, googleAdminOAuthConfig, verifyGoogleAdminState } from "./services/googleAdminOAuth.js";
+import { exchangeGoogleAdminCode, verifyGoogleAdminIdToken } from "./services/googleAdminToken.js";
 import { registerListingsSource } from "./services/gListingsSource.js";
 import {
   adminAuthConfig,
@@ -27,6 +30,7 @@ import {
   mintAdminSession,
   adminSessionCookie,
   adminSessionClearCookie,
+  googleAdminSessionSecret,
   isAdminAuthenticated,
 } from "./services/adminAuth.js";
 
@@ -261,29 +265,50 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // ADMIN_PASSWORD / ADMIN_SESSION_SECRET are not configured, which is
   // the production state today: the admin surface is disabled, and every
   // protected admin route rejects anonymous callers server-side.
+  if (pathname.startsWith("/api/admin/")) res.setHeader("Cache-Control", "no-store");
+  // Google OpenID Connect: state cookie binds the callback to the initiating browser.
+  // Both endpoints fail closed unless OAuth and the authorized-email allowlist are configured.
+  const oauthStateCookieName = "ocg_admin_oauth_state";
+  const oauthStateCookie = (value: string, age: number) =>
+    `${oauthStateCookieName}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/api/admin/google; Max-Age=${age}`;
+  if (pathname === "/api/admin/google/start" && req.method === "GET") {
+    const config = googleAdminOAuthConfig(env);
+    if (!config) { jsonReply(res, 503, { error: "Google sign-in is not configured." }); return; }
+    const state = createGoogleAdminState(config);
+    res.setHeader("Set-Cookie", oauthStateCookie(state.cookie, 300));
+    res.writeHead(302, { Location: googleAdminAuthorizationUrl(config, state.state, state.nonce) });
+    res.end();
+    return;
+  }
+  if (pathname === "/api/admin/google/callback" && req.method === "GET") {
+    const config = googleAdminOAuthConfig(env);
+    res.setHeader("Set-Cookie", oauthStateCookie("", 0));
+    const cookies = req.headers.cookie?.split(";") || [];
+    const stateCookie = cookies.find((part) => part.trim().startsWith(oauthStateCookieName + "="))
+      ?.trim().slice(oauthStateCookieName.length + 1);
+    const stateParam = url.searchParams.get("state") || "";
+    const code = url.searchParams.get("code") || "";
+    const nonce = config ? verifyGoogleAdminState(stateCookie, stateParam, config) : null;
+    if (!config || !nonce || !code || code.length > 4096 || url.searchParams.has("error")) {
+      jsonReply(res, 401, { error: "Google sign-in failed." });
+      return;
+    }
+    const token = await exchangeGoogleAdminCode(code, config);
+    if (!token || !(await verifyGoogleAdminIdToken(token, config, nonce))) {
+      jsonReply(res, 401, { error: "Google sign-in failed." });
+      return;
+    }
+    res.setHeader("Set-Cookie", [
+      oauthStateCookie("", 0),
+      adminSessionCookie(mintAdminSession({ password: "", secret: googleAdminSessionSecret(config.sessionSecret) }, Date.now())),
+    ]);
+    res.writeHead(303, { Location: "/admin" });
+    res.end();
+    return;
+  }
+  // Legacy password sign-in is retired. No founder code or password fallback.
   if (pathname === "/api/admin/login" && req.method === "POST") {
-    const config = adminAuthConfig(env);
-    if (!config) { jsonReply(res, 503, { error: "Admin access is not configured on this deployment." }); return; }
-    const clientId = trustedClientIp(req.headers["x-forwarded-for"], req.socket.remoteAddress);
-    const nowMs = Date.now();
-    if (adminLoginThrottled(clientId, nowMs)) {
-      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "600" });
-      res.end(JSON.stringify({ error: "Too many attempts. Please try again later." }));
-      return;
-    }
-    let candidate = "";
-    try {
-      const body = JSON.parse((await readBodyLimited(req, 4096)).toString("utf8")) as { password?: unknown };
-      if (typeof body?.password === "string") candidate = body.password;
-    } catch { /* malformed body falls through to a generic 401 */ }
-    if (!verifyAdminPassword(candidate, config)) {
-      recordAdminLoginFailure(clientId, nowMs);
-      jsonReply(res, 401, { error: "Invalid credentials." });
-      return;
-    }
-    adminLoginFailures.delete(clientId);
-    res.setHeader("Set-Cookie", adminSessionCookie(mintAdminSession(config, nowMs)));
-    jsonReply(res, 200, { ok: true });
+    jsonReply(res, 404, { error: "Not found." });
     return;
   }
   if (pathname === "/api/admin/logout" && req.method === "POST") {
@@ -293,17 +318,39 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (pathname === "/api/admin/session" && req.method === "GET") {
     jsonReply(res, 200, {
-      configured: adminAuthConfig(env) !== null,
+      configured: googleAdminOAuthConfig(env) !== null,
+      googleConfigured: googleAdminOAuthConfig(env) !== null,
       authenticated: isAdminAuthenticated(req.headers.cookie, env, Date.now()),
     });
     return;
   }
   if (pathname.startsWith("/api/admin/")) {
+    res.setHeader("Cache-Control", "no-store");
     if (!isAdminAuthenticated(req.headers.cookie, env, Date.now())) {
       jsonReply(res, 401, { error: "Unauthorized." });
       return;
     }
-    // Authenticated, but the admin data layer is deliberately disabled
+    // Explicit activation gate: credentials alone never expose customer data.
+    // This endpoint is read-only and bounded; no bulk export or owner fields.
+    if (pathname === "/api/admin/seller-leads" && req.method === "GET") {
+      if (env.OCG_ADMIN_LEADS_ENABLED !== "true" || leadBackend(env) !== "firestore") {
+        jsonReply(res, 404, { error: "Not found." });
+        return;
+      }
+      try {
+        const store = (await getGFirestore()).leads;
+        if (!store.listRecentLeads) throw new Error("lead listing not available");
+        const rows = await store.listRecentLeads(100);
+        const sellerRows = projectSellerLeadRows(rows);
+        const leads = sellerRows.slice(0, 25);
+        res.setHeader("Cache-Control", "no-store");
+        jsonReply(res, 200, { leads, limit: 25, hasMore: sellerRows.length > 25 || rows.length === 100 });
+      } catch {
+        jsonReply(res, 503, { error: "Lead review is temporarily unavailable." });
+      }
+      return;
+    }
+    // All other admin data routes remain disabled.
     // until a separate founder-approved activation (P0 §3): no endpoint
     // serves administrative data yet.
     jsonReply(res, 404, { error: "Not found." });

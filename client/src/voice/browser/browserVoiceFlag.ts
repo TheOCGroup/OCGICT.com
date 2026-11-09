@@ -1,8 +1,8 @@
 /**
- * The browser-voice prototype flag — deliberately dependency-free so
+ * The browser-voice selection flag — deliberately dependency-free so
  * importing it never pulls the inference library into the main bundle.
  * The heavy runtime loads only through a dynamic import, and only for
- * visitors who turned the flag on.
+ * visitors who start voice mode. M1 is the default; ?browserVoice=0 persists an opt-out.
  *
  * P0 repair (2026-10-23): the localStorage leg was read-only — nothing
  * ever wrote it — so the flag lived only in the current URL's query
@@ -20,11 +20,11 @@ export function browserVoiceFlagEnabled(): boolean {
         return true;
       }
       if (v === "0") {
-        try { localStorage.removeItem("ocg-g-browser-voice"); } catch { /* best-effort */ }
+        try { localStorage.setItem("ocg-g-browser-voice", "0"); } catch { /* best-effort */ }
         return false;
       }
     }
-    if (typeof localStorage !== "undefined" && localStorage.getItem("ocg-g-browser-voice") === "1") return true;
+    if (typeof localStorage !== "undefined" && localStorage.getItem("ocg-g-browser-voice") === "0") return false;
   } catch { /* flags are best-effort */ }
-  return false;
+  return true;
 }

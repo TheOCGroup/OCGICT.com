@@ -11,6 +11,8 @@
  * service's attached service account — no key files, nothing in the image.
  */
 
+import { queryRecentSellerLeadRows } from "./sellerLeadReview.js";
+
 export interface FirestoreDocSnap {
   exists: boolean;
   data(): Record<string, unknown> | undefined;
@@ -35,6 +37,7 @@ export interface FirestoreLeadDb {
    *  (without overwriting) when the id already exists. Powers the form
    *  intake's duplicate protection for reference-bearing submissions. */
   createLeadWithId?(id: string, record: Record<string, unknown>): Promise<boolean>;
+  listRecentLeads?(limit: number): Promise<Array<{ id: string; data: Record<string, unknown> }>>;
 }
 
 /** The narrow Firestore surface the Marketplace listings read path uses. */
@@ -76,6 +79,7 @@ async function init(): Promise<GFirestore> {
       runTransaction: (update) => db.runTransaction(update as never),
     },
     leads: {
+      listRecentLeads: (limit: number) => queryRecentSellerLeadRows(db.collection(leadsCollection), limit),
       addLead: async (record: Record<string, unknown>) => {
         await db.collection(leadsCollection).add({
           ...record,
