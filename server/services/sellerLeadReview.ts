@@ -47,14 +47,19 @@ export interface SellerLeadQuery {
 }
 
 function receivedAtMillis(value: unknown): number {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "string") { const parsed = Date.parse(value); return Number.isFinite(parsed) ? parsed : 0; }
-  if (value && typeof value === "object") {
-    const timestamp = value as { toMillis?: () => number; toDate?: () => Date };
-    if (typeof timestamp.toMillis === "function") return timestamp.toMillis();
-    if (typeof timestamp.toDate === "function") return timestamp.toDate().getTime();
+  try {
+    let millis = 0;
+    if (value instanceof Date) millis = value.getTime();
+    else if (typeof value === "string") millis = Date.parse(value);
+    else if (value && typeof value === "object") {
+      const timestamp = value as { toMillis?: () => number; toDate?: () => Date };
+      if (typeof timestamp.toMillis === "function") millis = timestamp.toMillis();
+      else if (typeof timestamp.toDate === "function") millis = timestamp.toDate().getTime();
+    }
+    return Number.isFinite(millis) ? millis : 0;
+  } catch {
+    return 0;
   }
-  return 0;
 }
 
 /**
