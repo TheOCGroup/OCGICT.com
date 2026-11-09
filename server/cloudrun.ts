@@ -305,29 +305,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.end();
     return;
   }
+  // Legacy password sign-in is retired. No founder code or password fallback.
   if (pathname === "/api/admin/login" && req.method === "POST") {
-    const config = adminAuthConfig(env);
-    if (!config) { jsonReply(res, 503, { error: "Admin access is not configured on this deployment." }); return; }
-    const clientId = trustedClientIp(req.headers["x-forwarded-for"], req.socket.remoteAddress);
-    const nowMs = Date.now();
-    if (adminLoginThrottled(clientId, nowMs)) {
-      res.writeHead(429, { "Content-Type": "application/json", "Retry-After": "600" });
-      res.end(JSON.stringify({ error: "Too many attempts. Please try again later." }));
-      return;
-    }
-    let candidate = "";
-    try {
-      const body = JSON.parse((await readBodyLimited(req, 4096)).toString("utf8")) as { password?: unknown };
-      if (typeof body?.password === "string") candidate = body.password;
-    } catch { /* malformed body falls through to a generic 401 */ }
-    if (!verifyAdminPassword(candidate, config)) {
-      recordAdminLoginFailure(clientId, nowMs);
-      jsonReply(res, 401, { error: "Invalid credentials." });
-      return;
-    }
-    adminLoginFailures.delete(clientId);
-    res.setHeader("Set-Cookie", adminSessionCookie(mintAdminSession(config, nowMs)));
-    jsonReply(res, 200, { ok: true });
+    jsonReply(res, 404, { error: "Not found." });
     return;
   }
   if (pathname === "/api/admin/logout" && req.method === "POST") {
@@ -337,7 +317,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
   if (pathname === "/api/admin/session" && req.method === "GET") {
     jsonReply(res, 200, {
-      configured: adminAuthConfig(env) !== null || googleAdminOAuthConfig(env) !== null,
+      configured: googleAdminOAuthConfig(env) !== null,
       googleConfigured: googleAdminOAuthConfig(env) !== null,
       authenticated: isAdminAuthenticated(req.headers.cookie, env, Date.now()),
     });
