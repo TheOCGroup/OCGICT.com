@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adminAuthConfig, adminSessionCookie, adminSessionFromCookie,
-  isAdminAuthenticated, mintAdminSession, verifyAdminPassword,
+  isAdminAuthenticated, googleAdminSessionSecret, mintAdminSession, verifyAdminPassword,
   verifyAdminSession, ADMIN_SESSION_TTL_MS,
 } from "../../server/services/adminAuth.js";
 
@@ -35,7 +35,9 @@ describe("seller review administrator session boundary", () => {
       OCG_ADMIN_GOOGLE_ALLOWED_EMAILS: "owner@example.com",
       ADMIN_SESSION_SECRET: env.ADMIN_SESSION_SECRET,
     };
-    const token = mintAdminSession({ password: "", secret: googleEnv.ADMIN_SESSION_SECRET }, now);
+    const token = mintAdminSession({ password: "", secret: googleAdminSessionSecret(googleEnv.ADMIN_SESSION_SECRET) }, now);
+    const oldToken = mintAdminSession({ password: "", secret: googleEnv.ADMIN_SESSION_SECRET }, now);
+    expect(isAdminAuthenticated("ocg_admin_session=" + oldToken, googleEnv, now)).toBe(false);
     expect(adminAuthConfig(googleEnv)).toBeNull();
     expect(isAdminAuthenticated("ocg_admin_session=" + token, googleEnv, now)).toBe(true);
     expect(isAdminAuthenticated("ocg_admin_session=" + token, { ...googleEnv, OCG_ADMIN_GOOGLE_ALLOWED_EMAILS: "" }, now)).toBe(false);
@@ -44,7 +46,7 @@ describe("seller review administrator session boundary", () => {
   it("requires the correct cookie and uses secure browser flags", () => {
     const token = mintAdminSession(config, now);
     expect(isAdminAuthenticated("unrelated=" + token, env, now)).toBe(false);
-    expect(isAdminAuthenticated("ocg_admin_session=" + token, env, now)).toBe(true);
+    expect(isAdminAuthenticated("ocg_admin_session=" + token, env, now)).toBe(false);
     expect(adminSessionFromCookie("x=1; ocg_admin_session=" + token)).toBe(token);
     const cookie = adminSessionCookie(token);
     expect(cookie).toContain("HttpOnly");
