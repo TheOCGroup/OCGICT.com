@@ -27,6 +27,20 @@ describe("seller review administrator session boundary", () => {
     expect(verifyAdminSession(token, config, now + ADMIN_SESSION_TTL_MS + 1)).toBe(false);
     expect(isAdminAuthenticated("ocg_admin_session=" + token, {}, now)).toBe(false);
   });
+  it("accepts Google-authorized sessions without a legacy admin password", () => {
+    const googleEnv = {
+      OCG_ADMIN_GOOGLE_CLIENT_ID: "test.apps.googleusercontent.com",
+      OCG_ADMIN_GOOGLE_CLIENT_SECRET: "test-secret",
+      OCG_ADMIN_GOOGLE_REDIRECT_URI: "https://example.com/api/admin/google/callback",
+      OCG_ADMIN_GOOGLE_ALLOWED_EMAILS: "owner@example.com",
+      ADMIN_SESSION_SECRET: env.ADMIN_SESSION_SECRET,
+    };
+    const token = mintAdminSession({ password: "", secret: googleEnv.ADMIN_SESSION_SECRET }, now);
+    expect(adminAuthConfig(googleEnv)).toBeNull();
+    expect(isAdminAuthenticated("ocg_admin_session=" + token, googleEnv, now)).toBe(true);
+    expect(isAdminAuthenticated("ocg_admin_session=" + token, { ...googleEnv, OCG_ADMIN_GOOGLE_ALLOWED_EMAILS: "" }, now)).toBe(false);
+    expect(isAdminAuthenticated("ocg_admin_session=" + token, googleEnv, now + ADMIN_SESSION_TTL_MS + 1)).toBe(false);
+  });
   it("requires the correct cookie and uses secure browser flags", () => {
     const token = mintAdminSession(config, now);
     expect(isAdminAuthenticated("unrelated=" + token, env, now)).toBe(false);
