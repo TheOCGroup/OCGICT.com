@@ -11,6 +11,8 @@
  * service's attached service account — no key files, nothing in the image.
  */
 
+import { queryRecentSellerLeadRows } from "./sellerLeadReview.js";
+
 export interface FirestoreDocSnap {
   exists: boolean;
   data(): Record<string, unknown> | undefined;
@@ -77,11 +79,7 @@ async function init(): Promise<GFirestore> {
       runTransaction: (update) => db.runTransaction(update as never),
     },
     leads: {
-      listRecentLeads: async (limit: number) => {
-        const bounded = Math.min(Math.max(Math.trunc(limit), 1), 100);
-        const snap = await db.collection(leadsCollection).where("form", "in", ["ocg-seller-intake", "ocg-seller-action", "ocg-g-lead"]).orderBy("receivedAt", "desc").limit(bounded).get();
-        return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() as Record<string, unknown> }));
-      },
+      listRecentLeads: (limit: number) => queryRecentSellerLeadRows(db.collection(leadsCollection), limit),
       addLead: async (record: Record<string, unknown>) => {
         await db.collection(leadsCollection).add({
           ...record,
