@@ -31,6 +31,11 @@ describe("seller lead review privacy projection", () => {
     expect(JSON.stringify(rows)).not.toContain("private@example.test");
     expect(JSON.stringify(rows)).not.toContain("unknown@example.test");
   });
+  it("treats invalid Firestore timestamps as unavailable without failing the queue", () => {
+    const result = projectSellerLeadRows([{ id: "bad-time", data: { form: "ocg-seller-intake", fields: { name: "Seller" }, receivedAt: { toDate: () => new Date("invalid") } } }]);
+    expect(result).toHaveLength(1);
+    expect(result[0].receivedAt).toBeNull();
+  });
   it("truncates all user-controlled text fields", () => {
     const result = projectSellerLeadRows([{ id: "4", data: { form: "ocg-seller-intake", fields: { name: "x".repeat(200), email: "y".repeat(300) } } }]);
     expect(result[0].name).toHaveLength(150);
