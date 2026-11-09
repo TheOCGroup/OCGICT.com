@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectSellerLeadRows } from "../../server/services/sellerLeadReview.js";
+import { projectSellerLeadRows, queryRecentSellerLeadRows } from "../../server/services/sellerLeadReview.js";
 
 describe("seller lead review privacy projection", () => {
   it("allows only seller forms and an explicit field allowlist", () => {
@@ -35,5 +35,33 @@ describe("seller lead review privacy projection", () => {
     const result = projectSellerLeadRows([{ id: "4", data: { form: "ocg-seller-intake", fields: { name: "x".repeat(200), email: "y".repeat(300) } } }]);
     expect(result[0].name).toHaveLength(150);
     expect(result[0].email).toHaveLength(254);
+  });
+});
+
+describe("seller review queue query", () => {
+  it("filters general G leads in Firestore before the bounded seller queue limit", async () => {
+    const rows = [
+      ...Array.from({ length: 140 }, (_, i) => ({ id: "general-" + i, data: { form: "ocg-g-lead", fields: { role: "general" }, receivedAt: new Date(10000 + i) } })),
+      ...Array.from({ length: 35 }, (_, i) => ({ id: "seller-" + i, data: { form: "ocg-g-lead", fields: { role: "seller" }, receivedAt: new Date(20000 + i) } })),
+      { id: "seller-action", data: { form: "ocg-seller-action", fields: { action: "REQUEST_CALL" }, receivedAt: new Date(30000) } },
+    ];
+    const makeQuery = (filters: Array<{ field: string; operator: string; value: unknown }> = [], cap = 100) => ({
+      where(field: string, operator: string, value: unknown) { return makeQuery([...filters, { field, operator, value }], cap); },
+      orderBy() { return makeQuery(filters, cap); },
+      limit(next: number) { return makeQuery(filters, next); },
+      async get() {
+        const matches = rows.filter((row) => filters.every((filter) => {
+          const value = filter.field === "form" ? row.data.form : filter.field === "fields.role" ? (row.data.fields as Record<string, unknown>).role : undefined;
+          return filter.operator === "in" ? (filter.value as unknown[]).includes(value) : value === filter.value;
+        })).sort((a, b) => b.data.receivedAt.getTime() - a.data.receivedAt.getTime()).slice(0, cap);
+        return { docs: matches.map((row) => ({ id: row.id, data: () => row.data })) };
+      },
+    });
+    const collection = { where: (field: string, operator: "in" | "==", value: unknown) => makeQuery().where(field, operator, value) };
+    const result = await queryRecentSellerLeadRows(collection, 25);
+    expect(result).toHaveLength(25);
+    expect(result[0].id).toBe("seller-action");
+    expect(result.every((row) => row.id.startsWith("seller-") || row.id === "seller-action")).toBe(true);
+    expect(result.some((row) => row.id.startsWith("general-"))).toBe(false);
   });
 });
