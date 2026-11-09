@@ -8,6 +8,7 @@ import { looksSpanish } from "../../server/services/streamingModelProvider.js";
 
 // A standalone Netlify function: it never starts the Express server.
 export default async function handler(request: Request, context?: { ip?: string; deploy?: { context?: string } }): Promise<Response> {
+  const chatStart = performance.now();
   const headers = { "Cache-Control": "no-store", "Content-Type": "application/json" };
   if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed." }), { status: 405, headers });
   if (Number(request.headers.get("content-length") || 0) > 20000) return new Response(JSON.stringify({ error: "Request too large." }), { status: 413, headers });
@@ -85,6 +86,7 @@ export default async function handler(request: Request, context?: { ip?: string;
   // JSON path and the client uses the certified behavior for this reply.
   if (body.stream === true && !localOnly) {
     const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+    const preflightMs = Math.round(performance.now() - chatStart);
     const encoder = new TextEncoder();
     const sse = (obj: Record<string, unknown>) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
     const stream = new ReadableStream({
@@ -92,6 +94,7 @@ export default async function handler(request: Request, context?: { ip?: string;
         try {
           let full = "";
           let usage: unknown;
+          let firstTokenSeen = false;
           for await (const delta of streamGeminiTokens({
             history: body.history || [],
             message: body.message.trim(),
@@ -104,16 +107,27 @@ export default async function handler(request: Request, context?: { ip?: string;
               console.warn(`[g-chat] provider truncation finishReason=${reason}`);
             },
           })) {
+            if (!firstTokenSeen && delta.length > 0) {
+              firstTokenSeen = true;
+              console.info(`[g-chat-perf] preflight_ms=${preflightMs} model_first_token_ms=${Math.round(performance.now() - chatStart - preflightMs)}`);
+            }
+            // Do not expose raw model deltas: the seller-policy guard must run
+            // before any text reaches the browser or speech queue.
             full += delta;
-            controller.enqueue(sse({ t: delta }));
           }
           const historyText = (body.history || []).map((h: any) => h.content).join(" ");
           const sctx = analyzeSellerContext(body.history || [], body.message.trim(), {
             spanish: looksSpanish(body.message) || looksSpanish(historyText),
           });
+          const modelCompleteMs = Math.round(performance.now() - chatStart - preflightMs);
+          const safeReply = guardSellerReply(full, sctx);
+          console.info(`[g-chat-perf] model_complete_ms=${modelCompleteMs} guarded_response_ms=${Math.round(performance.now() - chatStart)}`);
+          // Until incremental policy enforcement is proven, deliver the
+          // guarded answer atomically. This intentionally trades TTFT for safety.
+          controller.enqueue(sse({ t: safeReply }));
           controller.enqueue(sse({
             done: true,
-            replyText: guardSellerReply(full, sctx),
+            replyText: safeReply,
             provider: "Gemini",
             model: POC_CHAT_MODEL,
             delivery: sctx.isSeller ? { emotion: sctx.primary, stage: sctx.stage } : undefined,
