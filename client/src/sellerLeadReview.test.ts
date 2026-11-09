@@ -13,6 +13,14 @@ describe("seller lead review privacy projection", () => {
     expect(JSON.stringify(result)).not.toContain("private notes");
     expect(JSON.stringify(result)).not.toContain("other@example.test");
   });
+  it("normalizes valid ISO timestamps and rejects invalid strings", () => {
+    const result = projectSellerLeadRows([
+      { id: "iso", data: { form: "ocg-seller-intake", receivedAt: "2026-11-09T10:00:00-06:00", fields: { name: "Seller" } } },
+      { id: "bad", data: { form: "ocg-seller-intake", receivedAt: "not-a-date", fields: {} } },
+    ]);
+    expect(result[0].receivedAt).toBe("2026-11-09T16:00:00.000Z");
+    expect(result[1].receivedAt).toBeNull();
+  });
   it("handles malformed fields without leaking arbitrary data", () => {
     const result = projectSellerLeadRows([{ id: "3", data: { form: "ocg-seller-intake", fields: "untrusted", extra: "hidden" } }]);
     expect(result).toHaveLength(1);
